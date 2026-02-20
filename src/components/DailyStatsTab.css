@@ -1,0 +1,89 @@
+.daily-stats h2 {
+  margin-bottom: 0.5rem;
+  color: #0f172a;
+}
+
+.daily-stats .date {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+.stats-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.stat-item {
+  margin-bottom: 1.5rem;
+}
+
+.stat-item:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  display: block;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+  transition: width 0.3s ease;
+}
+
+.stat-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.consumed {
+  color: #2563eb;
+}
+
+.separator {
+  color: #cbd5e1;
+}
+
+.budget {
+  color: #64748b;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.burned {
+  color: #16a34a;
+}
+
+.remaining {
+  display: block;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.remaining.positive {
+  color: #16a34a;
+}
+
+.remaining.negative {
+  color: #dc2626;
+}
