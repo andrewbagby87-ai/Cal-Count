@@ -8,18 +8,24 @@ interface UserSettingsProps {
 
 export default function UserSettings({ onBack }: UserSettingsProps) {
   const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
+  
+  // Added "as number | string" so TypeScript allows us to temporarily 
+  // hold an empty string in the input field when you backspace it.
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    caloriesBudget: 2000,
-    proteinBudget: 150,
-    fiberBudget: 25,
+    caloriesBudget: 2000 as number | string,
+    proteinBudget: 150 as number | string,
+    fiberBudget: 25 as number | string,
     trackProtein: true,
     trackFiber: true,
   });
+  
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -38,9 +44,11 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
+    
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (type === 'number' ? Number(value) : value),
+      // FIX: If the field is empty, leave it empty (''). Don't force it to 0.
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? '' : Number(value)) : value),
     }));
   };
 
@@ -50,10 +58,18 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       return;
     }
 
-    setLoading(true);
+    setIsSaving(true);
     setMessage('');
     try {
-      await updateUserProfile(formData);
+      // Ensure we convert any accidentally left empty strings back to valid numbers before saving
+      const dataToSave = {
+        ...formData,
+        caloriesBudget: Number(formData.caloriesBudget) || 0,
+        proteinBudget: Number(formData.proteinBudget) || 0,
+        fiberBudget: Number(formData.fiberBudget) || 0,
+      };
+
+      await updateUserProfile(dataToSave);
       setMessage('✓ Settings saved successfully!');
       setTimeout(() => {
         setPassword('');
@@ -63,7 +79,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       setMessage('✗ Failed to save settings');
       console.error(error);
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -79,7 +95,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       return;
     }
 
-    setLoading(true);
+    setIsDeleting(true);
     try {
       await deleteUserAccount(userPassword);
     } catch (error: any) {
@@ -90,7 +106,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       }
       console.error(error);
     } finally {
-      setLoading(false);
+      setIsDeleting(false);
     }
   };
 
@@ -98,11 +114,13 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     return <div className="loading">Loading settings...</div>;
   }
 
+  const isBusy = isSaving || isDeleting;
+
   return (
     <div className="settings-container">
       <div className="settings-card">
         <header className="settings-header">
-          <button className="back-btn" onClick={onBack}>← Back</button>
+          <button className="back-btn" onClick={onBack} disabled={isBusy}>← Back</button>
           <h1>Settings</h1>
         </header>
 
@@ -123,6 +141,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Your name"
+                disabled={isBusy}
               />
             </div>
             <div className="form-group">
@@ -147,6 +166,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Leave blank to keep current"
+                disabled={isBusy}
               />
             </div>
             <div className="form-group">
@@ -156,6 +176,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm new password"
+                disabled={isBusy}
               />
             </div>
           </section>
@@ -169,7 +190,9 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 name="caloriesBudget"
                 value={formData.caloriesBudget}
                 onChange={handleChange}
+                onFocus={(e) => e.target.select()} // Highlights entire number on click
                 min="500"
+                disabled={isBusy}
               />
             </div>
             <div className="form-group">
@@ -179,7 +202,9 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 name="proteinBudget"
                 value={formData.proteinBudget}
                 onChange={handleChange}
+                onFocus={(e) => e.target.select()} // Highlights entire number on click
                 min="0"
+                disabled={isBusy}
               />
             </div>
             <div className="form-group">
@@ -189,7 +214,9 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 name="fiberBudget"
                 value={formData.fiberBudget}
                 onChange={handleChange}
+                onFocus={(e) => e.target.select()} // Highlights entire number on click
                 min="0"
+                disabled={isBusy}
               />
             </div>
           </section>
@@ -203,6 +230,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                   name="trackProtein"
                   checked={formData.trackProtein}
                   onChange={handleChange}
+                  disabled={isBusy}
                 />
                 Track Protein
               </label>
@@ -214,6 +242,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                   name="trackFiber"
                   checked={formData.trackFiber}
                   onChange={handleChange}
+                  disabled={isBusy}
                 />
                 Track Fiber
               </label>
@@ -221,11 +250,11 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
           </section>
 
           <div className="settings-actions">
-            <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
-              {loading ? 'Saving...' : 'Save Changes'}
+            <button className="btn btn-primary" onClick={handleSave} disabled={isBusy}>
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
-            <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={loading}>
-              {loading ? 'Deleting...' : 'Delete Account'}
+            <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
+              {isDeleting ? 'Deleting...' : 'Delete Account'}
             </button>
           </div>
         </div>

@@ -1,3 +1,21 @@
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.tab-header h2 {
+  margin: 0;
+  color: #334155;
+  font-size: 1.5rem;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
 .weight-tab {
   display: flex;
   flex-direction: column;

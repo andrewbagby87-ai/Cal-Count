@@ -184,20 +184,41 @@ export async function createWeightLog(userId: string, weight: Omit<WeightLog, 'i
 }
 
 export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
-  const q = query(
-    collection(db, 'weightLogs'),
-    where('userId', '==', userId),
-    orderBy('timestamp', 'desc')
-  );
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data as Omit<WeightLog, 'id'>,
-      timestamp: (data.timestamp as Timestamp).toMillis(),
-    };
-  });
+  try {
+    // 1. We ONLY filter by userId. We removed the Firebase "orderBy" to prevent index errors.
+    const q = query(
+      collection(db, 'weightLogs'),
+      where('userId', '==', userId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    const logs = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      
+      // 2. Crash-proof timestamp reading! If a log is somehow missing a timestamp, 
+      // we gracefully fall back to the current time instead of crashing the whole screen.
+      let timeInMillis = Date.now();
+      if (data.timestamp) {
+        timeInMillis = typeof data.timestamp.toMillis === 'function' 
+          ? data.timestamp.toMillis() 
+          : data.timestamp; // Just in case it's already a number
+      }
+
+      return {
+        id: doc.id,
+        ...data as Omit<WeightLog, 'id'>,
+        timestamp: timeInMillis,
+      };
+    });
+    
+    // 3. Sort the logs from newest to oldest using Javascript
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+    
+  } catch (error) {
+    console.error("CRITICAL ERROR fetching weight logs:", error);
+    return []; // Return an empty array so the screen doesn't break
+  }
 }
 
 export async function getLastWeightLogForDate(userId: string, date: string): Promise<WeightLog | null> {
@@ -215,4 +236,13 @@ export async function getLastWeightLogForDate(userId: string, date: string): Pro
     ...data as Omit<WeightLog, 'id'>,
     timestamp: (data.timestamp as Timestamp).toMillis(),
   };
+}
+
+export async function deleteWeightLog(id: string) {
+  try {
+    await deleteDoc(doc(db, 'weightLogs', id));
+  } catch (error) {
+    console.error('Error deleting weight log:', error);
+    throw error;
+  }
 }

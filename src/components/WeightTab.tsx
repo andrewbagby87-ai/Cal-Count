@@ -1,8 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllWeightLogs, createWeightLog } from '../services/database';
+// Added deleteWeightLog to the import
+import { getAllWeightLogs, createWeightLog, deleteWeightLog } from '../services/database';
 import { WeightLog } from '../types';
 import './WeightTab.css';
+
+// 100% Native Browser Time Converter
+const formatTime12Hour = (timeValue: string) => {
+  if (!timeValue) return '';
+  
+  try {
+    const timeStr = String(timeValue);
+    const [hours, minutes] = timeStr.split(':');
+    
+    const tempDate = new Date();
+    tempDate.setHours(parseInt(hours, 10));
+    tempDate.setMinutes(parseInt(minutes, 10));
+    tempDate.setSeconds(0);
+    
+    return tempDate.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+  } catch (error) {
+    return String(timeValue); 
+  }
+};
 
 export default function WeightTab() {
   const { user } = useAuth();
@@ -10,8 +34,10 @@ export default function WeightTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [weight, setWeight] = useState('');
+  
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+  
   const [unit, setUnit] = useState<'kg' | 'lbs'>('lbs');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +88,19 @@ export default function WeightTab() {
       setError(err instanceof Error ? err.message : 'Failed to save weight');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // NEW: Function to handle the double-click deletion
+  const handleDeleteLog = async (logId: string) => {
+    if (window.confirm('Are you sure you want to delete this weight log?')) {
+      try {
+        await deleteWeightLog(logId);
+        await loadWeightLogs(); // Refresh the list after deletion
+      } catch (err) {
+        console.error('Failed to delete log:', err);
+        alert('Failed to delete the weight log. Please try again.');
+      }
     }
   };
 
@@ -142,10 +181,16 @@ export default function WeightTab() {
       ) : (
         <div className="weight-logs">
           {weightLogs.map((log) => (
-            <div key={log.id} className="weight-log-item">
+            <div 
+              key={log.id} 
+              className="weight-log-item"
+              onDoubleClick={() => handleDeleteLog(log.id)}
+              title="Double-click to delete this entry"
+              style={{ cursor: 'pointer' }}
+            >
               <div className="log-date">
-                <span className="date">{new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                <span className="time">{log.time}</span>
+                <span className="date">{new Date(log.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span className="time">{formatTime12Hour(log.time)}</span>
               </div>
               <div className="log-weight">
                 <span className="value">{log.weight}</span>
