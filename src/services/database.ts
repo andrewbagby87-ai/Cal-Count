@@ -50,12 +50,27 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
   await updateDoc(docRef, updates);
 }
 
-export async function deleteUserProfile(uid: string) {
+export async function deleteAllUserData(uid: string) {
   try {
     const db = getFirestore();
+    
+    // List of collections where user data is stored
+    const collectionsToClean = ['foods', 'foodLogs', 'workoutLogs', 'weightLogs'];
+    
+    // Delete all documents in related collections where userId matches
+    for (const collectionName of collectionsToClean) {
+      const q = query(collection(db, collectionName), where('userId', '==', uid));
+      const querySnapshot = await getDocs(q);
+      const deletePromises = querySnapshot.docs.map(document => 
+        deleteDoc(doc(db, collectionName, document.id))
+      );
+      await Promise.all(deletePromises);
+    }
+    
+    // Finally, delete the user profile document
     await deleteDoc(doc(db, 'users', uid));
   } catch (error) {
-    console.error('Error deleting user profile:', error);
+    console.error('Error deleting all user data:', error);
     throw error;
   }
 }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth } from '../services/firebase';
-import { getUserProfile, deleteUserProfile } from '../services/database';
+import { getUserProfile, deleteAllUserData } from '../services/database';
 import type { AuthContextType, UserProfile } from '../types/index';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,8 +56,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!user) throw new Error('No user logged in');
     try {
-      // Implement database update logic
-      console.log('Updating profile:', data);
       await refreshUserProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -65,21 +63,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const deleteUserAccount = async () => {
+  // This function takes the password from UserSettings, refreshes the token, and deletes everything
+  const deleteUserAccount = async (password?: string) => {
     if (!user) throw new Error('No user logged in');
+    
     try {
-      // Delete user data from Firestore first
-      await deleteUserProfile(user.uid);
+      // 1. Re-authenticate with the provided password to satisfy Firebase security rules
+      if (password && user.email) {
+        const credential = EmailAuthProvider.credential(user.email, password);
+        await reauthenticateWithCredential(user, credential);
+      }
+
+      // 2. Delete ALL user data from Firestore
+      await deleteAllUserData(user.uid);
       
-      // Then delete the user account from Firebase Auth
+      // 3. Delete the user account from Firebase Auth
       await deleteUser(user);
       
-      setUser(null);
-      setUserProfile(null);
-    } catch (error) {
+      // 4. Clear local session
+      await logout();
+      
+    } catch (error: any) {
       console.error('Error deleting account:', error);
-      throw error;
-    }
+      throw error; 
+    } 
   };
 
   const value: AuthContextType = {

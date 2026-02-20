@@ -68,17 +68,33 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
   };
 
   const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to delete your account? This cannot be undone.')) {
+    // 1. First warning
+    if (!window.confirm('Are you sure you want to delete your account? All your data will be permanently erased. This cannot be undone.')) {
+      return;
+    }
+
+    // 2. Prompt for password upfront
+    const userPassword = window.prompt("Security Check: Please enter your password to confirm account deletion.");
+    
+    // If they click cancel on the prompt or leave it blank, stop the deletion
+    if (!userPassword) {
+      setMessage('✗ Account deletion cancelled.');
       return;
     }
 
     setLoading(true);
     try {
-      await deleteUserAccount();
-      await logout();
-    } catch (error) {
-      setMessage('✗ Failed to delete account');
+      // 3. Pass the password to the context to re-authenticate and delete
+      await deleteUserAccount(userPassword);
+    } catch (error: any) {
+      // Handle incorrect password or other errors gracefully
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        setMessage('✗ Incorrect password. Account deletion cancelled.');
+      } else {
+        setMessage('✗ ' + (error.message || 'Failed to delete account'));
+      }
       console.error(error);
+    } finally {
       setLoading(false);
     }
   };
