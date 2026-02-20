@@ -50,66 +50,71 @@ export default function SetupPage() {
   };
 
   return (
-    <div className="setup-page">
-      <div className="setup-container">
+    <div className="setup-container">
+      <div className="setup-card">
         <h1>Welcome to Cal-Count</h1>
         <p>Let's set up your profile</p>
 
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="fullName">Full Name</label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
-              required
-            />
+          <div className="setup-section">
+            <div className="form-group">
+              <label htmlFor="fullName">Full Name</label>
+              <input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="caloriesBudget">Daily Calorie Budget</label>
-            <input
-              id="caloriesBudget"
-              type="number"
-              value={dailyCalorieBudget}
-              onChange={(e) => setDailyCalorieBudget(e.target.value)}
-              min="500"
-              max="10000"
-              required
-            />
+          <div className="setup-section">
+            <h2>Your Daily Goals</h2>
+            <div className="form-group">
+              <label htmlFor="caloriesBudget">Daily Calorie Budget</label>
+              <input
+                id="caloriesBudget"
+                type="number"
+                value={dailyCalorieBudget}
+                onChange={(e) => setDailyCalorieBudget(e.target.value)}
+                min="500"
+                max="10000"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="proteinBudget">Daily Protein Budget (g)</label>
+              <input
+                id="proteinBudget"
+                type="number"
+                value={dailyProteinBudget}
+                onChange={(e) => setDailyProteinBudget(e.target.value)}
+                min="0"
+                max="500"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="fiberBudget">Daily Fiber Budget (g)</label>
+              <input
+                id="fiberBudget"
+                type="number"
+                value={dailyFiberBudget}
+                onChange={(e) => setDailyFiberBudget(e.target.value)}
+                min="0"
+                max="100"
+                required
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="proteinBudget">Daily Protein Budget (g)</label>
-            <input
-              id="proteinBudget"
-              type="number"
-              value={dailyProteinBudget}
-              onChange={(e) => setDailyProteinBudget(e.target.value)}
-              min="0"
-              max="500"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="fiberBudget">Daily Fiber Budget (g)</label>
-            <input
-              id="fiberBudget"
-              type="number"
-              value={dailyFiberBudget}
-              onChange={(e) => setDailyFiberBudget(e.target.value)}
-              min="0"
-              max="100"
-              required
-            />
-          </div>
-
-          <button type="submit" disabled={loading} className="submit-btn">
+          <button type="submit" disabled={loading} className="btn-primary">
             {loading ? 'Setting up...' : 'Complete Setup'}
           </button>
         </form>

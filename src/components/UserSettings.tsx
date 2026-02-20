@@ -7,7 +7,7 @@ interface UserSettingsProps {
 }
 
 export default function UserSettings({ onBack }: UserSettingsProps) {
-  const { userProfile, logout, updateUserProfile, deleteUserAccount } = useAuth();
+  const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -68,15 +68,12 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
   };
 
   const handleDeleteAccount = async () => {
-    // 1. First warning
     if (!window.confirm('Are you sure you want to delete your account? All your data will be permanently erased. This cannot be undone.')) {
       return;
     }
 
-    // 2. Prompt for password upfront
     const userPassword = window.prompt("Security Check: Please enter your password to confirm account deletion.");
     
-    // If they click cancel on the prompt or leave it blank, stop the deletion
     if (!userPassword) {
       setMessage('✗ Account deletion cancelled.');
       return;
@@ -84,10 +81,8 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
 
     setLoading(true);
     try {
-      // 3. Pass the password to the context to re-authenticate and delete
       await deleteUserAccount(userPassword);
     } catch (error: any) {
-      // Handle incorrect password or other errors gracefully
       if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         setMessage('✗ Incorrect password. Account deletion cancelled.');
       } else {
@@ -104,133 +99,135 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
   }
 
   return (
-    <div className="settings-page">
-      <header className="settings-header">
-        <button className="back-btn" onClick={onBack}>← Back</button>
-        <h1>Settings</h1>
-      </header>
+    <div className="settings-container">
+      <div className="settings-card">
+        <header className="settings-header">
+          <button className="back-btn" onClick={onBack}>← Back</button>
+          <h1>Settings</h1>
+        </header>
 
-      <div className="settings-content">
-        {message && (
-          <div className={`message ${message.includes('✓') ? 'success' : 'error'}`}>
-            {message}
-          </div>
-        )}
+        <div className="settings-content">
+          {message && (
+            <div className={`message ${message.includes('✓') ? 'success' : 'error'}`}>
+              {message}
+            </div>
+          )}
 
-        <section className="settings-section">
-          <h2>Profile</h2>
-          <div className="form-group">
-            <label>Name</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Your name"
-            />
-          </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Your email"
-              disabled
-            />
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <h2>Change Password</h2>
-          <div className="form-group">
-            <label>New Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Leave blank to keep current"
-            />
-          </div>
-          <div className="form-group">
-            <label>Confirm Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <h2>Budget Settings</h2>
-          <div className="form-group">
-            <label>Daily Calories Budget</label>
-            <input
-              type="number"
-              name="caloriesBudget"
-              value={formData.caloriesBudget}
-              onChange={handleChange}
-              min="500"
-            />
-          </div>
-          <div className="form-group">
-            <label>Daily Protein Budget (g)</label>
-            <input
-              type="number"
-              name="proteinBudget"
-              value={formData.proteinBudget}
-              onChange={handleChange}
-              min="0"
-            />
-          </div>
-          <div className="form-group">
-            <label>Daily Fiber Budget (g)</label>
-            <input
-              type="number"
-              name="fiberBudget"
-              value={formData.fiberBudget}
-              onChange={handleChange}
-              min="0"
-            />
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <h2>Tracking Preferences</h2>
-          <div className="checkbox-group">
-            <label>
+          <section className="settings-section">
+            <h2>Profile</h2>
+            <div className="form-group">
+              <label>Name</label>
               <input
-                type="checkbox"
-                name="trackProtein"
-                checked={formData.trackProtein}
+                type="text"
+                name="name"
+                value={formData.name}
                 onChange={handleChange}
+                placeholder="Your name"
               />
-              Track Protein
-            </label>
-          </div>
-          <div className="checkbox-group">
-            <label>
+            </div>
+            <div className="form-group">
+              <label>Email</label>
               <input
-                type="checkbox"
-                name="trackFiber"
-                checked={formData.trackFiber}
+                type="email"
+                name="email"
+                value={formData.email}
                 onChange={handleChange}
+                placeholder="Your email"
+                disabled
               />
-              Track Fiber
-            </label>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <div className="settings-actions">
-          <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
-            {loading ? 'Saving...' : 'Save Changes'}
-          </button>
-          <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={loading}>
-            {loading ? 'Deleting...' : 'Delete Account'}
-          </button>
+          <section className="settings-section">
+            <h2>Change Password</h2>
+            <div className="form-group">
+              <label>New Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Leave blank to keep current"
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+              />
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h2>Budget Settings</h2>
+            <div className="form-group">
+              <label>Daily Calories Budget</label>
+              <input
+                type="number"
+                name="caloriesBudget"
+                value={formData.caloriesBudget}
+                onChange={handleChange}
+                min="500"
+              />
+            </div>
+            <div className="form-group">
+              <label>Daily Protein Budget (g)</label>
+              <input
+                type="number"
+                name="proteinBudget"
+                value={formData.proteinBudget}
+                onChange={handleChange}
+                min="0"
+              />
+            </div>
+            <div className="form-group">
+              <label>Daily Fiber Budget (g)</label>
+              <input
+                type="number"
+                name="fiberBudget"
+                value={formData.fiberBudget}
+                onChange={handleChange}
+                min="0"
+              />
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h2>Tracking Preferences</h2>
+            <div className="checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  name="trackProtein"
+                  checked={formData.trackProtein}
+                  onChange={handleChange}
+                />
+                Track Protein
+              </label>
+            </div>
+            <div className="checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  name="trackFiber"
+                  checked={formData.trackFiber}
+                  onChange={handleChange}
+                />
+                Track Fiber
+              </label>
+            </div>
+          </section>
+
+          <div className="settings-actions">
+            <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={loading}>
+              {loading ? 'Deleting...' : 'Delete Account'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
