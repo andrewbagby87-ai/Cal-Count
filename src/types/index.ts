@@ -9,12 +9,25 @@ export interface UserProfile {
   name: string;
   email: string;
   caloriesBudget: number;
-  proteinBudget: number;
-  fiberBudget: number;
-  trackProtein: boolean;
-  trackFiber: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  
+  // Nutrient Budgets
+  proteinBudget?: number;
+  fiberBudget?: number;
+  fatBudget?: number;
+  saturatedFatBudget?: number;
+  carbsBudget?: number;
+  sugarBudget?: number;
+  
+  // Tracking Toggles
+  trackProtein?: boolean;
+  trackFiber?: boolean;
+  trackFat?: boolean;
+  trackSaturatedFat?: boolean;
+  trackCarbs?: boolean;
+  trackSugar?: boolean;
+  
+  createdAt: Date | number | string;
+  updatedAt?: Date | number | string;
 }
 
 export interface AuthContextType {
@@ -25,7 +38,7 @@ export interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
-  deleteUserAccount: (password?: string) => Promise<void>;
+  deleteUserAccount: (password?: string) => Promise<void>; // Added optional password for the recent update
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -37,6 +50,10 @@ export interface Food {
   calories: number;
   protein?: number;
   fiber?: number;
+  fat?: number;
+  saturatedFat?: number;
+  carbs?: number;
+  sugar?: number;
   servingSize: number;
   servingUnit: 'g' | 'oz' | 'cup' | 'ml' | 'serving';
   createdAt: number;
@@ -53,12 +70,21 @@ export interface FoodLog {
   calories: number;
   protein?: number;
   fiber?: number;
+  fat?: number;
+  saturatedFat?: number;
+  carbs?: number;
+  sugar?: number;
   timestamp: number;
+  
   // For edited foods (only edit this log entry)
   editedNutrition?: {
     calories: number;
     protein?: number;
     fiber?: number;
+    fat?: number;
+    saturatedFat?: number;
+    carbs?: number;
+    sugar?: number;
   };
 }
 
@@ -85,8 +111,13 @@ export interface DailyStats {
   date: string;
   caloriesConsumed: number;
   caloriesBurned: number;
-  proteinConsumed?: number;
-  fiberConsumed?: number;
   totalCalorieBudget: number;
   calorieBudgetRemaining: number;
+  
+  proteinConsumed?: number;
+  fiberConsumed?: number;
+  fatConsumed?: number;
+  saturatedFatConsumed?: number;
+  carbsConsumed?: number;
+  sugarConsumed?: number;
 }

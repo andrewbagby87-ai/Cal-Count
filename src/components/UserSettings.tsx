@@ -9,16 +9,23 @@ interface UserSettingsProps {
 export default function UserSettings({ onBack }: UserSettingsProps) {
   const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   
-  // Added "as number | string" so TypeScript allows us to temporarily 
-  // hold an empty string in the input field when you backspace it.
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    caloriesBudget: 2000 as number | string,
-    proteinBudget: 150 as number | string,
-    fiberBudget: 25 as number | string,
-    trackProtein: true,
-    trackFiber: true,
+    caloriesBudget: '' as number | string,
+    fatBudget: '' as number | string,
+    saturatedFatBudget: '' as number | string,
+    carbsBudget: '' as number | string,
+    fiberBudget: '' as number | string,
+    sugarBudget: '' as number | string,
+    proteinBudget: '' as number | string,
+    
+    trackFat: false,
+    trackSaturatedFat: false,
+    trackCarbs: false,
+    trackFiber: false,
+    trackSugar: false,
+    trackProtein: false,
   });
   
   const [password, setPassword] = useState('');
@@ -33,26 +40,36 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       setFormData({
         name: userProfile.name || '',
         email: userProfile.email || '',
-        caloriesBudget: userProfile.caloriesBudget || 2000,
-        proteinBudget: userProfile.proteinBudget || 150,
-        fiberBudget: userProfile.fiberBudget || 25,
-        trackProtein: userProfile.trackProtein !== false,
-        trackFiber: userProfile.trackFiber !== false,
+        caloriesBudget: userProfile.caloriesBudget || '',
+        fatBudget: userProfile.fatBudget || '',
+        saturatedFatBudget: userProfile.saturatedFatBudget || '',
+        carbsBudget: userProfile.carbsBudget || '',
+        fiberBudget: userProfile.fiberBudget || '',
+        sugarBudget: userProfile.sugarBudget || '',
+        proteinBudget: userProfile.proteinBudget || '',
+        
+        trackFat: userProfile.trackFat || false,
+        trackSaturatedFat: userProfile.trackSaturatedFat || false,
+        trackCarbs: userProfile.trackCarbs || false,
+        trackFiber: userProfile.trackFiber || false,
+        trackSugar: userProfile.trackSugar || false,
+        trackProtein: userProfile.trackProtein || false,
       });
     }
   }, [userProfile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    
     setFormData(prev => ({
       ...prev,
-      // FIX: If the field is empty, leave it empty (''). Don't force it to 0.
       [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? '' : Number(value)) : value),
     }));
   };
 
-  const handleSave = async () => {
+  // ADDED: Accept the form event so we can prevent the page from reloading
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault(); 
+    
     if (password && password !== confirmPassword) {
       setMessage('Passwords do not match');
       return;
@@ -61,12 +78,15 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     setIsSaving(true);
     setMessage('');
     try {
-      // Ensure we convert any accidentally left empty strings back to valid numbers before saving
       const dataToSave = {
         ...formData,
         caloriesBudget: Number(formData.caloriesBudget) || 0,
-        proteinBudget: Number(formData.proteinBudget) || 0,
+        fatBudget: Number(formData.fatBudget) || 0,
+        saturatedFatBudget: Number(formData.saturatedFatBudget) || 0,
+        carbsBudget: Number(formData.carbsBudget) || 0,
         fiberBudget: Number(formData.fiberBudget) || 0,
+        sugarBudget: Number(formData.sugarBudget) || 0,
+        proteinBudget: Number(formData.proteinBudget) || 0,
       };
 
       await updateUserProfile(dataToSave);
@@ -87,9 +107,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     if (!window.confirm('Are you sure you want to delete your account? All your data will be permanently erased. This cannot be undone.')) {
       return;
     }
-
     const userPassword = window.prompt("Security Check: Please enter your password to confirm account deletion.");
-    
     if (!userPassword) {
       setMessage('✗ Account deletion cancelled.');
       return;
@@ -131,132 +149,111 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
             </div>
           )}
 
-          <section className="settings-section">
-            <h2>Profile</h2>
-            <div className="form-group">
-              <label>Name</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Your name"
-                disabled={isBusy}
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Your email"
-                disabled
-              />
-            </div>
-          </section>
+          {/* ADDED: A form wrapper so HTML5 "required" validation works automatically */}
+          <form onSubmit={handleSave}>
+            <section className="settings-section">
+              <h2>Profile</h2>
+              <div className="form-group">
+                <label>Name *</label>
+                <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} disabled />
+              </div>
+            </section>
 
-          <section className="settings-section">
-            <h2>Change Password</h2>
-            <div className="form-group">
-              <label>New Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Leave blank to keep current"
-                disabled={isBusy}
-              />
-            </div>
-            <div className="form-group">
-              <label>Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                disabled={isBusy}
-              />
-            </div>
-          </section>
+            <section className="settings-section">
+              <h2>Change Password</h2>
+              <div className="form-group">
+                <label>New Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current" disabled={isBusy} />
+              </div>
+              <div className="form-group">
+                <label>Confirm Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" disabled={isBusy} />
+              </div>
+            </section>
 
-          <section className="settings-section">
-            <h2>Budget Settings</h2>
-            <div className="form-group">
-              <label>Daily Calories Budget</label>
-              <input
-                type="number"
-                name="caloriesBudget"
-                value={formData.caloriesBudget}
-                onChange={handleChange}
-                onFocus={(e) => e.target.select()} // Highlights entire number on click
-                min="500"
-                disabled={isBusy}
-              />
-            </div>
-            <div className="form-group">
-              <label>Daily Protein Budget (g)</label>
-              <input
-                type="number"
-                name="proteinBudget"
-                value={formData.proteinBudget}
-                onChange={handleChange}
-                onFocus={(e) => e.target.select()} // Highlights entire number on click
-                min="0"
-                disabled={isBusy}
-              />
-            </div>
-            <div className="form-group">
-              <label>Daily Fiber Budget (g)</label>
-              <input
-                type="number"
-                name="fiberBudget"
-                value={formData.fiberBudget}
-                onChange={handleChange}
-                onFocus={(e) => e.target.select()} // Highlights entire number on click
-                min="0"
-                disabled={isBusy}
-              />
-            </div>
-          </section>
+            <section className="settings-section">
+              <h2>Tracking Preferences</h2>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackFat" checked={formData.trackFat} onChange={handleChange} disabled={isBusy} /> Fat</label>
+              </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackSaturatedFat" checked={formData.trackSaturatedFat} onChange={handleChange} disabled={isBusy} /> Saturated Fat</label>
+              </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackCarbs" checked={formData.trackCarbs} onChange={handleChange} disabled={isBusy} /> Carbs</label>
+              </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackFiber" checked={formData.trackFiber} onChange={handleChange} disabled={isBusy} /> Fiber</label>
+              </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackSugar" checked={formData.trackSugar} onChange={handleChange} disabled={isBusy} /> Sugar</label>
+              </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackProtein" checked={formData.trackProtein} onChange={handleChange} disabled={isBusy} /> Protein</label>
+              </div>
+            </section>
 
-          <section className="settings-section">
-            <h2>Tracking Preferences</h2>
-            <div className="checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="trackProtein"
-                  checked={formData.trackProtein}
-                  onChange={handleChange}
-                  disabled={isBusy}
-                />
-                Track Protein
-              </label>
-            </div>
-            <div className="checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="trackFiber"
-                  checked={formData.trackFiber}
-                  onChange={handleChange}
-                  disabled={isBusy}
-                />
-                Track Fiber
-              </label>
-            </div>
-          </section>
+            <section className="settings-section">
+              <h2>Budget Settings</h2>
+              <div className="form-group">
+                <label>Daily Calories Budget *</label>
+                <input type="number" name="caloriesBudget" value={formData.caloriesBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="500" required disabled={isBusy} />
+              </div>
+              
+              {/* ADDED: "required" attribute and visual asterisks to all nutrient inputs */}
+              {formData.trackFat && (
+                <div className="form-group">
+                  <label>Daily Fat Budget (g) *</label>
+                  <input type="number" name="fatBudget" value={formData.fatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+              {formData.trackSaturatedFat && (
+                <div className="form-group">
+                  <label>Daily Saturated Fat Budget (g) *</label>
+                  <input type="number" name="saturatedFatBudget" value={formData.saturatedFatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+              {formData.trackCarbs && (
+                <div className="form-group">
+                  <label>Daily Carbs Budget (g) *</label>
+                  <input type="number" name="carbsBudget" value={formData.carbsBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+              {formData.trackFiber && (
+                <div className="form-group">
+                  <label>Daily Fiber Budget (g) *</label>
+                  <input type="number" name="fiberBudget" value={formData.fiberBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+              {formData.trackSugar && (
+                <div className="form-group">
+                  <label>Daily Sugar Budget (g) *</label>
+                  <input type="number" name="sugarBudget" value={formData.sugarBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+              {formData.trackProtein && (
+                <div className="form-group">
+                  <label>Daily Protein Budget (g) *</label>
+                  <input type="number" name="proteinBudget" value={formData.proteinBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                </div>
+              )}
+            </section>
 
-          <div className="settings-actions">
-            <button className="btn btn-primary" onClick={handleSave} disabled={isBusy}>
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
-              {isDeleting ? 'Deleting...' : 'Delete Account'}
-            </button>
-          </div>
+            <div className="settings-actions">
+              <button type="submit" className="btn btn-primary" disabled={isBusy}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+              
+              {/* ADDED: type="button" prevents this button from accidentally trying to submit the form */}
+              <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
+                {isDeleting ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
