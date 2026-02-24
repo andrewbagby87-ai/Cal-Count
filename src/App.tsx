@@ -1,3 +1,4 @@
+import { Router } from 'wouter';
 import { useAuth } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
@@ -18,7 +19,11 @@ function App() {
     return <SetupPage />;
   }
 
-  return <Dashboard />;
+  return (
+  <Router base="/Cal-Count">
+    <Dashboard />
+  </Router>
+  );
 }
 
 export default App;
