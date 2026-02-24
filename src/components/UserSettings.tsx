@@ -66,7 +66,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     }));
   };
 
-  // ADDED: Accept the form event so we can prevent the page from reloading
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); 
     
@@ -128,6 +127,19 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     }
   };
 
+  // Helper function to copy the full Sync URL
+  const copySyncUrl = () => {
+    const baseUrl = "https://console.firebase.google.com/project/cal-count-c5d90/overview";
+    
+    // Attach the user ID directly to the URL
+    // We use userProfile?.uid just in case it hasn't fully loaded yet
+    const fullUrl = `${baseUrl}?userId=${userProfile?.uid}`;
+
+    navigator.clipboard.writeText(fullUrl);
+    setMessage('✓ Sync URL copied to clipboard!');
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   if (!userProfile) {
     return <div className="loading">Loading settings...</div>;
   }
@@ -149,10 +161,27 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
             </div>
           )}
 
-          {/* ADDED: A form wrapper so HTML5 "required" validation works automatically */}
           <form onSubmit={handleSave}>
             <section className="settings-section">
-              <h2>Profile</h2>
+              <h2>Profile & Health Sync</h2>
+              
+              {/* UPDATED: Apple Health Sync section with only the copy button */}
+              <div className="form-group">
+                <label>Apple Health Sync</label>
+                <div>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary"
+                    onClick={copySyncUrl}
+                  >
+                    Copy Sync URL
+                  </button>
+                </div>
+                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+                  Paste this URL into the Health Auto Export app's REST API automation.
+                </small>
+              </div>
+
               <div className="form-group">
                 <label>Name *</label>
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
@@ -204,7 +233,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 <input type="number" name="caloriesBudget" value={formData.caloriesBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="500" required disabled={isBusy} />
               </div>
               
-              {/* ADDED: "required" attribute and visual asterisks to all nutrient inputs */}
               {formData.trackFat && (
                 <div className="form-group">
                   <label>Daily Fat Budget (g) *</label>
@@ -248,7 +276,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
               
-              {/* ADDED: type="button" prevents this button from accidentally trying to submit the form */}
               <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
                 {isDeleting ? 'Deleting...' : 'Delete Account'}
               </button>

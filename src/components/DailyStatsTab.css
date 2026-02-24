@@ -87,3 +87,119 @@
 .remaining.negative {
   color: #dc2626;
 }
+
+/* --- Circular Nutrient Grid Styles --- */
+.hero-stat {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stat-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value.full-width {
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.nutrients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 1.5rem 1rem;
+  justify-items: center;
+  padding-top: 0.5rem;
+}
+
+.nutrient-circle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.svg-wrapper {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle-inner-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+}
+
+.circle-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.circle-unit {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.circle-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  text-align: center;
+}
+/* --- Bottom Row & Half-Width Cards --- */
+.dashboard-bottom-row {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.half-width-card {
+  flex: 1; /* This makes the card automatically take up 50% of the row */
+  min-width: 0; /* Prevents flexbox blowouts */
+  margin: 0; /* Overrides any default margins on the stats-card class */
+}
+
+.weight-highlight {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.weight-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.weight-unit {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.empty-weight {
+  margin-top: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* On small phones, stack the half-width cards on top of each other */
+@media (max-width: 600px) {
+  .dashboard-bottom-row {
+    flex-direction: column;
+  }
+}

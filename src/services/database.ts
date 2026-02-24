@@ -246,3 +246,16 @@ export async function deleteWeightLog(id: string) {
     throw error;
   }
 }
+
+export async function getHealthLogs(userId: string) {
+  const q = query(
+    collection(db, 'healthLogs'),
+    where('userId', '==', userId),
+    orderBy('timestamp', 'desc')
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+}
