@@ -21,6 +21,8 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
+        id: '/Cal-Count/',
+        start_url: '/Cal-Count/',
         icons: [
           {
             src: 'scale.png',
