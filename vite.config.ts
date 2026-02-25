@@ -23,7 +23,7 @@ export default defineConfig({
         orientation: 'portrait-primary',
         icons: [
           {
-            src: '/scale.png',
+            src: 'scale.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
@@ -31,7 +31,7 @@ export default defineConfig({
         ],
         screenshots: [
           {
-            src: '/screenshot.png',
+            src: 'screenshot.png',
             sizes: '540x720',
             type: 'image/png',
             form_factor: 'narrow'
