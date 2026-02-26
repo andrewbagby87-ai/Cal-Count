@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 // https://vitejs.dev/config/
 export default defineConfig({
+    base: '/Cal-Count/',
     plugins: [
         react(),
         VitePWA({
@@ -19,9 +20,11 @@ export default defineConfig({
                 background_color: '#ffffff',
                 display: 'standalone',
                 orientation: 'portrait-primary',
+                id: './Cal-Count/',
+                start_url: './Cal-Count/',
                 icons: [
                     {
-                        src: '/scale.png',
+                        src: 'public/scale.png',
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'any'
@@ -29,7 +32,7 @@ export default defineConfig({
                 ],
                 screenshots: [
                     {
-                        src: '/screenshot.png',
+                        src: 'screenshot.png',
                         sizes: '540x720',
                         type: 'image/png',
                         form_factor: 'narrow'

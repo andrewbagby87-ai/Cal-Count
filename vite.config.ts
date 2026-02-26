@@ -21,11 +21,11 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
-        id: '/Cal-Count/',
-        start_url: '/Cal-Count/',
+        id: './Cal-Count/',
+        start_url: './Cal-Count/',
         icons: [
           {
-            src: 'scale.png',
+            src: 'public/scale.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
