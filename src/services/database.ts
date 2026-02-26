@@ -248,14 +248,25 @@ export async function deleteWeightLog(id: string) {
 }
 
 export async function getHealthLogs(userId: string) {
-  const q = query(
-    collection(db, 'healthLogs'),
-    where('userId', '==', userId),
-    orderBy('timestamp', 'desc')
-  );
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  try {
+    // Reference the single document named after the user's ID
+    const docRef = doc(db, 'healthLogs', userId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      // Extract the 'syncs' array, defaulting to an empty array if it doesn't exist
+      const syncs = data.syncs || [];
+      
+      // Sort the array so the newest syncs appear first
+      return syncs.sort((a: any, b: any) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+    }
+    
+    return []; // Return empty if the document doesn't exist yet
+  } catch (error) {
+    console.error("Error fetching health logs:", error);
+    return [];
+  }
 }

@@ -1,5 +1,5 @@
 const { onRequest } = require("firebase-functions/v2/https");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { initializeApp } = require("firebase-admin/app");
 
 initializeApp();
@@ -19,13 +19,21 @@ exports.syncHealthData = onRequest({ invoker: "public" }, async (req, res) => {
     const db = getFirestore();
     const data = req.body; 
 
-    // CHANGE: Write to a top-level collection 'healthLogs'
-    // Include userId as a field so you can filter it later
-    await db.collection("healthLogs").add({
+    // Prepare the new sync entry
+    const newSyncEntry = {
       ...data,
-      userId: userId, 
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Reference the specific document named after the userId
+    const docRef = db.collection("healthLogs").doc(userId);
+
+    // Use set with { merge: true } and arrayUnion to add the new sync
+    // into a 'syncs' array. If the doc doesn't exist, it creates it.
+    await docRef.set({
+      userId: userId,
+      syncs: FieldValue.arrayUnion(newSyncEntry)
+    }, { merge: true });
 
     res.status(200).send("Data synced successfully!");
   } catch (error) {
