@@ -7,7 +7,8 @@ interface UserSettingsProps {
 }
 
 export default function UserSettings({ onBack }: UserSettingsProps) {
-  const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
+  // Extract user to access the uid for the copy button
+  const { user, userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -127,16 +128,10 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     }
   };
 
-  // Helper function to copy the full Sync URL
-  const copySyncUrl = () => {
-    const baseUrl = "https://console.firebase.google.com/project/cal-count-c5d90/overview";
-    
-    // Attach the user ID directly to the URL
-    // We use userProfile?.uid just in case it hasn't fully loaded yet
-    const fullUrl = `${baseUrl}?userId=${userProfile?.uid}`;
-
-    navigator.clipboard.writeText(fullUrl);
-    setMessage('✓ Sync URL copied to clipboard!');
+  // Helper function to handle copying any text and showing a custom message
+  const copyToClipboard = (text: string, successMessage: string) => {
+    navigator.clipboard.writeText(text);
+    setMessage(`✓ ${successMessage}`);
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -145,6 +140,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
   }
 
   const isBusy = isSaving || isDeleting;
+  const userId = user?.uid || userProfile?.uid || '';
 
   return (
     <div className="settings-container">
@@ -165,24 +161,49 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
             <section className="settings-section">
               <h2>Profile & Health Sync</h2>
               
-              {/* UPDATED: Apple Health Sync section with only the copy button */}
               <div className="form-group">
-                <label>Apple Health Sync</label>
-                <div>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary"
-                    onClick={copySyncUrl}
-                  >
-                    Copy Sync URL
-                  </button>
-                </div>
-                <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-                  Paste this URL into the Health Auto Export app's REST API automation.
+                <label>Apple Health Sync Setup</label>
+                <small style={{ color: '#666', marginTop: '4px', marginBottom: '12px', display: 'block' }}>
+                  Paste these values into the Health Auto Export app's REST API automation.
                 </small>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Sync URL Button */}
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard('https://synchealthdata-iyfojguipa-uc.a.run.app/', 'Sync URL copied!')}
+                    >
+                      Copy Sync URL
+                    </button>
+                  </div>
+
+                  {/* Header Key Button */}
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard('x-user-id', 'Header Key copied!')}
+                    >
+                      Copy Key (x-user-id)
+                    </button>
+                  </div>
+
+                  {/* Header Value Button */}
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard(userId, 'User ID copied!')}
+                    >
+                      Copy Value (User ID)
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group" style={{ marginTop: '1rem' }}>
                 <label>Name *</label>
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
               </div>

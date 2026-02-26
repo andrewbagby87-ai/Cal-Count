@@ -204,3 +204,42 @@
   color: #991b1b;
   border: 1px solid #fecaca;
 }
+
+.copy-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  min-width: 80px;
+  text-transform: uppercase;
+}
+
+.copy-text {
+  flex: 1;
+  font-family: monospace;
+  color: #334155;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-copy {
+  background-color: #e2e8f0;
+  color: #475569;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-copy:hover {
+  background-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.btn-copy:active {
+  background-color: #94a3b8;
+}
