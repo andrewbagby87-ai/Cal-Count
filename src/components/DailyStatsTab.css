@@ -158,6 +158,7 @@
   color: #475569;
   text-align: center;
 }
+
 /* --- Bottom Row & Half-Width Cards --- */
 .dashboard-bottom-row {
   display: flex;
@@ -166,9 +167,9 @@
 }
 
 .half-width-card {
-  flex: 1; /* This makes the card automatically take up 50% of the row */
-  min-width: 0; /* Prevents flexbox blowouts */
-  margin: 0; /* Overrides any default margins on the stats-card class */
+  flex: 1; 
+  min-width: 0; 
+  margin: 0; 
 }
 
 .weight-highlight {
@@ -195,13 +196,6 @@
   color: #94a3b8;
   font-style: italic;
   font-size: 0.9rem;
-}
-
-/* On small phones, stack the half-width cards on top of each other */
-@media (max-width: 600px) {
-  .dashboard-bottom-row {
-    flex-direction: column;
-  }
 }
 
 .date-navigator {
@@ -238,6 +232,7 @@
   border-radius: 0.75rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  animation: slideDown 0.3s ease-out;
 }
 
 .week-day-btn {
@@ -300,7 +295,7 @@
   left: 0;
   width: 100%;
   transition: height 0.3s ease;
-  opacity: 0.3; /* Subtle background fill */
+  opacity: 0.3; 
 }
 
 .week-day-btn.selected .day-circle {
@@ -331,19 +326,6 @@
   color: #1e293b;
 }
 
-/* Ensure the navigator has a slight animation or clean entry */
-.weekly-navigator {
-  display: flex;
-  justify-content: space-between;
-  background: white;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  /* Animation for collapse */
-  animation: slideDown 0.3s ease-out;
-}
-
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -354,8 +336,6 @@
     transform: translateY(0);
   }
 }
-
-/* src/components/DailyStatsTab.css */
 
 .view-toggle-container {
   display: flex;
@@ -385,15 +365,6 @@
   gap: 1rem;
 }
 
-.month-header {
-  font-weight: 700;
-  font-size: 1.1rem;
-  text-align: center;
-  color: #1e293b;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #f1f5f9;
-}
-
 .navigator-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -409,3 +380,61 @@
   height: 32px;
 }
 
+/* --- Updates for Monthly View Navigation --- */
+.month-header {
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-align: center;
+  color: #1e293b;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex; 
+  justify-content: space-between;
+  align-items: center;
+}
+
+.small-nav-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Mobile Fixes for Weekly View Overflow --- */
+@media (max-width: 600px) {
+  .dashboard-bottom-row {
+    flex-direction: column;
+  }
+  
+  .navigator-container {
+    padding: 0.75rem 0.25rem; 
+  }
+  
+  .navigator-grid {
+    gap: 2px; 
+  }
+  
+  .week-day-btn {
+    padding: 0.25rem 0.1rem; 
+  }
+  
+  .day-circle {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .day-number {
+    font-size: 0.8rem;
+  }
+  
+  .day-name {
+    font-size: 0.65rem;
+  }
+  
+  .monthly-view .day-circle {
+    width: 26px;
+    height: 26px;
+  }
+}

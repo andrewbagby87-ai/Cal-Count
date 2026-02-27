@@ -151,6 +151,32 @@ export default function DailyStatsTab() {
     setViewDate(new Date());
   };
 
+const handlePrevMonth = () => {
+    const targetDate = new Date(viewDate);
+    targetDate.setDate(1); // Set to 1st to prevent month-skipping overflow bugs
+    targetDate.setMonth(viewDate.getMonth() - 1);
+    
+    const today = new Date();
+    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
+      setViewDate(new Date()); // It's the current month, default to today
+    } else {
+      setViewDate(targetDate); // It's a different month, default to the 1st
+    }
+  };
+
+  const handleNextMonth = () => {
+    const targetDate = new Date(viewDate);
+    targetDate.setDate(1); // Set to 1st to prevent month-skipping overflow bugs
+    targetDate.setMonth(viewDate.getMonth() + 1);
+    
+    const today = new Date();
+    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
+      setViewDate(new Date()); // It's the current month, default to today
+    } else {
+      setViewDate(targetDate); // It's a different month, default to the 1st
+    }
+  };
+
   // Load Summaries for Weekly/Monthly navigator
   useEffect(() => {
     const loadNavigatorStats = async () => {
@@ -316,7 +342,9 @@ export default function DailyStatsTab() {
           {/* MONTH HEADER: Shows the month name only in Monthly View */}
           {viewMode === 'monthly' && (
             <div className="month-header">
-              {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              <button className="nav-btn small-nav-btn" onClick={handlePrevMonth}>←</button>
+              <span>{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+              <button className="nav-btn small-nav-btn" onClick={handleNextMonth}>→</button>
             </div>
           )}
           
