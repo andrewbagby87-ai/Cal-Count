@@ -4,6 +4,7 @@ import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodL
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
+import BarcodeScanner from './BarcodeScanner';
 import './FoodLogTab.css';
 
 export default function FoodLogTab() {
@@ -14,6 +15,9 @@ export default function FoodLogTab() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  
+  // NEW: State to control the barcode scanner
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const loadData = async () => {
     if (!user) return;
@@ -80,9 +84,15 @@ export default function FoodLogTab() {
     <div className="food-log-tab">
       <div className="tab-header">
         <h2>Food Log</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
-          + Add Food
-        </button>
+        {/* NEW: Added header-actions div to put the buttons side-by-side */}
+        <div className="header-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => setIsScannerOpen(true)}>
+            📷 Scan
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+            + Add Food
+          </button>
+        </div>
       </div>
 
       <div className="food-summary">
@@ -140,6 +150,18 @@ export default function FoodLogTab() {
 
       {showEditModal && editingLog && (
         <EditFoodLogModal log={editingLog} onSave={handleEditLog} onClose={() => setShowEditModal(false)} />
+      )}
+
+      {/* NEW: The Barcode Scanner Component */}
+      {isScannerOpen && (
+        <BarcodeScanner 
+          onClose={() => setIsScannerOpen(false)}
+          onScanSuccess={(code) => {
+            setIsScannerOpen(false);
+            alert(`Successfully scanned barcode: ${code}`);
+            console.log("Barcode:", code);
+          }}
+        />
       )}
     </div>
   );

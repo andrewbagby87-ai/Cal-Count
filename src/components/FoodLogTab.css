@@ -11,6 +11,12 @@
   margin-bottom: 0.5rem;
 }
 
+/* NEW: Keeps the Scan and Add buttons neat */
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .tab-header h2 {
   margin: 0;
 }
