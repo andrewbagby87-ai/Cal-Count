@@ -4,6 +4,8 @@ import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs } fr
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
+// --- Helper Functions ---
+
 const formatTime12Hour = (timeStr: string) => {
   if (!timeStr) return '';
   try {
@@ -48,6 +50,39 @@ const parseUnit = (u: string) => {
   return u.toLowerCase().includes('kg') ? 'kg' : 'lbs';
 };
 
+const getWeekDates = (date: Date) => {
+  const start = new Date(date);
+  start.setDate(date.getDate() - date.getDay()); // Start on Sunday
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+};
+
+const getMonthDates = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - firstDay.getDay());
+  
+  const end = new Date(lastDay);
+  end.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
+  
+  const dates = [];
+  let current = new Date(start);
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+};
+
+// --- Sub-Components ---
+
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
   const percentage = Math.min(Math.round((consumed / (budget || 1)) * 100), 100);
   const radius = 34;
@@ -81,30 +116,77 @@ const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { 
   );
 };
 
+// --- Main Component ---
+
 export default function DailyStatsTab() {
   const { user, userProfile } = useAuth();
+  const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
+  const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  const getLocalDateString = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
+  const getDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
+  const handlePrevDay = () => {
+    const prev = new Date(viewDate);
+    prev.setDate(prev.getDate() - 1);
+    setViewDate(prev);
+  };
+
+  const handleNextDay = () => {
+    const next = new Date(viewDate);
+    next.setDate(next.getDate() + 1);
+    setViewDate(next);
+  };
+
+  const handleGoToToday = () => {
+    setViewDate(new Date());
+  };
+
+  // Load Summaries for Weekly/Monthly navigator
+  useEffect(() => {
+    const loadNavigatorStats = async () => {
+      if (!user || viewMode === 'none') return;
+      const datesToFetch = viewMode === 'monthly' ? getMonthDates(viewDate) : getWeekDates(viewDate);
+      const summaries: Record<string, number> = {};
+
+      await Promise.all(datesToFetch.map(async (date) => {
+        const dStr = getDateString(date);
+        const [foods, workouts] = await Promise.all([
+          getDayFoodLogs(user.uid, dStr),
+          getDayWorkoutLogs(user.uid, dStr)
+        ]);
+        
+        const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+        const burned = workouts.reduce((sum, log) => sum + log.caloriesBurned, 0);
+        const budget = (userProfile?.caloriesBudget || 0) + burned;
+        summaries[dStr] = budget > 0 ? (consumed / budget) : 0;
+      }));
+
+      setNavigatorSummaries(summaries);
+    };
+
+    loadNavigatorStats();
+  }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
+
+  // Load Detailed Daily Data
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
+      setLoading(true);
       try {
-        const todayStr = getLocalDateString();
-        
+        const dateStr = getDateString(viewDate);
         const [foods, workouts, manualWeights, healthLogsRaw] = await Promise.all([
-          getDayFoodLogs(user.uid, todayStr),
-          getDayWorkoutLogs(user.uid, todayStr),
+          getDayFoodLogs(user.uid, dateStr),
+          getDayWorkoutLogs(user.uid, dateStr),
           getAllWeightLogs(user.uid),
           getHealthLogs(user.uid)
         ]);
@@ -112,13 +194,12 @@ export default function DailyStatsTab() {
         setFoodLogs(foods || []);
         setWorkoutLogs(workouts || []);
         
-        const todaysManualWeights = (manualWeights || []).filter(w => w.date === todayStr).map(w => ({
+        const todaysManualWeights = (manualWeights || []).filter(w => w.date === dateStr).map(w => ({
           ...w,
           timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
         }));
 
         const todaysHealthWeights: any[] = [];
-
         healthLogsRaw.forEach((log: any) => {
           const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
           const baseTimestamp = baseTimestampObj.getTime();
@@ -128,8 +209,7 @@ export default function DailyStatsTab() {
               metric.data.forEach((entry: any) => {
                 const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
                 const parsedDate = formatSyncDate(dateObj);
-                
-                if (parsedDate && parsedDate.dateStr === todayStr) {
+                if (parsedDate && parsedDate.dateStr === dateStr) {
                   todaysHealthWeights.push({
                     date: parsedDate.dateStr,
                     time: parsedDate.timeStr,
@@ -149,8 +229,7 @@ export default function DailyStatsTab() {
             } else {
               const dateObj = parseSafeDate(log.date || log.timestamp, baseTimestamp);
               const parsedDate = formatSyncDate(dateObj);
-              
-              if (parsedDate && parsedDate.dateStr === todayStr) {
+              if (parsedDate && parsedDate.dateStr === dateStr) {
                 todaysHealthWeights.push({
                   date: parsedDate.dateStr,
                   time: parsedDate.timeStr,
@@ -168,30 +247,26 @@ export default function DailyStatsTab() {
           }
         });
 
-        const combinedTodaysWeights = [...todaysManualWeights, ...todaysHealthWeights]
-          .filter(w => w.weight > 0);
-        
+        const combinedTodaysWeights = [...todaysManualWeights, ...todaysHealthWeights].filter(w => w.weight > 0);
         if (combinedTodaysWeights.length > 0) {
           combinedTodaysWeights.sort((a, b) => b.timestamp - a.timestamp);
           setTodayWeight(combinedTodaysWeights[0]);
         } else {
           setTodayWeight(null);
         }
-        
       } catch (error) {
         console.error('Failed to load stats:', error);
       } finally {
         setLoading(false);
       }
     };
-
     loadData();
-  }, [user]);
+  }, [user, viewDate]);
 
-  if (loading) return <div className="loading">Loading stats...</div>;
+  const todayStr = getDateString(new Date());
+  const viewStr = getDateString(viewDate);
+  const isToday = todayStr === viewStr;
 
-  const todayDisplay = getLocalDateString();
-  
   const caloriesConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
   const caloriesBurned = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
   const totalBudget = (userProfile?.caloriesBudget || 0) + caloriesBurned;
@@ -207,75 +282,136 @@ export default function DailyStatsTab() {
 
   return (
     <div className="daily-stats">
-      <h2>Today's Summary</h2>
-      <p className="date">{new Date(todayDisplay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-
-      <div className="stats-card">
-        <div className="stat-item hero-stat">
-          <div className="stat-header-row">
-            <span className="stat-label">Calories</span>
-            <span className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}>
-              {remaining >= 0 ? '+' : ''}{Math.round(remaining)} remaining
-            </span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${Math.min(percentage, 100)}%` }}></div>
-          </div>
-          <div className="stat-value full-width">
-            <span className="consumed">{Math.round(caloriesConsumed)}</span>
-            <span className="separator">/</span>
-            <span className="budget">{totalBudget} kcal</span>
-          </div>
+      <div className="date-navigator">
+        <button className="nav-btn" onClick={handlePrevDay}>←</button>
+        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
+          <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
+          <p className="date">
+            {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
         </div>
-
-        <div className="nutrients-grid">
-          {userProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={userProfile.fatBudget || 0} unit="g" color="#f59e0b" />}
-          {userProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={userProfile.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
-          {userProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={userProfile.carbsBudget || 0} unit="g" color="#10b981" />}
-          {userProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={userProfile.fiberBudget || 0} unit="g" color="#8b5cf6" />}
-          {userProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={userProfile.sugarBudget || 0} unit="g" color="#ec4899" />}
-          {userProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={userProfile.proteinBudget || 0} unit="g" color="#3b82f6" />}
-        </div>
+        <button className="nav-btn" onClick={handleNextDay}>→</button>
       </div>
 
-      <div className="dashboard-bottom-row">
+      <div className="view-toggle-container">
+        <button 
+          className="btn-weekly-toggle" 
+          onClick={() => setViewMode(viewMode === 'none' ? 'weekly' : 'none')}
+        >
+          {viewMode === 'none' ? '▼ Show Navigator' : '▲ Hide Navigator'}
+        </button>
         
-        {/* Today's Weight Tile */}
-        <div className="stats-card half-width-card">
-          <div className="stat-item">
-            <span className="stat-label">Today's Weight</span>
-            {todayWeight ? (
-              <div className="weight-highlight">
-                <span className="weight-number">{todayWeight.weight}</span>
-                <span className="weight-unit">{todayWeight.unit}</span>
-                {/* Removed alignSelf: 'center' here so it falls to the baseline! */}
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
-                  at {formatTime12Hour(todayWeight.time)}
+        {viewMode !== 'none' && (
+          <button 
+            className="btn-mode-switch"
+            onClick={() => setViewMode(viewMode === 'weekly' ? 'monthly' : 'weekly')}
+          >
+            Switch to {viewMode === 'weekly' ? 'Month' : 'Week'} View
+          </button>
+        )}
+      </div>
+
+      {viewMode !== 'none' && (
+        <div className={`navigator-container ${viewMode}-view`}>
+          {/* MONTH HEADER: Shows the month name only in Monthly View */}
+          {viewMode === 'monthly' && (
+            <div className="month-header">
+              {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </div>
+          )}
+          
+          <div className="navigator-grid">
+            {(viewMode === 'weekly' ? getWeekDates(viewDate) : getMonthDates(viewDate)).map((date) => {
+              const dStr = getDateString(date);
+              const isSelected = dStr === viewStr;
+              const isActualToday = dStr === todayStr;
+              const isDifferentMonth = date.getMonth() !== viewDate.getMonth();
+              const progress = navigatorSummaries[dStr] || 0;
+              
+              return (
+                <button 
+                  key={dStr} 
+                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''} ${isDifferentMonth ? 'diff-month' : ''}`}
+                  onClick={() => setViewDate(date)}
+                >
+                  <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                  <div className="day-circle">
+                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: progress > 1 ? '#ef4444' : '#2563eb' }} />
+                     <span className="day-number">{date.getDate()}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="loading">Loading stats...</div>
+      ) : (
+        <>
+          <div className="stats-card">
+            <div className="stat-item hero-stat">
+              <div className="stat-header-row">
+                <span className="stat-label">Calories</span>
+                <span className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}>
+                  {remaining >= 0 ? '+' : ''}{Math.round(remaining)} remaining
                 </span>
               </div>
-            ) : (
-              <div className="empty-weight">
-                <span>No weight logged today</span>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${Math.min(percentage, 100)}%` }}></div>
+              </div>
+              <div className="stat-value full-width">
+                <span className="consumed">{Math.round(caloriesConsumed)}</span>
+                <span className="separator">/</span>
+                <span className="budget">{totalBudget} kcal</span>
+              </div>
+            </div>
+
+            <div className="nutrients-grid">
+              {userProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={userProfile.fatBudget || 0} unit="g" color="#f59e0b" />}
+              {userProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={userProfile.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
+              {userProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={userProfile.carbsBudget || 0} unit="g" color="#10b981" />}
+              {userProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={userProfile.fiberBudget || 0} unit="g" color="#8b5cf6" />}
+              {userProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={userProfile.sugarBudget || 0} unit="g" color="#ec4899" />}
+              {userProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={userProfile.proteinBudget || 0} unit="g" color="#3b82f6" />}
+            </div>
+          </div>
+
+          <div className="dashboard-bottom-row">
+            <div className="stats-card half-width-card">
+              <div className="stat-item">
+                <span className="stat-label">Weight</span>
+                {todayWeight ? (
+                  <div className="weight-highlight">
+                    <span className="weight-number">{todayWeight.weight}</span>
+                    <span className="weight-unit">{todayWeight.unit}</span>
+                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
+                      at {formatTime12Hour(todayWeight.time)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="empty-weight"><span>No weight logged</span></div>
+                )}
+              </div>
+            </div>
+
+            {caloriesBurned > 0 && (
+              <div className="stats-card half-width-card">
+                <div className="stat-item">
+                  <span className="stat-label">Calories Burned</span>
+                  <div className="weight-highlight">
+                    <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
+                      {caloriesBurned}
+                    </span>
+                    <span className="weight-unit">kcal</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        </div>
-
-        {caloriesBurned > 0 && (
-          <div className="stats-card half-width-card">
-            <div className="stat-item">
-              <span className="stat-label">Calories Burned</span>
-              <div className="weight-highlight">
-                <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
-                  {caloriesBurned}
-                </span>
-                <span className="weight-unit">kcal</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
+        </>
+      )}
     </div>
   );
 }

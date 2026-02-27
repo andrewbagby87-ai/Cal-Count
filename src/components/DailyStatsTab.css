@@ -203,3 +203,209 @@
     flex-direction: column;
   }
 }
+
+.date-navigator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.date-display {
+  text-align: center;
+}
+
+.nav-btn {
+  background: #e2e8f0;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.nav-btn:hover {
+  background: #cbd5e1;
+}
+
+.weekly-navigator {
+  display: flex;
+  justify-content: space-between;
+  background: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.week-day-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.week-day-btn:hover {
+  background: #f1f5f9;
+}
+
+.week-day-btn.selected {
+  background: #e2e8f0;
+}
+
+.week-day-btn.is-today .day-name {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.day-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.day-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.day-number {
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 1;
+  color: #1e293b;
+}
+
+.day-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  transition: height 0.3s ease;
+  opacity: 0.3; /* Subtle background fill */
+}
+
+.week-day-btn.selected .day-circle {
+  border-color: #2563eb;
+}
+
+.weekly-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.btn-weekly-toggle {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background-color: #f1f5f9;
+  transition: all 0.2s;
+}
+
+.btn-weekly-toggle:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Ensure the navigator has a slight animation or clean entry */
+.weekly-navigator {
+  display: flex;
+  justify-content: space-between;
+  background: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  /* Animation for collapse */
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* src/components/DailyStatsTab.css */
+
+.view-toggle-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 1rem;
+}
+
+.btn-mode-switch {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.navigator-container {
+  background: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.month-header {
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-align: center;
+  color: #1e293b;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.navigator-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.week-day-btn.diff-month {
+  opacity: 0.4;
+}
+
+.monthly-view .day-circle {
+  width: 32px;
+  height: 32px;
+}
+
