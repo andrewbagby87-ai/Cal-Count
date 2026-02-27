@@ -100,14 +100,30 @@ export async function deleteFood(id: string) {
   await deleteDoc(doc(db, 'foods', id));
 }
 
-// Food Log Operations
 export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' | 'userId' | 'timestamp'>) {
-  const docRef = await addDoc(collection(db, 'foodLogs'), {
+  const docRef = doc(db, 'foodLogs', userId);
+  const docSnap = await getDoc(docRef);
+  
+  const newLog = {
     ...foodLog,
-    userId,
-    timestamp: Timestamp.now(),
-  });
-  return docRef.id;
+    id: crypto.randomUUID(), // Generate a unique ID for the log entry
+    timestamp: Timestamp.now().toMillis(),
+  };
+
+  if (docSnap.exists()) {
+    // If document exists, append to the logs array
+    const existingLogs = docSnap.data().logs || [];
+    await updateDoc(docRef, {
+      logs: [newLog, ...existingLogs]
+    });
+  } else {
+    // If document doesn't exist, create it with the first log
+    await setDoc(docRef, {
+      userId,
+      logs: [newLog]
+    });
+  }
+  return newLog.id;
 }
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {

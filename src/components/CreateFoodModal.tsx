@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { createFood } from '../services/database';
+import { createFood, createFoodLog } from '../services/database';
 import { Food } from '../types';
 import './CreateFoodModal.css';
 
@@ -15,9 +15,17 @@ export default function CreateFoodModal({ onCreated, onClose }: Props) {
     name: '',
     brand: '',
     calories: '',
-    protein: '',
+    fat: '',
+    saturatedFat: '',
+    transFat: '',
+    cholesterol: '',
+    sodium: '',
+    carbs: '',
     fiber: '',
+    sugar: '',
+    protein: '',
     servingSize: '',
+    volume: '',
     servingUnit: 'g' as const,
   });
   const [loading, setLoading] = useState(false);
@@ -42,28 +50,51 @@ export default function CreateFoodModal({ onCreated, onClose }: Props) {
       if (!formData.calories) throw new Error('Calories is required');
       if (!formData.servingSize) throw new Error('Serving size is required');
 
-      const foodId = await createFood(user.uid, {
+      // Build the nutrition object without undefined fields
+      const nutritionData: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
         calories: parseFloat(formData.calories),
-        protein: formData.protein ? parseFloat(formData.protein) : undefined,
+        fat: formData.fat ? parseFloat(formData.fat) : undefined,
+        saturatedFat: formData.saturatedFat ? parseFloat(formData.saturatedFat) : undefined,
+        transFat: formData.transFat ? parseFloat(formData.transFat) : undefined,
+        cholesterol: formData.cholesterol ? parseFloat(formData.cholesterol) : undefined,
+        sodium: formData.sodium ? parseFloat(formData.sodium) : undefined,
+        carbs: formData.carbs ? parseFloat(formData.carbs) : undefined,
         fiber: formData.fiber ? parseFloat(formData.fiber) : undefined,
+        sugar: formData.sugar ? parseFloat(formData.sugar) : undefined,
+        protein: formData.protein ? parseFloat(formData.protein) : undefined,
         servingSize: parseFloat(formData.servingSize),
         servingUnit: formData.servingUnit,
-      });
+      };
 
-      onCreated({
+      if (formData.volume && formData.volume.trim() !== '') {
+        nutritionData.volume = parseFloat(formData.volume);
+      }
+
+      // 1. Create the base food definition
+      const foodId = await createFood(user.uid, nutritionData);
+      
+      const foodObject: Food = {
         id: foodId,
         userId: user.uid,
-        name: formData.name,
-        brand: formData.brand || undefined,
-        calories: parseFloat(formData.calories),
-        protein: formData.protein ? parseFloat(formData.protein) : undefined,
-        fiber: formData.fiber ? parseFloat(formData.fiber) : undefined,
-        servingSize: parseFloat(formData.servingSize),
-        servingUnit: formData.servingUnit,
+        ...nutritionData,
         createdAt: Date.now(),
+      };
+
+      // 2. Save to consolidated foodLogs (HealthLog style)
+      const today = new Date().toISOString().split('T')[0];
+      await createFoodLog(user.uid, {
+        date: today,
+        foodId: foodId,
+        food: foodObject,
+        amount: nutritionData.servingSize,
+        unit: nutritionData.servingUnit,
+        ...nutritionData
       });
+
+      onCreated(foodObject);
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -103,59 +134,157 @@ export default function CreateFoodModal({ onCreated, onClose }: Props) {
           />
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="calories">Calories *</label>
-            <input
-              id="calories"
-              type="number"
-              name="calories"
-              value={formData.calories}
-              onChange={handleChange}
-              placeholder="165"
-              required
-              min="0"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="protein">Protein (g)</label>
-            <input
-              id="protein"
-              type="number"
-              name="protein"
-              value={formData.protein}
-              onChange={handleChange}
-              placeholder="31"
-              min="0"
-              step="0.1"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="fiber">Fiber (g)</label>
-            <input
-              id="fiber"
-              type="number"
-              name="fiber"
-              value={formData.fiber}
-              onChange={handleChange}
-              placeholder="0"
-              min="0"
-              step="0.1"
-            />
-          </div>
+        {/* Nutrients - Each on its own line in specified order */}
+        <div className="form-group">
+          <label htmlFor="calories">Calories *</label>
+          <input
+            id="calories"
+            type="number"
+            name="calories"
+            value={formData.calories}
+            onChange={handleChange}
+            placeholder="0"
+            required
+            min="0"
+          />
         </div>
 
         <div className="form-group">
-          <label htmlFor="servingSize">Serving Size *</label>
+          <label htmlFor="fat">Fat (g)</label>
+          <input
+            id="fat"
+            type="number"
+            name="fat"
+            value={formData.fat}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="saturatedFat">Saturated Fat (g)</label>
+          <input
+            id="saturatedFat"
+            type="number"
+            name="saturatedFat"
+            value={formData.saturatedFat}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="transFat">Trans Fat (g)</label>
+          <input
+            id="transFat"
+            type="number"
+            name="transFat"
+            value={formData.transFat}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="cholesterol">Cholesterol (mg)</label>
+          <input
+            id="cholesterol"
+            type="number"
+            name="cholesterol"
+            value={formData.cholesterol}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="sodium">Sodium (mg)</label>
+          <input
+            id="sodium"
+            type="number"
+            name="sodium"
+            value={formData.sodium}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="carbs">Carbs (g)</label>
+          <input
+            id="carbs"
+            type="number"
+            name="carbs"
+            value={formData.carbs}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="fiber">Fiber (g)</label>
+          <input
+            id="fiber"
+            type="number"
+            name="fiber"
+            value={formData.fiber}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="sugar">Sugar (g)</label>
+          <input
+            id="sugar"
+            type="number"
+            name="sugar"
+            value={formData.sugar}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="protein">Protein (g)</label>
+          <input
+            id="protein"
+            type="number"
+            name="protein"
+            value={formData.protein}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.1"
+          />
+        </div>
+
+        {/* Serving and Volume Information */}
+        <div className="form-group">
+          <label htmlFor="servingSize">Serving Size * (e.g., 1)</label>
           <input
             id="servingSize"
             type="number"
             name="servingSize"
             value={formData.servingSize}
             onChange={handleChange}
-            placeholder="100"
+            placeholder="1"
             required
             min="0"
             step="0.1"
@@ -163,19 +292,33 @@ export default function CreateFoodModal({ onCreated, onClose }: Props) {
         </div>
 
         <div className="form-group">
-          <label htmlFor="servingUnit">Volume Unit (Optional)</label>
-          <select
-            id="servingUnit"
-            name="servingUnit"
-            value={formData.servingUnit}
-            onChange={handleChange}
-          >
-            <option value="g">Grams (g)</option>
-            <option value="oz">Ounces (oz)</option>
-            <option value="cup">Cup</option>
-            <option value="ml">Milliliters (ml)</option>
-            <option value="serving">Serving</option>
-          </select>
+          <label htmlFor="volume">Volume (Optional)</label>
+          <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              id="volume"
+              type="number"
+              name="volume"
+              style={{ flex: 1 }}
+              value={formData.volume}
+              onChange={handleChange}
+              placeholder="100"
+              min="0"
+              step="0.1"
+            />
+            <select
+              id="servingUnit"
+              name="servingUnit"
+              style={{ width: 'auto', padding: '0.75rem' }}
+              value={formData.servingUnit}
+              onChange={handleChange}
+            >
+              <option value="g">Grams (g)</option>
+              <option value="oz">Ounces (oz)</option>
+              <option value="cup">Cup(s)</option>
+              <option value="ml">Milliliters (ml)</option>
+              <option value="serving">Serving</option>
+            </select>
+          </div>
         </div>
 
         <div className="form-actions">
