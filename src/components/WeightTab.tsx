@@ -1,36 +1,62 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-// Added deleteWeightLog to the import
-import { getAllWeightLogs, createWeightLog, deleteWeightLog } from '../services/database';
-import { WeightLog } from '../types';
+import { getAllWeightLogs, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
 import './WeightTab.css';
 
-// 100% Native Browser Time Converter
 const formatTime12Hour = (timeValue: string) => {
   if (!timeValue) return '';
-  
   try {
     const timeStr = String(timeValue);
     const [hours, minutes] = timeStr.split(':');
-    
     const tempDate = new Date();
     tempDate.setHours(parseInt(hours, 10));
     tempDate.setMinutes(parseInt(minutes, 10));
     tempDate.setSeconds(0);
-    
-    return tempDate.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true 
-    });
+    return tempDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   } catch (error) {
     return String(timeValue); 
   }
 };
 
+const parseSafeDate = (dateVal: any, fallbackTimestamp: number) => {
+  if (!dateVal) return new Date(fallbackTimestamp);
+  if (typeof dateVal === 'number') return new Date(dateVal);
+  
+  let dStr = String(dateVal);
+  
+  let d = new Date(dStr);
+  if (!isNaN(d.getTime())) return d;
+
+  dStr = dStr.replace(' ', 'T').replace(' -', '-').replace(' +', '+');
+  d = new Date(dStr);
+  if (!isNaN(d.getTime())) return d;
+
+  return new Date(fallbackTimestamp);
+};
+
+const formatSyncDate = (dateObj: Date) => {
+  if (isNaN(dateObj.getTime())) return null;
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  
+  return {
+    dateStr: `${year}-${month}-${day}`,
+    timeStr: `${hours}:${minutes}`,
+    timeMs: dateObj.getTime()
+  };
+};
+
+const parseUnit = (u: string) => {
+  if (!u) return 'lbs';
+  return u.toLowerCase().includes('kg') ? 'kg' : 'lbs';
+};
+
 export default function WeightTab() {
   const { user } = useAuth();
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
+  const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [weight, setWeight] = useState('');
@@ -45,8 +71,79 @@ export default function WeightTab() {
   const loadWeightLogs = async () => {
     if (!user) return;
     try {
-      const logs = await getAllWeightLogs(user.uid);
-      setWeightLogs(logs);
+      const [dbLogs, healthLogsRaw] = await Promise.all([
+        getAllWeightLogs(user.uid),
+        getHealthLogs(user.uid)
+      ]);
+
+      const healthWeightLogs: any[] = [];
+      
+      healthLogsRaw.forEach((log: any, index: number) => {
+        const baseTimestamp = new Date(log.timestamp || Date.now()).getTime();
+        const payloadId = log.id || `sync-${index}`;
+
+        const processMetric = (metric: any) => {
+          if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
+            metric.data.forEach((entry: any, i: number) => {
+              const dateObj = parseSafeDate(entry.date, baseTimestamp);
+              const parsedDate = formatSyncDate(dateObj);
+              
+              if (parsedDate) {
+                healthWeightLogs.push({
+                  id: `health-sync-${payloadId}-${i}`,
+                  date: parsedDate.dateStr,
+                  time: parsedDate.timeStr,
+                  weight: Number(entry.qty || entry.value || 0),
+                  unit: parseUnit(metric.units || log.units),
+                  timestamp: parsedDate.timeMs,
+                  isSynced: true
+                });
+              }
+            });
+          }
+        };
+
+        if (log.name === 'weight_body_mass') {
+          if (Array.isArray(log.data)) {
+            processMetric(log);
+          } else {
+            const dateObj = parseSafeDate(log.date, baseTimestamp);
+            const parsedDate = formatSyncDate(dateObj);
+            if (parsedDate) {
+              healthWeightLogs.push({
+                id: `health-sync-flat-${payloadId}`,
+                date: parsedDate.dateStr,
+                time: parsedDate.timeStr,
+                weight: Number(log.qty || log.value || log.weight || 0),
+                unit: parseUnit(log.units || log.unit),
+                timestamp: parsedDate.timeMs,
+                isSynced: true
+              });
+            }
+          }
+        } else if (Array.isArray(log.metrics)) {
+          log.metrics.forEach(processMetric);
+        } else if (log.data && Array.isArray(log.data.metrics)) {
+          log.data.metrics.forEach(processMetric);
+        }
+      });
+
+      const validHealthLogs = healthWeightLogs.filter(log => log.weight > 0);
+      const combinedLogs = [...dbLogs, ...validHealthLogs].sort((a, b) => b.timestamp - a.timestamp);
+      
+      // NEW: Deduplicate the combined logs
+      const seen = new Set();
+      const uniqueLogs = combinedLogs.filter(log => {
+        // Create a unique identifier for this specific weight entry
+        const uniqueKey = `${log.date}_${log.time}_${log.weight}`;
+        if (seen.has(uniqueKey)) {
+          return false; // Skip it, we already added this exact entry
+        }
+        seen.add(uniqueKey); // Mark it as seen
+        return true; // Keep it
+      });
+
+      setWeightLogs(uniqueLogs);
     } catch (err) {
       console.error('Failed to load weight logs:', err);
     } finally {
@@ -91,12 +188,16 @@ export default function WeightTab() {
     }
   };
 
-  // NEW: Function to handle the double-click deletion
-  const handleDeleteLog = async (logId: string) => {
+  const handleDeleteLog = async (log: any) => {
+    if (log.isSynced) {
+      alert('This entry is synced from Apple Health and cannot be deleted here.');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this weight log?')) {
       try {
-        await deleteWeightLog(logId);
-        await loadWeightLogs(); // Refresh the list after deletion
+        await deleteWeightLog(log.id);
+        await loadWeightLogs(); 
       } catch (err) {
         console.error('Failed to delete log:', err);
         alert('Failed to delete the weight log. Please try again.');
@@ -183,14 +284,19 @@ export default function WeightTab() {
           {weightLogs.map((log) => (
             <div 
               key={log.id} 
-              className="weight-log-item"
-              onDoubleClick={() => handleDeleteLog(log.id)}
-              title="Double-click to delete this entry"
-              style={{ cursor: 'pointer' }}
+              className={`weight-log-item ${log.isSynced ? 'synced-item' : ''}`}
+              onDoubleClick={() => handleDeleteLog(log)}
+              title={log.isSynced ? "Synced from Apple Health" : "Double-click to delete this entry"}
+              style={{ cursor: log.isSynced ? 'default' : 'pointer' }}
             >
               <div className="log-date">
                 <span className="date">{new Date(log.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 <span className="time">{formatTime12Hour(log.time)}</span>
+                {log.isSynced && (
+                  <span style={{ fontSize: '0.75rem', color: '#2563eb', display: 'block', marginTop: '4px', fontWeight: 600 }}>
+                    Health Sync
+                  </span>
+                )}
               </div>
               <div className="log-weight">
                 <span className="value">{log.weight}</span>

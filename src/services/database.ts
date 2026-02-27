@@ -7,7 +7,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   Timestamp,
   updateDoc,
   deleteDoc,
@@ -53,11 +52,8 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
 export async function deleteAllUserData(uid: string) {
   try {
     const db = getFirestore();
-    
-    // List of collections where user data is stored
     const collectionsToClean = ['foods', 'foodLogs', 'workoutLogs', 'weightLogs'];
     
-    // Delete all documents in related collections where userId matches
     for (const collectionName of collectionsToClean) {
       const q = query(collection(db, collectionName), where('userId', '==', uid));
       const querySnapshot = await getDocs(q);
@@ -67,7 +63,6 @@ export async function deleteAllUserData(uid: string) {
       await Promise.all(deletePromises);
     }
     
-    // Finally, delete the user profile document
     await deleteDoc(doc(db, 'users', uid));
   } catch (error) {
     console.error('Error deleting all user data:', error);
@@ -86,13 +81,14 @@ export async function createFood(userId: string, food: Omit<Food, 'id' | 'userId
 }
 
 export async function getUserFoods(userId: string): Promise<Food[]> {
-  const q = query(collection(db, 'foods'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'foods'), where('userId', '==', userId));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
+  const foods = querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data() as Omit<Food, 'id'>,
     createdAt: (doc.data().createdAt as Timestamp).toMillis(),
   }));
+  return foods.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function updateFood(id: string, updates: Partial<Food>) {
@@ -115,14 +111,14 @@ export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' 
 }
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
+  // REMOVED orderBy to fix the index crash!
   const q = query(
     collection(db, 'foodLogs'),
     where('userId', '==', userId),
-    where('date', '==', date),
-    orderBy('timestamp', 'desc')
+    where('date', '==', date)
   );
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
+  const logs = querySnapshot.docs.map(doc => {
     const data = doc.data();
     return {
       id: doc.id,
@@ -130,6 +126,9 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
       timestamp: (data.timestamp as Timestamp).toMillis(),
     };
   });
+  
+  // Sorting manually in Javascript instead
+  return logs.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function updateFoodLog(id: string, updates: Partial<FoodLog>) {
@@ -152,14 +151,14 @@ export async function createWorkoutLog(userId: string, workout: Omit<WorkoutLog,
 }
 
 export async function getDayWorkoutLogs(userId: string, date: string): Promise<WorkoutLog[]> {
+  // REMOVED orderBy to fix the index crash!
   const q = query(
     collection(db, 'workoutLogs'),
     where('userId', '==', userId),
-    where('date', '==', date),
-    orderBy('timestamp', 'desc')
+    where('date', '==', date)
   );
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
+  const logs = querySnapshot.docs.map(doc => {
     const data = doc.data();
     return {
       id: doc.id,
@@ -167,6 +166,9 @@ export async function getDayWorkoutLogs(userId: string, date: string): Promise<W
       timestamp: (data.timestamp as Timestamp).toMillis(),
     };
   });
+  
+  // Sorting manually in Javascript instead
+  return logs.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function deleteWorkoutLog(id: string) {
@@ -185,7 +187,6 @@ export async function createWeightLog(userId: string, weight: Omit<WeightLog, 'i
 
 export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
   try {
-    // 1. We ONLY filter by userId. We removed the Firebase "orderBy" to prevent index errors.
     const q = query(
       collection(db, 'weightLogs'),
       where('userId', '==', userId)
@@ -195,14 +196,11 @@ export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
     
     const logs = querySnapshot.docs.map(doc => {
       const data = doc.data();
-      
-      // 2. Crash-proof timestamp reading! If a log is somehow missing a timestamp, 
-      // we gracefully fall back to the current time instead of crashing the whole screen.
       let timeInMillis = Date.now();
       if (data.timestamp) {
         timeInMillis = typeof data.timestamp.toMillis === 'function' 
           ? data.timestamp.toMillis() 
-          : data.timestamp; // Just in case it's already a number
+          : data.timestamp; 
       }
 
       return {
@@ -212,12 +210,11 @@ export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
       };
     });
     
-    // 3. Sort the logs from newest to oldest using Javascript
     return logs.sort((a, b) => b.timestamp - a.timestamp);
     
   } catch (error) {
     console.error("CRITICAL ERROR fetching weight logs:", error);
-    return []; // Return an empty array so the screen doesn't break
+    return []; 
   }
 }
 
@@ -247,26 +244,56 @@ export async function deleteWeightLog(id: string) {
   }
 }
 
+// Health Log Operations (Restored the bulletproof version without orderBy)
 export async function getHealthLogs(userId: string) {
-  try {
-    // Reference the single document named after the user's ID
-    const docRef = doc(db, 'healthLogs', userId);
-    const docSnap = await getDoc(docRef);
+  const allSyncs: any[] = [];
+  const lowerUserId = userId.toLowerCase();
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      // Extract the 'syncs' array, defaulting to an empty array if it doesn't exist
-      const syncs = data.syncs || [];
-      
-      // Sort the array so the newest syncs appear first
-      return syncs.sort((a: any, b: any) => {
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
+  // 1. Fetch exact match document (Single doc array format)
+  try {
+    const exactDoc = await getDoc(doc(db, 'healthLogs', userId));
+    if (exactDoc.exists() && exactDoc.data().syncs) {
+      allSyncs.push(...exactDoc.data().syncs);
     }
-    
-    return []; // Return empty if the document doesn't exist yet
-  } catch (error) {
-    console.error("Error fetching health logs:", error);
-    return [];
+  } catch (e) {
+    console.warn("Could not fetch exact health doc:", e);
   }
+
+  // 2. Fetch lowercase match document
+  if (userId !== lowerUserId) {
+    try {
+      const lowerDoc = await getDoc(doc(db, 'healthLogs', lowerUserId));
+      if (lowerDoc.exists() && lowerDoc.data().syncs) {
+        allSyncs.push(...lowerDoc.data().syncs);
+      }
+    } catch (e) {
+      console.warn("Could not fetch lowercase health doc:", e);
+    }
+  }
+
+  // 3. Fetch exact match queries (Multi-doc format) - No OrderBy!
+  try {
+    const qExact = query(collection(db, 'healthLogs'), where('userId', '==', userId));
+    const snapExact = await getDocs(qExact);
+    snapExact.docs.forEach(d => {
+      if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...d.data(), id: d.id });
+    });
+  } catch (e) {
+    console.warn("Could not fetch exact health queries:", e);
+  }
+
+  // 4. Fetch lowercase match queries - No OrderBy!
+  if (userId !== lowerUserId) {
+    try {
+      const qLower = query(collection(db, 'healthLogs'), where('userId', '==', lowerUserId));
+      const snapLower = await getDocs(qLower);
+      snapLower.docs.forEach(d => {
+        if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...d.data(), id: d.id });
+      });
+    } catch (e) {
+      console.warn("Could not fetch lowercase health queries:", e);
+    }
+  }
+
+  return allSyncs;
 }

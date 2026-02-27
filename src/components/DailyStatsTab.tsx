@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs } from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
-// Formats the 24-hour time from the database into a readable AM/PM format
 const formatTime12Hour = (timeStr: string) => {
   if (!timeStr) return '';
   try {
@@ -16,6 +15,37 @@ const formatTime12Hour = (timeStr: string) => {
   } catch (e) {
     return timeStr;
   }
+};
+
+const parseSafeDate = (dateVal: any, fallbackTimestamp: number) => {
+  if (!dateVal) return new Date(fallbackTimestamp);
+  if (typeof dateVal === 'number') return new Date(dateVal);
+  let dStr = String(dateVal);
+  let d = new Date(dStr);
+  if (!isNaN(d.getTime())) return d;
+  dStr = dStr.replace(' ', 'T').replace(' -', '-').replace(' +', '+');
+  d = new Date(dStr);
+  if (!isNaN(d.getTime())) return d;
+  return new Date(fallbackTimestamp);
+};
+
+const formatSyncDate = (dateObj: Date) => {
+  if (isNaN(dateObj.getTime())) return null;
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  return {
+    dateStr: `${year}-${month}-${day}`,
+    timeStr: `${hours}:${minutes}`,
+    timeMs: dateObj.getTime()
+  };
+};
+
+const parseUnit = (u: string) => {
+  if (!u) return 'lbs';
+  return u.toLowerCase().includes('kg') ? 'kg' : 'lbs';
 };
 
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
@@ -58,7 +88,6 @@ export default function DailyStatsTab() {
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Bulletproof Local Date Builder (Guarantees YYYY-MM-DD matches your database)
   const getLocalDateString = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -73,28 +102,78 @@ export default function DailyStatsTab() {
       try {
         const todayStr = getLocalDateString();
         
-        const [foods, workouts, weights] = await Promise.all([
+        const [foods, workouts, manualWeights, healthLogsRaw] = await Promise.all([
           getDayFoodLogs(user.uid, todayStr),
           getDayWorkoutLogs(user.uid, todayStr),
           getAllWeightLogs(user.uid),
+          getHealthLogs(user.uid)
         ]);
         
         setFoodLogs(foods || []);
         setWorkoutLogs(workouts || []);
         
-        // Find ALL weights logged specifically today
-        const todaysWeights = (weights || []).filter(w => w.date === todayStr);
+        const todaysManualWeights = (manualWeights || []).filter(w => w.date === todayStr).map(w => ({
+          ...w,
+          timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
+        }));
+
+        const todaysHealthWeights: any[] = [];
+
+        healthLogsRaw.forEach((log: any) => {
+          const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
+          const baseTimestamp = baseTimestampObj.getTime();
+
+          const processMetric = (metric: any) => {
+            if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
+              metric.data.forEach((entry: any) => {
+                const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+                const parsedDate = formatSyncDate(dateObj);
+                
+                if (parsedDate && parsedDate.dateStr === todayStr) {
+                  todaysHealthWeights.push({
+                    date: parsedDate.dateStr,
+                    time: parsedDate.timeStr,
+                    weight: Number(entry.qty || entry.value || 0),
+                    unit: parseUnit(metric.units || log.units),
+                    timestamp: parsedDate.timeMs,
+                    isSynced: true
+                  });
+                }
+              });
+            }
+          };
+
+          if (log.name === 'weight_body_mass') {
+            if (Array.isArray(log.data)) {
+              processMetric(log);
+            } else {
+              const dateObj = parseSafeDate(log.date || log.timestamp, baseTimestamp);
+              const parsedDate = formatSyncDate(dateObj);
+              
+              if (parsedDate && parsedDate.dateStr === todayStr) {
+                todaysHealthWeights.push({
+                  date: parsedDate.dateStr,
+                  time: parsedDate.timeStr,
+                  weight: Number(log.qty || log.value || log.weight || 0),
+                  unit: parseUnit(log.units || log.unit),
+                  timestamp: parsedDate.timeMs,
+                  isSynced: true
+                });
+              }
+            }
+          } else if (Array.isArray(log.metrics)) {
+            log.metrics.forEach(processMetric);
+          } else if (log.data && Array.isArray(log.data.metrics)) {
+            log.data.metrics.forEach(processMetric);
+          }
+        });
+
+        const combinedTodaysWeights = [...todaysManualWeights, ...todaysHealthWeights]
+          .filter(w => w.weight > 0);
         
-        if (todaysWeights.length > 0) {
-          // Sort them STRICTLY by the 24-hour time string ("15:30" comes before "07:14")
-          // This avoids the Firebase Timestamp math error!
-          todaysWeights.sort((a, b) => {
-            const timeA = a.time || "00:00";
-            const timeB = b.time || "00:00";
-            return timeB.localeCompare(timeA);
-          });
-          
-          setTodayWeight(todaysWeights[0]);
+        if (combinedTodaysWeights.length > 0) {
+          combinedTodaysWeights.sort((a, b) => b.timestamp - a.timestamp);
+          setTodayWeight(combinedTodaysWeights[0]);
         } else {
           setTodayWeight(null);
         }
@@ -169,7 +248,8 @@ export default function DailyStatsTab() {
               <div className="weight-highlight">
                 <span className="weight-number">{todayWeight.weight}</span>
                 <span className="weight-unit">{todayWeight.unit}</span>
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem', alignSelf: 'center' }}>
+                {/* Removed alignSelf: 'center' here so it falls to the baseline! */}
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
                   at {formatTime12Hour(todayWeight.time)}
                 </span>
               </div>
