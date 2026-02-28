@@ -11,7 +11,7 @@ import './FoodLogTab.css';
 
 const getWeekDates = (date: Date) => {
   const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay()); // Start on Sunday
+  start.setDate(date.getDate() - date.getDay());
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -124,12 +124,10 @@ export default function FoodLogTab() {
     }
   };
 
-  // Reload data when the user changes dates
   useEffect(() => {
     loadData();
   }, [user, viewDate]);
 
-  // Load Summaries for Weekly/Monthly navigator
   useEffect(() => {
     const loadNavigatorStats = async () => {
       if (!user || viewMode === 'none') return;
@@ -158,7 +156,6 @@ export default function FoodLogTab() {
   const handleAddFood = async (foodData: any) => {
     if (!user) return;
     try {
-      // Save the food log to the currently viewed date, not necessarily today
       const targetDate = getDateString(viewDate);
       await createFoodLog(user.uid, {
         date: targetDate,
@@ -172,8 +169,9 @@ export default function FoodLogTab() {
   };
 
   const handleDeleteLog = async (logId: string) => {
+    if (!user) return;
     try {
-      await deleteFoodLog(logId);
+      await deleteFoodLog(user.uid, logId);
       await loadData();
     } catch (error) {
       console.error('Failed to delete food log:', error);
@@ -181,9 +179,9 @@ export default function FoodLogTab() {
   };
 
   const handleEditLog = async (updates: any) => {
-    if (!editingLog) return;
+    if (!editingLog || !user) return;
     try {
-      await updateFoodLog(editingLog.id, updates);
+      await updateFoodLog(user.uid, editingLog.id, updates);
       setShowEditModal(false);
       setEditingLog(null);
       await loadData();
@@ -196,10 +194,13 @@ export default function FoodLogTab() {
 
   const totalCalories = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
 
+  // Group foods by meal type for the diary layout
+  const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Uncategorized'];
+
   return (
     <div className="food-log-tab">
       
-      {/* --- DATE NAVIGATOR (Ported from DailyStats) --- */}
+      {/* --- DATE NAVIGATOR --- */}
       <div className="date-navigator">
         <button className="nav-btn" onClick={handlePrevDay}>←</button>
         <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
@@ -264,7 +265,6 @@ export default function FoodLogTab() {
           </div>
         </div>
       )}
-      {/* --- END DATE NAVIGATOR --- */}
 
       <div className="tab-header">
         <h2>{isToday ? "Today's Foods" : "Logged Foods"}</h2>
@@ -282,53 +282,78 @@ export default function FoodLogTab() {
         <span>Total: {totalCalories} cal</span>
       </div>
 
-      {foodLogs.length === 0 ? (
-        <div className="empty-state">
-          <p>No foods logged {isToday ? 'today' : 'on this day'}</p>
-          <button className="btn btn-outline" onClick={() => setShowAddModal(true)}>
-            Log your first food
-          </button>
-        </div>
-      ) : (
-        <div className="food-logs-list">
-          {foodLogs.map((log) => (
-            <div key={log.id} className="food-log-item">
-              <div className="food-info">
-                <h4>{log.food.name}</h4>
-                {log.food.brand && <span className="brand">{log.food.brand}</span>}
-                <span className="amount">
-                  {log.amount} {log.unit}
-                </span>
+      {/* --- MEAL DIARY SECTIONS --- */}
+      <div className="daily-diary">
+        {mealCategories.map(mealName => {
+          // Filter logs that belong to this specific meal
+          const logsForMeal = foodLogs.filter((log: any) => {
+            if (mealName === 'Uncategorized') {
+              // Catch legacy foods that were logged before meal tracking was added
+              return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
+            }
+            return log.mealType === mealName;
+          });
+
+          // Completely hide the "Uncategorized" section if there are no legacy foods
+          if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
+
+          // Calculate subtotal for just this meal
+          const mealCalories = logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
+
+          return (
+            <div key={mealName} className="meal-section">
+              <div className="meal-header">
+                <h3>{mealName}</h3>
+                <span className="meal-calories">{mealCalories} cal</span>
               </div>
-              <div className="food-calories">
-                <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
-              </div>
-              <div className="food-actions">
-                <button
-                  className="action-btn edit"
-                  onClick={() => {
-                    setEditingLog(log);
-                    setShowEditModal(true);
-                  }}
-                  title="Edit this food entry"
-                >
-                  ✏️
-                </button>
-                <button
-                  className="action-btn delete"
-                  onClick={() => handleDeleteLog(log.id)}
-                  title="Delete this food entry"
-                >
-                  🗑️
-                </button>
-              </div>
+              
+              {logsForMeal.length === 0 ? (
+                <div className="meal-empty">No foods logged</div>
+              ) : (
+                <div className="food-logs-list">
+                  {logsForMeal.map((log) => (
+                    <div key={log.id} className="food-log-item">
+                      <div className="food-info">
+                        <h4>{log.food.name}</h4>
+                        {log.food.brand && <span className="brand">{log.food.brand}</span>}
+                        <span className="amount">
+                          {log.amount} {log.unit}
+                        </span>
+                      </div>
+                      <div className="food-calories">
+                        <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
+                      </div>
+                      <div className="food-actions">
+                        <button
+                          className="action-btn edit"
+                          onClick={() => {
+                            setEditingLog(log);
+                            setShowEditModal(true);
+                          }}
+                          title="Edit this food entry"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="action-btn delete"
+                          onClick={() => handleDeleteLog(log.id)}
+                          title="Delete this food entry"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
 
       {showAddModal && (
-        <AddFoodModal foods={foods} onAdd={handleAddFood} onClose={() => setShowAddModal(false)} />
+        <AddFoodModal foods={foods} onAdd={handleAddFood} onClose={() => setShowAddModal(false)} selectedDate={getDateString(viewDate)} // <--- ADD THIS LINE
+        />
       )}
 
       {showEditModal && editingLog && (

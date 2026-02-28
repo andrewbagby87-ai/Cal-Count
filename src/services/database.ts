@@ -100,6 +100,7 @@ export async function deleteFood(id: string) {
   await deleteDoc(doc(db, 'foods', id));
 }
 
+// --- Food Log Operations (Updated for Array Structure) ---
 export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' | 'userId' | 'timestamp'>) {
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
@@ -111,49 +112,152 @@ export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' 
   };
 
   if (docSnap.exists()) {
-    // If document exists, append to the logs array
-    const existingLogs = docSnap.data().logs || [];
+    // If document exists, append to the foodData array
+    const data = docSnap.data();
+    const existingData = data.foodData || data.logs || [];
     await updateDoc(docRef, {
-      logs: [newLog, ...existingLogs]
+      foodData: [newLog, ...existingData]
     });
   } else {
-    // If document doesn't exist, create it with the first log
+    // If document doesn't exist, create it with the foodData array
     await setDoc(docRef, {
       userId,
-      logs: [newLog]
+      foodData: [newLog]
     });
   }
   return newLog.id;
 }
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
-  // REMOVED orderBy to fix the index crash!
-  const q = query(
-    collection(db, 'foodLogs'),
-    where('userId', '==', userId),
-    where('date', '==', date)
-  );
-  const querySnapshot = await getDocs(q);
-  const logs = querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data as Omit<FoodLog, 'id'>,
-      timestamp: (data.timestamp as Timestamp).toMillis(),
-    };
-  });
+  const allLogs: any[] = [];
   
-  // Sorting manually in Javascript instead
-  return logs.sort((a, b) => b.timestamp - a.timestamp);
+  // 1. Fetch exact match document (Single doc array format)
+  try {
+    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
+    if (exactDoc.exists()) {
+      const data = exactDoc.data();
+      if (data.foodData) {
+        allLogs.push(...data.foodData);
+      } else if (data.logs) {
+        allLogs.push(...data.logs); // Fallback so you don't lose older logs
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch exact foodLogs doc:", e);
+  }
+
+  // 2. Fetch multi-doc format fallback (so old single-document entries aren't lost)
+  try {
+    const qExact = query(
+      collection(db, 'foodLogs'),
+      where('userId', '==', userId),
+      where('date', '==', date)
+    );
+    const snapExact = await getDocs(qExact);
+    snapExact.docs.forEach(d => {
+      if (d.id !== userId) {
+        allLogs.push({
+          id: d.id,
+          ...d.data(),
+          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
+        });
+      }
+    });
+  } catch (e) {
+    console.warn("Could not fetch multi-doc format logs:", e);
+  }
+
+  // Filter to the requested date and sort descending
+  const dailyLogs = allLogs.filter((log: any) => log.date === date);
+  return dailyLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
-export async function updateFoodLog(id: string, updates: Partial<FoodLog>) {
-  const docRef = doc(db, 'foodLogs', id);
-  await updateDoc(docRef, updates);
+export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
+  const docRef = doc(db, 'foodLogs', userId);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    let updated = false;
+    
+    // Scan and update inside the foodData array
+    if (data.foodData) {
+      const newFoodData = data.foodData.map((log: any) => {
+        if (log.id === id) {
+          updated = true;
+          return { ...log, ...updates };
+        }
+        return log;
+      });
+      if (updated) {
+        await updateDoc(docRef, { foodData: newFoodData });
+        return;
+      }
+    }
+    
+    // Check legacy logs array
+    if (data.logs && !updated) {
+      const newLogs = data.logs.map((log: any) => {
+        if (log.id === id) {
+          updated = true;
+          return { ...log, ...updates };
+        }
+        return log;
+      });
+      if (updated) {
+        await updateDoc(docRef, { logs: newLogs });
+        return;
+      }
+    }
+  }
+
+  // Fallback for old multi-doc formatting
+  try {
+    const fallbackRef = doc(db, 'foodLogs', id);
+    await updateDoc(fallbackRef, updates);
+  } catch (e) {
+    console.warn("Could not update multi-doc format fallback:", e);
+  }
 }
 
-export async function deleteFoodLog(id: string) {
-  await deleteDoc(doc(db, 'foodLogs', id));
+export async function deleteFoodLog(userId: string, id: string) {
+  const docRef = doc(db, 'foodLogs', userId);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    let updated = false;
+
+    // Remove from foodData array
+    if (data.foodData) {
+      const initialLength = data.foodData.length;
+      const newFoodData = data.foodData.filter((log: any) => log.id !== id);
+      if (newFoodData.length !== initialLength) {
+        await updateDoc(docRef, { foodData: newFoodData });
+        updated = true;
+      }
+    }
+
+    // Check legacy logs array
+    if (data.logs && !updated) {
+      const initialLength = data.logs.length;
+      const newLogs = data.logs.filter((log: any) => log.id !== id);
+      if (newLogs.length !== initialLength) {
+        await updateDoc(docRef, { logs: newLogs });
+        updated = true;
+      }
+    }
+    
+    if (updated) return;
+  }
+
+  // Fallback for old multi-doc format
+  try {
+    const fallbackRef = doc(db, 'foodLogs', id);
+    await deleteDoc(fallbackRef);
+  } catch (e) {
+    console.warn("Could not delete multi-doc format fallback:", e);
+  }
 }
 
 // Workout Log Operations
@@ -260,7 +364,7 @@ export async function deleteWeightLog(id: string) {
   }
 }
 
-// Health Log Operations (Restored the bulletproof version without orderBy)
+// Health Log Operations
 export async function getHealthLogs(userId: string) {
   const allSyncs: any[] = [];
   const lowerUserId = userId.toLowerCase();

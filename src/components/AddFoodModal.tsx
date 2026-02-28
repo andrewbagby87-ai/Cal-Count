@@ -8,9 +8,10 @@ interface Props {
   foods: Food[];
   onAdd: (foodData: any) => Promise<void>;
   onClose: () => void;
+  selectedDate?: string; // NEW: Accepts the date from the Food Log view
 }
 
-export default function AddFoodModal({ foods, onAdd, onClose }: Props) {
+export default function AddFoodModal({ foods, onAdd, onClose, selectedDate }: Props) {
   const [mode, setMode] = useState<'choose' | 'create' | 'previous'>('choose');
   const [newFood, setNewFood] = useState<Food | null>(null);
 
@@ -42,7 +43,11 @@ export default function AddFoodModal({ foods, onAdd, onClose }: Props) {
         )}
 
         {mode === 'create' && (
-          <CreateFoodModal onCreated={handleFoodCreated} onClose={onClose} />
+          <CreateFoodModal 
+            onCreated={handleFoodCreated} 
+            onClose={onClose} 
+            initialDate={selectedDate} // NEW: Passes the date down to the Create Food modal
+          />
         )}
 
         {mode === 'previous' && (
