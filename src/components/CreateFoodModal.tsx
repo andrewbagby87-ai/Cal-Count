@@ -29,15 +29,14 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
     sugar: '',
     protein: '',
     labelServings: '1',
-    labelVolume: '',
-    labelVolumeUnit: 'g',
+    labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
 
   // Step 2 State: What the user actually consumed
   const [logDetails, setLogDetails] = useState({
     date: initialDate || new Date().toISOString().split('T')[0],
     mealType: '', 
-    consumptionMethod: 'serving' as 'serving' | 'volume', 
+    consumptionMethod: 'serving', // 'serving' | 'volume-0' | 'volume-1' etc.
     servingsConsumed: '1',
     volumeConsumed: '',
   });
@@ -48,10 +47,34 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   // Handler for Step 1 (Nutrition Label)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name !== 'name' && name !== 'brand' && name !== 'labelVolumeUnit') {
+    if (name !== 'name' && name !== 'brand') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleVolumeChange = (index: number, field: 'amount' | 'unit', value: string) => {
+    if (field === 'amount' && value !== '' && !/^\d*\.?\d*$/.test(value)) return;
+    setFormData(prev => {
+      const newVolumes = [...prev.labelVolumes];
+      newVolumes[index] = { ...newVolumes[index], [field]: value };
+      return { ...prev, labelVolumes: newVolumes };
+    });
+  };
+
+  const addVolume = () => {
+    setFormData(prev => ({
+      ...prev,
+      labelVolumes: [...prev.labelVolumes, { amount: '', unit: 'g' }]
+    }));
+  };
+
+  const removeVolume = (index: number) => {
+    setFormData(prev => {
+      const newVolumes = [...prev.labelVolumes];
+      newVolumes.splice(index, 1);
+      return { ...prev, labelVolumes: newVolumes };
+    });
   };
 
   // Handler for Step 2 (Consumption Details)
@@ -93,6 +116,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
       let finalAmount = 1;
       let finalUnit = 'serving';
 
+      const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
+
       // 1. Calculate the math multiplier based on the CHOSEN method
       if (logDetails.consumptionMethod === 'serving') {
         if (!logDetails.servingsConsumed) throw new Error('Please enter how many servings you ate');
@@ -102,19 +127,27 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         multiplier = consumedServings / labelServings;
         finalAmount = consumedServings;
         finalUnit = 'serving';
-      } else {
-        if (!logDetails.volumeConsumed) throw new Error('Please enter the volume/weight you ate');
-        if (!formData.labelVolume) throw new Error('Cannot calculate by volume because no volume was provided on the label');
+      } else if (isVolumeSelected) {
+        if (!logDetails.volumeConsumed) throw new Error('Please enter the volume/amount you ate');
         
-        const labelVol = parseFloat(formData.labelVolume);
+        const volIndex = parseInt(logDetails.consumptionMethod.split('-')[1]);
+        const selectedVol = formData.labelVolumes[volIndex];
+
+        if (!selectedVol || !selectedVol.amount) throw new Error('Cannot calculate based on an invalid volume');
+        
+        const labelVol = parseFloat(selectedVol.amount);
         const consumedVol = parseFloat(logDetails.volumeConsumed) || 0;
         
         if (labelVol === 0) throw new Error('Label volume cannot be zero');
         
         multiplier = consumedVol / labelVol;
         finalAmount = consumedVol;
-        finalUnit = formData.labelVolumeUnit; // Locks perfectly to the Step 1 unit
+        finalUnit = selectedVol.unit; 
       }
+
+      const validVolumes = formData.labelVolumes
+        .filter(v => v.amount.trim() !== '')
+        .map(v => ({ amount: safeParse(v.amount)!, unit: v.unit }));
 
       // 2. Build the BASE object to save inside the log's 'food' dictionary
       const baseNutrition: any = {
@@ -134,9 +167,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         servingUnit: 'serving',
       };
 
-      if (formData.labelVolume && formData.labelVolume.trim() !== '') {
-        baseNutrition.volume = safeParse(formData.labelVolume);
-        baseNutrition.volumeUnit = formData.labelVolumeUnit;
+      if (validVolumes.length > 0) {
+        baseNutrition.volumes = validVolumes;
+        // Keep first available flat string/num for backward compatibility with older logs
+        baseNutrition.volume = validVolumes[0].amount;
+        baseNutrition.volumeUnit = validVolumes[0].unit;
       }
 
       const cleanBaseNutrition = Object.fromEntries(
@@ -168,8 +203,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
       ) as any;
 
-      // Add the final converted volume directly to the log if they used the volume method
-      if (logDetails.consumptionMethod === 'volume') {
+      if (isVolumeSelected) {
         cleanConsumedNutrition.volume = finalAmount;
         cleanConsumedNutrition.volumeUnit = finalUnit;
       }
@@ -189,7 +223,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         foodId: foodId,
         food: foodObject, 
         amount: finalAmount, 
-        unit: finalUnit,
+        unit: finalUnit as any,
         mealType: logDetails.mealType, 
         ...cleanConsumedNutrition 
       });
@@ -202,6 +236,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
       setLoading(false);
     }
   };
+
+  // Helper for rendering Step 2 options safely
+  const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
+  const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
+  const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
 
   return (
     <div className="create-food-modal">
@@ -233,31 +272,46 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
             </div>
 
             <div className="form-group">
-              <label htmlFor="labelVolume">Volume/Weight on Label (Optional)</label>
-              <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <input
-                  id="labelVolume"
-                  type="text"
-                  inputMode="decimal"
-                  name="labelVolume"
-                  style={{ flex: 1 }}
-                  value={formData.labelVolume}
-                  onChange={handleChange}
-                  placeholder="e.g., 100"
-                />
-                <select
-                  id="labelVolumeUnit"
-                  name="labelVolumeUnit"
-                  style={{ width: 'auto', padding: '0.75rem' }}
-                  value={formData.labelVolumeUnit}
-                  onChange={handleChange}
-                >
-                  <option value="g">Grams (g)</option>
-                  <option value="oz">Ounces (oz)</option>
-                  <option value="cup">Cup(s)</option>
-                  <option value="ml">Milliliters (ml)</option>
-                </select>
-              </div>
+              <label>Volume/Weight/Amount on Label (Optional)</label>
+              {formData.labelVolumes.map((vol, index) => (
+                <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    style={{ flex: 1 }}
+                    value={vol.amount}
+                    onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)}
+                    placeholder="e.g., 100"
+                  />
+                  <select
+                    style={{ width: 'auto', padding: '0.75rem' }}
+                    value={vol.unit}
+                    onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}
+                  >
+                    <option value="g">Grams (g)</option>
+                    <option value="oz">Ounces (oz)</option>
+                    <option value="cup">Cup(s)</option>
+                    <option value="ml">Milliliters (ml)</option>
+                    <option value="each">Each</option>
+                  </select>
+                  {formData.labelVolumes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeVolume(index)}
+                      style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      X
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button 
+                type="button" 
+                onClick={addVolume}
+                style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}
+              >
+                + Add Another Option
+              </button>
             </div>
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
@@ -328,7 +382,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
 
             <div className="form-group">
               <label style={{ display: 'block', marginBottom: '0.75rem' }}>How do you want to log this? *</label>
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
                   <input 
                     type="radio" 
@@ -340,27 +394,30 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
                   By Servings
                 </label>
                 
-                {formData.labelVolume && formData.labelVolume.trim() !== '' && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
-                    <input 
-                      type="radio" 
-                      name="consumptionMethod" 
-                      value="volume" 
-                      checked={logDetails.consumptionMethod === 'volume'} 
-                      onChange={handleLogDetailsChange} 
-                    /> 
-                    By {formData.labelVolumeUnit}
-                  </label>
-                )}
+                {formData.labelVolumes.map((vol, index) => {
+                  if (!vol.amount.trim()) return null;
+                  return (
+                    <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
+                      <input 
+                        type="radio" 
+                        name="consumptionMethod" 
+                        value={`volume-${index}`} 
+                        checked={logDetails.consumptionMethod === `volume-${index}`} 
+                        onChange={handleLogDetailsChange} 
+                      /> 
+                      By {vol.unit}
+                    </label>
+                  );
+                })}
               </div>
-              {!formData.labelVolume && (
+              {!formData.labelVolumes.some(v => v.amount.trim() !== '') && (
                  <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
-                   * Logging by weight/volume is disabled because you did not enter a label volume in Step 1.
+                   * Logging by weight/volume/amount is disabled because you did not enter any in Step 1.
                  </span>
               )}
             </div>
 
-            {logDetails.consumptionMethod === 'serving' ? (
+            {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
               <div className="form-group">
                 <label htmlFor="servingsConsumed">Number of Servings Eaten *</label>
                 <input
@@ -386,10 +443,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
                     style={{ flex: 1 }}
                     value={logDetails.volumeConsumed}
                     onChange={handleLogDetailsChange}
-                    placeholder={`e.g., ${formData.labelVolume}`}
+                    placeholder={`e.g., ${selectedVol.amount}`}
                     required
                   />
-                  {/* NEW: Replaced the dropdown with a solid, unchangeable badge showing the locked unit */}
                   <span style={{ 
                     padding: '0.75rem 1rem', 
                     backgroundColor: '#f1f5f9', 
@@ -402,7 +458,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
                     justifyContent: 'center',
                     minWidth: '3rem'
                   }}>
-                    {formData.labelVolumeUnit}
+                    {selectedVol.unit}
                   </span>
                 </div>
               </div>

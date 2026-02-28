@@ -1,3 +1,4 @@
+/* src/components/FoodLogTab.css */
 .food-log-tab {
   display: flex;
   flex-direction: column;
@@ -15,9 +16,9 @@
 
 .tab-header h2 {
   margin: 0;
-  height: 36px; /* Forces the header to match the exact height of the buttons */
+  height: 36px;
   display: flex;
-  align-items: center; /* Centers the text inside that 36px box */
+  align-items: center; 
 }
 
 .header-actions {
@@ -34,7 +35,7 @@
   padding: 0 1rem;
   margin: 0;
   font-size: 0.875rem;
-  line-height: normal; /* Neutralizes emoji height bugs */
+  line-height: normal;
   white-space: nowrap;
   box-sizing: border-box;
 }
@@ -63,15 +64,52 @@
   gap: 0.75rem;
 }
 
+/* --- Swipe to Delete & Expand Logic --- */
+.swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #ef4444;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.swipe-actions-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 0.9rem;
+  cursor: pointer;
+  z-index: 0;
+}
+
 .food-log-item {
   background: white;
   border-radius: 0.5rem;
   padding: 1rem;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.food-log-item.is-swiping {
+  transition: none; 
+}
+
+.food-log-summary {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  width: 100%;
 }
 
 .food-info h4 {
@@ -104,24 +142,59 @@
   font-size: 1.1rem;
 }
 
-.food-actions {
+/* Expanded Nutrition Block */
+.nutrition-details {
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column; /* Stack the grids and the button */
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+  animation: fadeIn 0.2s ease-in;
 }
 
-.action-btn {
-  background: none;
-  border: none;
+.macro-row {
+  display: flex;
+  flex-wrap: wrap; /* Wraps cleanly to next line */
+  gap: 1rem 1.5rem;
+  width: 100%;
+}
+
+.macro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 60px; /* Maintains clean column sizes */
+}
+
+.macro span {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.btn-edit {
+  align-self: flex-end; /* Keeps edit button pushed to bottom right */
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
   cursor: pointer;
-  font-size: 1rem;
-  padding: 0.25rem;
-  transition: transform 0.2s ease;
+  transition: background 0.2s;
 }
 
-.action-btn:hover {
-  transform: scale(1.2);
+.btn-edit:hover {
+  background: #e2e8f0;
 }
 
+/* --- Date Navigators --- */
 .date-navigator {
   display: flex;
   align-items: center;
@@ -220,6 +293,11 @@
   align-items: center; justify-content: center;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -234,6 +312,11 @@
   .day-number { font-size: 0.8rem; }
   .day-name { font-size: 0.65rem; }
   .monthly-view .day-circle { width: 26px; height: 26px; }
+  
+  .btn-edit {
+    width: 100%;
+    align-self: stretch;
+  }
 }
 
 /* --- Meal Diary Layout --- */
@@ -247,7 +330,7 @@
   background: #f8fafc;
   border-radius: 0.75rem;
   padding: 1.25rem;
-  box-shadow: inset 0 0 0 1px #e2e8f0; /* Crisp subtle border */
+  box-shadow: inset 0 0 0 1px #e2e8f0; 
 }
 
 .meal-header {

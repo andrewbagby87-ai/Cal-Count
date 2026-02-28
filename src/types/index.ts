@@ -38,7 +38,7 @@ export interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
-  deleteUserAccount: (password?: string) => Promise<void>; // Added optional password for the recent update
+  deleteUserAccount: (password?: string) => Promise<void>; 
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -55,7 +55,10 @@ export interface Food {
   carbs?: number;
   sugar?: number;
   servingSize: number;
-  servingUnit: 'g' | 'oz' | 'cup' | 'ml' | 'serving';
+  servingUnit: 'g' | 'oz' | 'cup' | 'ml' | 'serving' | 'each';
+  volume?: number;
+  volumeUnit?: string;
+  volumes?: { amount: number; unit: string }[];
   createdAt: number;
 }
 
@@ -66,7 +69,7 @@ export interface FoodLog {
   foodId: string;
   food: Food;
   amount: number;
-  unit: 'g' | 'oz' | 'cup' | 'ml' | 'serving';
+  unit: 'g' | 'oz' | 'cup' | 'ml' | 'serving' | 'each';
   calories: number;
   protein?: number;
   fiber?: number;

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// src/components/FoodLogTab.tsx
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs } from '../services/database';
 import { Food, FoodLog } from '../types';
@@ -56,6 +57,14 @@ export default function FoodLogTab() {
   const [viewDate, setViewDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
+
+  // Expansion and Swipe State
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [swipedLogId, setSwipedLogId] = useState<string | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [swipingId, setSwipingId] = useState<string | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState<number>(0);
 
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -126,6 +135,9 @@ export default function FoodLogTab() {
 
   useEffect(() => {
     loadData();
+    // Close any opened items when changing dates
+    setExpandedLogId(null);
+    setSwipedLogId(null);
   }, [user, viewDate]);
 
   useEffect(() => {
@@ -173,6 +185,7 @@ export default function FoodLogTab() {
     try {
       await deleteFoodLog(user.uid, logId);
       await loadData();
+      setSwipedLogId(null);
     } catch (error) {
       console.error('Failed to delete food log:', error);
     }
@@ -187,6 +200,60 @@ export default function FoodLogTab() {
       await loadData();
     } catch (error) {
       console.error('Failed to update food log:', error);
+    }
+  };
+
+  // --- Touch Event Handlers for Swipe to Delete ---
+  const handleTouchStart = (e: React.TouchEvent, id: string) => {
+    setTouchStartX(e.touches[0].clientX);
+    setTouchStartY(e.touches[0].clientY);
+    setSwipingId(id);
+    setSwipeOffset(swipedLogId === id ? 80 : 0);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, id: string) => {
+    if (!touchStartX || !touchStartY || swipingId !== id) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - touchStartX;
+    const diffY = currentY - touchStartY;
+    
+    // Ignore swipe if they are primarily scrolling vertically
+    if (Math.abs(diffY) > Math.abs(diffX) + 5) return;
+    
+    let newOffset = (swipedLogId === id ? 80 : 0) + diffX;
+    if (newOffset < 0) newOffset = 0; // Prevent swiping left
+    if (newOffset > 100) newOffset = 100; // Cap swipe right
+    
+    setSwipeOffset(newOffset);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent, id: string) => {
+    if (swipingId !== id) return;
+    
+    // Snap open if swiped past threshold
+    if (swipeOffset > 40) {
+      setSwipedLogId(id);
+    } else {
+      setSwipedLogId(null);
+    }
+    
+    setSwipingId(null);
+    setTouchStartX(null);
+    setTouchStartY(null);
+  };
+
+  const handleItemClick = (e: React.MouseEvent, id: string) => {
+    // If they click an inner button like "Edit", ignore expanding/collapsing logic
+    if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
+
+    if (swipedLogId === id) {
+      setSwipedLogId(null); // Close swipe if clicking it
+    } else if (swipedLogId) {
+      setSwipedLogId(null); // Close other swipes before expanding this one
+    } else {
+      // Toggle Expansion
+      setExpandedLogId(prev => prev === id ? null : id);
     }
   };
 
@@ -285,19 +352,15 @@ export default function FoodLogTab() {
       {/* --- MEAL DIARY SECTIONS --- */}
       <div className="daily-diary">
         {mealCategories.map(mealName => {
-          // Filter logs that belong to this specific meal
           const logsForMeal = foodLogs.filter((log: any) => {
             if (mealName === 'Uncategorized') {
-              // Catch legacy foods that were logged before meal tracking was added
               return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
             }
             return log.mealType === mealName;
           });
 
-          // Completely hide the "Uncategorized" section if there are no legacy foods
           if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
 
-          // Calculate subtotal for just this meal
           const mealCalories = logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
 
           return (
@@ -311,39 +374,71 @@ export default function FoodLogTab() {
                 <div className="meal-empty">No foods logged</div>
               ) : (
                 <div className="food-logs-list">
-                  {logsForMeal.map((log) => (
-                    <div key={log.id} className="food-log-item">
-                      <div className="food-info">
-                        <h4>{log.food.name}</h4>
-                        {log.food.brand && <span className="brand">{log.food.brand}</span>}
-                        <span className="amount">
-                          {log.amount} {log.unit}
-                        </span>
-                      </div>
-                      <div className="food-calories">
-                        <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
-                      </div>
-                      <div className="food-actions">
-                        <button
-                          className="action-btn edit"
-                          onClick={() => {
-                            setEditingLog(log);
-                            setShowEditModal(true);
-                          }}
-                          title="Edit this food entry"
+                  {logsForMeal.map((log) => {
+                    const isExpanded = expandedLogId === log.id;
+                    const isSwiped = swipedLogId === log.id;
+                    const isSwiping = swipingId === log.id;
+                    
+                    let transformValue = 'translateX(0px)';
+                    if (isSwiping) transformValue = `translateX(${swipeOffset}px)`;
+                    else if (isSwiped) transformValue = `translateX(80px)`;
+
+                    return (
+                      <div key={log.id} className="swipe-container">
+                        <div className="swipe-actions-left" onClick={() => handleDeleteLog(log.id)}>
+                          <span>🗑️ Delete</span>
+                        </div>
+                        
+                        <div 
+                          className={`food-log-item ${isSwiping ? 'is-swiping' : ''} ${isExpanded ? 'expanded' : ''}`}
+                          style={{ transform: transformValue }}
+                          onTouchStart={(e) => handleTouchStart(e, log.id)}
+                          onTouchMove={(e) => handleTouchMove(e, log.id)}
+                          onTouchEnd={(e) => handleTouchEnd(e, log.id)}
+                          onClick={(e) => handleItemClick(e, log.id)}
                         >
-                          ✏️
-                        </button>
-                        <button
-                          className="action-btn delete"
-                          onClick={() => handleDeleteLog(log.id)}
-                          title="Delete this food entry"
-                        >
-                          🗑️
-                        </button>
+                          <div className="food-log-summary">
+                            <div className="food-info">
+                              <h4>{log.food.name}</h4>
+                              {log.food.brand && <span className="brand">{log.food.brand}</span>}
+                              <span className="amount">
+                                {log.amount} {log.unit}
+                              </span>
+                            </div>
+                            <div className="food-calories">
+                              <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="nutrition-details">
+                              <div className="macro-row">
+                                <div className="macro"><span>Protein</span> {log.editedNutrition?.protein ?? log.protein ?? 0}g</div>
+                                <div className="macro"><span>Carbs</span> {log.editedNutrition?.carbs ?? log.carbs ?? 0}g</div>
+                                <div className="macro"><span>Fat</span> {log.editedNutrition?.fat ?? log.fat ?? 0}g</div>
+                                <div className="macro"><span>Sat Fat</span> {log.editedNutrition?.saturatedFat ?? log.saturatedFat ?? 0}g</div>
+                                <div className="macro"><span>Trans Fat</span> {(log as any).transFat ?? (log.food as any).transFat ?? 0}g</div>
+                                <div className="macro"><span>Cholesterol</span> {(log as any).cholesterol ?? (log.food as any).cholesterol ?? 0}mg</div>
+                                <div className="macro"><span>Sodium</span> {(log as any).sodium ?? (log.food as any).sodium ?? 0}mg</div>
+                                <div className="macro"><span>Fiber</span> {log.editedNutrition?.fiber ?? log.fiber ?? 0}g</div>
+                                <div className="macro"><span>Sugar</span> {log.editedNutrition?.sugar ?? log.sugar ?? 0}g</div>
+                              </div>
+                              <button
+                                className="btn-edit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingLog(log);
+                                  setShowEditModal(true);
+                                }}
+                              >
+                                ✏️ Edit
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -351,7 +446,6 @@ export default function FoodLogTab() {
         })}
       </div>
 
-      {/* NEW: Added loadData() to the onClose trigger so it fetches new foods immediately! */}
       {showAddModal && (
         <AddFoodModal 
           foods={foods} 
