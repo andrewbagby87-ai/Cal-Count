@@ -351,8 +351,16 @@ export default function FoodLogTab() {
         })}
       </div>
 
+      {/* NEW: Added loadData() to the onClose trigger so it fetches new foods immediately! */}
       {showAddModal && (
-        <AddFoodModal foods={foods} onAdd={handleAddFood} onClose={() => setShowAddModal(false)} selectedDate={getDateString(viewDate)} // <--- ADD THIS LINE
+        <AddFoodModal 
+          foods={foods} 
+          onAdd={handleAddFood} 
+          onClose={() => {
+            setShowAddModal(false);
+            loadData(); 
+          }} 
+          selectedDate={getDateString(viewDate)} 
         />
       )}
 
