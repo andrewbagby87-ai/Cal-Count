@@ -58,8 +58,10 @@ export default function FoodLogTab() {
   const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
 
-  // Expansion and Swipe State
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  // Popup Modal State (Replaces the inline dropdown expansion)
+  const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
+
+  // Swipe State (Kept just in case, but modal makes it less necessary)
   const [swipedLogId, setSwipedLogId] = useState<string | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -135,8 +137,6 @@ export default function FoodLogTab() {
 
   useEffect(() => {
     loadData();
-    // Close any opened items when changing dates
-    setExpandedLogId(null);
     setSwipedLogId(null);
   }, [user, viewDate]);
 
@@ -185,6 +185,7 @@ export default function FoodLogTab() {
     try {
       await deleteFoodLog(user.uid, logId);
       await loadData();
+      setSelectedLog(null); // Close modal if open
       setSwipedLogId(null);
     } catch (error) {
       console.error('Failed to delete food log:', error);
@@ -243,17 +244,16 @@ export default function FoodLogTab() {
     setTouchStartY(null);
   };
 
-  const handleItemClick = (e: React.MouseEvent, id: string) => {
-    // If they click an inner button like "Edit", ignore expanding/collapsing logic
+  const handleItemClick = (e: React.MouseEvent, log: FoodLog) => {
+    // If they click an inner button, ignore
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
 
-    if (swipedLogId === id) {
+    if (swipedLogId === log.id) {
       setSwipedLogId(null); // Close swipe if clicking it
     } else if (swipedLogId) {
-      setSwipedLogId(null); // Close other swipes before expanding this one
+      setSwipedLogId(null); // Close other swipes before opening popup
     } else {
-      // Toggle Expansion
-      setExpandedLogId(prev => prev === id ? null : id);
+      setSelectedLog(log); // Open Popup
     }
   };
 
@@ -261,7 +261,6 @@ export default function FoodLogTab() {
 
   const totalCalories = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
 
-  // Group foods by meal type for the diary layout
   const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Uncategorized'];
 
   return (
@@ -375,7 +374,6 @@ export default function FoodLogTab() {
               ) : (
                 <div className="food-logs-list">
                   {logsForMeal.map((log) => {
-                    const isExpanded = expandedLogId === log.id;
                     const isSwiped = swipedLogId === log.id;
                     const isSwiping = swipingId === log.id;
                     
@@ -390,12 +388,12 @@ export default function FoodLogTab() {
                         </div>
                         
                         <div 
-                          className={`food-log-item ${isSwiping ? 'is-swiping' : ''} ${isExpanded ? 'expanded' : ''}`}
+                          className={`food-log-item ${isSwiping ? 'is-swiping' : ''}`}
                           style={{ transform: transformValue }}
                           onTouchStart={(e) => handleTouchStart(e, log.id)}
                           onTouchMove={(e) => handleTouchMove(e, log.id)}
                           onTouchEnd={(e) => handleTouchEnd(e, log.id)}
-                          onClick={(e) => handleItemClick(e, log.id)}
+                          onClick={(e) => handleItemClick(e, log)}
                         >
                           <div className="food-log-summary">
                             <div className="food-info">
@@ -409,32 +407,6 @@ export default function FoodLogTab() {
                               <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
                             </div>
                           </div>
-
-                          {isExpanded && (
-                            <div className="nutrition-details">
-                              <div className="macro-row">
-                                <div className="macro"><span>Protein</span> {log.editedNutrition?.protein ?? log.protein ?? 0}g</div>
-                                <div className="macro"><span>Carbs</span> {log.editedNutrition?.carbs ?? log.carbs ?? 0}g</div>
-                                <div className="macro"><span>Fat</span> {log.editedNutrition?.fat ?? log.fat ?? 0}g</div>
-                                <div className="macro"><span>Sat Fat</span> {log.editedNutrition?.saturatedFat ?? log.saturatedFat ?? 0}g</div>
-                                <div className="macro"><span>Trans Fat</span> {(log as any).transFat ?? (log.food as any).transFat ?? 0}g</div>
-                                <div className="macro"><span>Cholesterol</span> {(log as any).cholesterol ?? (log.food as any).cholesterol ?? 0}mg</div>
-                                <div className="macro"><span>Sodium</span> {(log as any).sodium ?? (log.food as any).sodium ?? 0}mg</div>
-                                <div className="macro"><span>Fiber</span> {log.editedNutrition?.fiber ?? log.fiber ?? 0}g</div>
-                                <div className="macro"><span>Sugar</span> {log.editedNutrition?.sugar ?? log.sugar ?? 0}g</div>
-                              </div>
-                              <button
-                                className="btn-edit"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingLog(log);
-                                  setShowEditModal(true);
-                                }}
-                              >
-                                ✏️ Edit
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
@@ -445,6 +417,86 @@ export default function FoodLogTab() {
           );
         })}
       </div>
+
+      {/* --- NEW: Selected Log Detail Popup --- */}
+      {selectedLog && (
+        <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
+          <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="selected-log-header">
+              <div>
+                <h3 style={{ margin: 0, color: '#1e293b' }}>{selectedLog.food.name}</h3>
+                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{selectedLog.food.brand}</span>}
+              </div>
+              <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>
+                {selectedLog.amount} {selectedLog.unit}
+              </span>
+            </div>
+
+            <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
+                Nutrition Logged
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {[
+                  { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true },
+                  { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false },
+                  { label: 'Carbs', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false },
+                  { label: 'Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false },
+                  { label: 'Sat Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false },
+                  { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false },
+                  { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false },
+                  { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false },
+                  { label: 'Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false },
+                  { label: 'Sugar', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false },
+                ].map((nutrient, idx) => (
+                  <div key={idx} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                    paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                  }}>
+                    <span style={{ 
+                      fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                      textTransform: 'uppercase', 
+                      color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                      fontWeight: nutrient.isHighlight ? 700 : 400
+                    }}>
+                      {nutrient.label}
+                    </span>
+                    <span style={{ 
+                      fontWeight: 700, 
+                      color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                      fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                    }}>
+                      {nutrient.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="selected-log-actions">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setEditingLog(selectedLog);
+                  setShowEditModal(true);
+                  setSelectedLog(null); // Close preview when editing
+                }}
+              >
+                ✏️ Edit
+              </button>
+              <button 
+                className="btn btn-danger" 
+                onClick={() => handleDeleteLog(selectedLog.id)}
+              >
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <AddFoodModal 

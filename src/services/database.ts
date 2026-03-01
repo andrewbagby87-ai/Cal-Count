@@ -128,6 +128,24 @@ export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' 
   return newLog.id;
 }
 
+export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
+  const allLogs: any[] = [];
+  try {
+    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
+    if (exactDoc.exists()) {
+      const data = exactDoc.data();
+      if (data.foodData) {
+        allLogs.push(...data.foodData);
+      } else if (data.logs) {
+        allLogs.push(...data.logs);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch all foodLogs doc:", e);
+  }
+  return allLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
+}
+
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
   
@@ -271,7 +289,6 @@ export async function createWorkoutLog(userId: string, workout: Omit<WorkoutLog,
 }
 
 export async function getDayWorkoutLogs(userId: string, date: string): Promise<WorkoutLog[]> {
-  // REMOVED orderBy to fix the index crash!
   const q = query(
     collection(db, 'workoutLogs'),
     where('userId', '==', userId),
@@ -287,7 +304,6 @@ export async function getDayWorkoutLogs(userId: string, date: string): Promise<W
     };
   });
   
-  // Sorting manually in Javascript instead
   return logs.sort((a, b) => b.timestamp - a.timestamp);
 }
 

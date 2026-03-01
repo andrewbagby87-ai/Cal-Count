@@ -64,7 +64,7 @@
   gap: 0.75rem;
 }
 
-/* --- Swipe to Delete & Expand Logic --- */
+/* --- Swipe to Delete Logic --- */
 .swipe-container {
   position: relative;
   overflow: hidden;
@@ -99,6 +99,10 @@
   z-index: 1;
   transition: transform 0.2s ease;
   cursor: pointer;
+}
+
+.food-log-item:hover {
+  background-color: #f8fafc;
 }
 
 .food-log-item.is-swiping {
@@ -142,56 +146,64 @@
   font-size: 1.1rem;
 }
 
-/* Expanded Nutrition Block */
-.nutrition-details {
+/* --- Log Popup Modal Styles --- */
+.selected-log-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  flex-direction: column; /* Stack the grids and the button */
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px dashed #e2e8f0;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 1rem;
+  backdrop-filter: blur(2px);
   animation: fadeIn 0.2s ease-in;
 }
 
-.macro-row {
-  display: flex;
-  flex-wrap: wrap; /* Wraps cleanly to next line */
-  gap: 1rem 1.5rem;
+.selected-log-modal {
+  background: white;
+  border-radius: 1rem;
   width: 100%;
+  max-width: 400px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.3s ease-out;
 }
 
-.macro {
+.selected-log-header {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #1e293b;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.selected-log-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.selected-log-actions button {
+  flex: 1;
+  padding: 0.75rem;
   font-weight: 600;
-  font-size: 0.9rem;
-  min-width: 60px; /* Maintains clean column sizes */
-}
-
-.macro span {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  color: #94a3b8;
-  margin-bottom: 0.25rem;
-}
-
-.btn-edit {
-  align-self: flex-end; /* Keeps edit button pushed to bottom right */
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
   border-radius: 0.5rem;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #475569;
   cursor: pointer;
-  transition: background 0.2s;
+  border: none;
 }
 
-.btn-edit:hover {
-  background: #e2e8f0;
+.selected-log-actions .btn-danger {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.selected-log-actions .btn-danger:hover {
+  background-color: #fef2f2;
 }
 
 /* --- Date Navigators --- */
@@ -294,8 +306,8 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideDown {
@@ -312,11 +324,6 @@
   .day-number { font-size: 0.8rem; }
   .day-name { font-size: 0.65rem; }
   .monthly-view .day-circle { width: 26px; height: 26px; }
-  
-  .btn-edit {
-    width: 100%;
-    align-self: stretch;
-  }
 }
 
 /* --- Meal Diary Layout --- */

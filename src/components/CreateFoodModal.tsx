@@ -1,3 +1,4 @@
+// src/components/CreateFoodModal.tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createFoodLog } from '../services/database';
@@ -9,6 +10,8 @@ interface Props {
   onClose: () => void;
   initialDate?: string; 
 }
+
+const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
 export default function CreateFoodModal({ onCreated, onClose, initialDate }: Props) {
   const { user } = useAuth();
@@ -36,7 +39,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   const [logDetails, setLogDetails] = useState({
     date: initialDate || new Date().toISOString().split('T')[0],
     mealType: '', 
-    consumptionMethod: 'serving', // 'serving' | 'volume-0' | 'volume-1' etc.
+    consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
   });
@@ -63,10 +66,17 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   };
 
   const addVolume = () => {
-    setFormData(prev => ({
-      ...prev,
-      labelVolumes: [...prev.labelVolumes, { amount: '', unit: 'g' }]
-    }));
+    setFormData(prev => {
+      const usedUnits = prev.labelVolumes.map(v => v.unit);
+      const nextAvailableUnit = ALL_UNITS.find(u => !usedUnits.includes(u));
+      
+      if (!nextAvailableUnit) return prev; 
+
+      return {
+        ...prev,
+        labelVolumes: [...prev.labelVolumes, { amount: '', unit: nextAvailableUnit }]
+      };
+    });
   };
 
   const removeVolume = (index: number) => {
@@ -102,6 +112,49 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
 
     setStep('meal');
   };
+
+  // --- Dynamic Preview Logic for Step 2 ---
+  const calculatePreview = () => {
+    let multiplier = 1;
+    const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
+
+    if (logDetails.consumptionMethod === 'serving') {
+      const labelServings = parseFloat(formData.labelServings) || 1;
+      const consumedServings = parseFloat(logDetails.servingsConsumed) || 0;
+      multiplier = consumedServings / labelServings;
+    } else if (isVolumeSelected) {
+      const volIndex = parseInt(logDetails.consumptionMethod.split('-')[1]);
+      const selectedVol = formData.labelVolumes[volIndex];
+      if (selectedVol && selectedVol.amount) {
+        const labelVol = parseFloat(selectedVol.amount) || 1;
+        const consumedVol = parseFloat(logDetails.volumeConsumed) || 0;
+        multiplier = labelVol === 0 ? 0 : consumedVol / labelVol;
+      } else {
+        multiplier = 0;
+      }
+    }
+
+    const calc = (val: string) => {
+      const parsed = parseFloat(val);
+      if (isNaN(parsed)) return 0;
+      return Number((parsed * multiplier).toFixed(1));
+    };
+
+    return {
+      calories: calc(formData.calories),
+      protein: calc(formData.protein),
+      carbs: calc(formData.carbs),
+      fat: calc(formData.fat),
+      saturatedFat: calc(formData.saturatedFat),
+      transFat: calc(formData.transFat),
+      cholesterol: calc(formData.cholesterol),
+      sodium: calc(formData.sodium),
+      fiber: calc(formData.fiber),
+      sugar: calc(formData.sugar),
+    };
+  };
+
+  const preview = step === 'meal' ? calculatePreview() : null;
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,45 +326,50 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
 
             <div className="form-group">
               <label>Volume/Weight/Amount on Label (Optional)</label>
-              {formData.labelVolumes.map((vol, index) => (
-                <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    style={{ flex: 1 }}
-                    value={vol.amount}
-                    onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)}
-                    placeholder="e.g., 100"
-                  />
-                  <select
-                    style={{ width: 'auto', padding: '0.75rem' }}
-                    value={vol.unit}
-                    onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}
-                  >
-                    <option value="g">Grams (g)</option>
-                    <option value="oz">Ounces (oz)</option>
-                    <option value="cup">Cup(s)</option>
-                    <option value="ml">Milliliters (ml)</option>
-                    <option value="each">Each</option>
-                  </select>
-                  {formData.labelVolumes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeVolume(index)}
-                      style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}
+              {formData.labelVolumes.map((vol, index) => {
+                const usedUnits = formData.labelVolumes.map(v => v.unit);
+                return (
+                  <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      style={{ flex: 1 }}
+                      value={vol.amount}
+                      onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)}
+                      placeholder="e.g., 100"
+                    />
+                    <select
+                      style={{ width: 'auto', padding: '0.75rem' }}
+                      value={vol.unit}
+                      onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}
                     >
-                      X
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button 
-                type="button" 
-                onClick={addVolume}
-                style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}
-              >
-                + Add Another Option
-              </button>
+                      <option value="g" disabled={usedUnits.includes('g') && vol.unit !== 'g'}>Grams (g)</option>
+                      <option value="oz" disabled={usedUnits.includes('oz') && vol.unit !== 'oz'}>Ounces (oz)</option>
+                      <option value="cup" disabled={usedUnits.includes('cup') && vol.unit !== 'cup'}>Cup(s)</option>
+                      <option value="ml" disabled={usedUnits.includes('ml') && vol.unit !== 'ml'}>Milliliters (ml)</option>
+                      <option value="each" disabled={usedUnits.includes('each') && vol.unit !== 'each'}>Each</option>
+                    </select>
+                    {formData.labelVolumes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeVolume(index)}
+                        style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}
+                      >
+                        X
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {formData.labelVolumes.length < ALL_UNITS.length && (
+                <button 
+                  type="button" 
+                  onClick={addVolume}
+                  style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}
+                >
+                  + Add Another Option
+                </button>
+              )}
             </div>
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
@@ -461,6 +519,61 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
                     {selectedVol.unit}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* --- Dynamic Nutrient Preview --- */}
+            {preview && (
+              <div style={{ 
+                marginTop: '1.5rem', 
+                padding: '1.25rem', 
+                backgroundColor: '#f8fafc', 
+                borderRadius: '0.75rem', 
+                border: '1px solid #e2e8f0'
+              }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
+                  Nutrition Preview
+                </h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {[
+                    { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true },
+                    { label: 'Protein', value: `${preview.protein}g`, isHighlight: false },
+                    { label: 'Carbs', value: `${preview.carbs}g`, isHighlight: false },
+                    { label: 'Fat', value: `${preview.fat}g`, isHighlight: false },
+                    { label: 'Sat Fat', value: `${preview.saturatedFat}g`, isHighlight: false },
+                    { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false },
+                    { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false },
+                    { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false },
+                    { label: 'Fiber', value: `${preview.fiber}g`, isHighlight: false },
+                    { label: 'Sugar', value: `${preview.sugar}g`, isHighlight: false },
+                  ].map((nutrient, idx) => (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                      paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                    }}>
+                      <span style={{ 
+                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                        textTransform: 'uppercase', 
+                        color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                        fontWeight: nutrient.isHighlight ? 700 : 400
+                      }}>
+                        {nutrient.label}
+                      </span>
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                      }}>
+                        {nutrient.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
               </div>
             )}
 

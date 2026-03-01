@@ -1,5 +1,8 @@
+// src/components/UserSettings.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { getUserFoods, getAllFoodLogs } from '../services/database';
+import { Food } from '../types';
 import './UserSettings.css';
 
 interface UserSettingsProps {
@@ -35,6 +38,11 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState('');
+
+  // States for the created foods popup
+  const [showFoodsList, setShowFoodsList] = useState(false);
+  const [loadingFoods, setLoadingFoods] = useState(false);
+  const [createdFoods, setCreatedFoods] = useState<{food: Food, lastLogged: string | null}[]>([]);
 
   useEffect(() => {
     if (userProfile) {
@@ -128,11 +136,47 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     }
   };
 
-  // Helper function to handle copying any text and showing a custom message
   const copyToClipboard = (text: string, successMessage: string) => {
     navigator.clipboard.writeText(text);
     setMessage(`✓ ${successMessage}`);
     setTimeout(() => setMessage(''), 3000);
+  };
+
+  // --- Logic to view created foods list ---
+  const handleViewCreatedFoods = async () => {
+    setShowFoodsList(true);
+    setLoadingFoods(true);
+    try {
+      const uid = userProfile?.uid || user?.uid;
+      if (!uid) return;
+      
+      const [foods, logs] = await Promise.all([
+        getUserFoods(uid),
+        getAllFoodLogs(uid)
+      ]);
+
+      const foodsWithDates = foods.map(food => {
+        // Find logs where the underlying foodId matches
+        const foodLogs = logs.filter(l => l.foodId === food.id || l.food?.id === food.id);
+        
+        // They are already sorted by `getAllFoodLogs`, but safety sort just in case
+        foodLogs.sort((a, b) => b.timestamp - a.timestamp);
+        
+        return {
+          food,
+          lastLogged: foodLogs.length > 0 ? foodLogs[0].date : null
+        };
+      });
+
+      // Sort alphabetically by name
+      foodsWithDates.sort((a, b) => a.food.name.localeCompare(b.food.name));
+
+      setCreatedFoods(foodsWithDates);
+    } catch (err) {
+      console.error("Failed to load created foods:", err);
+    } finally {
+      setLoadingFoods(false);
+    }
   };
 
   if (!userProfile) {
@@ -159,6 +203,18 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
 
           <form onSubmit={handleSave}>
             <section className="settings-section">
+              <h2>My Foods</h2>
+              <div className="form-group">
+                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 0.5rem 0' }}>
+                  View all foods you've ever created and see the last time you logged them.
+                </p>
+                <button type="button" className="btn btn-secondary" onClick={handleViewCreatedFoods} disabled={isBusy}>
+                  🍔 View Created Foods
+                </button>
+              </div>
+            </section>
+
+            <section className="settings-section" style={{ marginTop: '1rem' }}>
               <h2>Profile & Health Sync</h2>
               
               <div className="form-group">
@@ -168,7 +224,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                 </small>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {/* Sync URL Button */}
                   <div>
                     <button 
                       type="button" 
@@ -178,8 +233,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                       Copy Sync URL
                     </button>
                   </div>
-
-                  {/* Header Key Button */}
                   <div>
                     <button 
                       type="button" 
@@ -189,8 +242,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                       Copy Key (x-user-id)
                     </button>
                   </div>
-
-                  {/* Header Value Button */}
                   <div>
                     <button 
                       type="button" 
@@ -304,6 +355,41 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
           </form>
         </div>
       </div>
+
+      {/* --- Overlay for Created Foods --- */}
+      {showFoodsList && (
+        <div className="foods-list-overlay" onClick={() => setShowFoodsList(false)}>
+          <div className="foods-list-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="foods-list-header">
+              <h2>My Created Foods</h2>
+              <button className="close-btn" onClick={() => setShowFoodsList(false)}>X</button>
+            </div>
+            
+            <div className="foods-list-body">
+              {loadingFoods ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Loading...</div>
+              ) : createdFoods.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                  You haven't created any foods yet.
+                </div>
+              ) : (
+                createdFoods.map((item) => (
+                  <div key={item.food.id} className="food-list-item">
+                    <div className="food-list-item-main">
+                      <strong>{item.food.name}</strong>
+                      {item.food.brand && <span className="food-list-item-brand">{item.food.brand}</span>}
+                    </div>
+                    <div className="food-list-item-date">
+                      <span className="date-label">Last logged:</span>
+                      <span className="date-value">{item.lastLogged ? item.lastLogged : ''}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

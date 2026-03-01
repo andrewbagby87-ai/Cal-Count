@@ -1,3 +1,5 @@
+/* src/components/UserSettings.css */
+
 /* Creates the full-screen blue gradient background and centers the card */
 .settings-container {
   display: flex;
@@ -116,7 +118,7 @@
 .checkbox-group label {
   display: flex;
   align-items: center;
-  gap: 0.75rem; /* <--- This is the magic line that spaces the words from the box! */
+  gap: 0.75rem;
   cursor: pointer;
   color: #475569;
   font-weight: 500;
@@ -128,19 +130,18 @@
   height: 1.25rem;
   cursor: pointer;
   accent-color: #2563eb;
-  margin: 0; /* Removes any default browser margins that might make it sit unevenly */
+  margin: 0; 
 }
 
 .settings-actions {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem; /* This increases the space between the two buttons */
-  margin-top: 1.5rem; /* This pushes the buttons down from the checkboxes */
-  padding-top: 1.5rem; /* Adds inner spacing */
-  border-top: 1px solid #e2e8f0; /* Adds a nice subtle divider line above the buttons */
+  gap: 1.25rem; 
+  margin-top: 1.5rem; 
+  padding-top: 1.5rem; 
+  border-top: 1px solid #e2e8f0; 
 }
 
-/* Add a fallback margin to the delete button just in case your browser is ignoring the flex gap */
 .btn-danger {
   background-color: transparent;
   color: #ef4444;
@@ -162,6 +163,15 @@
   width: 100%;
 }
 
+.btn-secondary {
+  background-color: #e2e8f0;
+  color: #475569;
+}
+
+.btn-secondary:hover {
+  background-color: #cbd5e1;
+}
+
 .btn-primary {
   background-color: #2563eb;
   color: white;
@@ -169,16 +179,6 @@
 
 .btn-primary:hover:not(:disabled) {
   background-color: #1d4ed8;
-}
-
-.btn-danger {
-  background-color: transparent;
-  color: #ef4444;
-  border: 1px solid #ef4444;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #fef2f2;
 }
 
 .btn:disabled {
@@ -205,41 +205,109 @@
   border: 1px solid #fecaca;
 }
 
-.copy-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #64748b;
-  min-width: 80px;
-  text-transform: uppercase;
+/* --- Created Foods List Modal Styles --- */
+.foods-list-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
 }
 
-.copy-text {
-  flex: 1;
-  font-family: monospace;
-  color: #334155;
-  font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.foods-list-modal {
+  background: white;
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 500px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
-.btn-copy {
-  background-color: #e2e8f0;
-  color: #475569;
-  border: none;
-  padding: 0.35rem 0.75rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.foods-list-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.btn-copy:hover {
-  background-color: #cbd5e1;
+.foods-list-header h2 {
+  margin: 0;
   color: #1e293b;
+  font-size: 1.25rem;
 }
 
-.btn-copy:active {
-  background-color: #94a3b8;
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: #ef4444;
+}
+
+.foods-list-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.food-list-item {
+  background: #f8fafc;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.food-list-item-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.food-list-item-main strong {
+  color: #0f172a;
+}
+
+.food-list-item-brand {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.food-list-item-date {
+  text-align: right;
+}
+
+.date-label {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.date-value {
+  font-size: 0.85rem;
+  color: #334155;
+  font-weight: 500;
 }
