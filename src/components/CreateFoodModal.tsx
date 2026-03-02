@@ -21,6 +21,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
+    upc: '',
     calories: '',
     fat: '',
     saturatedFat: '',
@@ -47,10 +48,17 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Handler for Step 1 (Nutrition Label)
+// Handler for Step 1 (Nutrition Label)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name !== 'name' && name !== 'brand') {
+    
+    // Ensure UPC only accepts digits and is max 12 characters
+    if (name === 'upc') {
+      if (value !== '' && !/^\d*$/.test(value)) return;
+      if (value.length > 12) return; 
+    }
+
+    if (name !== 'name' && name !== 'brand' && name !== 'upc') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -102,11 +110,18 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
     return isNaN(parsed) ? undefined : Number(parsed.toFixed(2));
   };
 
-  const handleContinue = (e: React.FormEvent) => {
+const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!formData.name.trim()) { setError('Food name is required'); return; }
+    
+    // Add UPC validation here: if it's filled in, it MUST be 12 digits
+    if (formData.upc.trim() && formData.upc.trim().length !== 12) { 
+      setError('UPC must be exactly 12 digits'); 
+      return; 
+    }
+    
     if (!formData.calories) { setError('Calories is required'); return; }
     if (!formData.labelServings) { setError('Number of servings on the label is required'); return; }
 
@@ -206,6 +221,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
       const baseNutrition: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
+        upc: formData.upc.trim() || undefined,
         calories: safeParse(formData.calories) || 0,
         fat: safeParse(formData.fat),
         saturatedFat: safeParse(formData.saturatedFat),
@@ -316,6 +332,12 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
             <div className="form-group">
               <label htmlFor="brand">Brand (Optional)</label>
               <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Tyson" />
+            </div>
+
+            {/* Add the UPC form group here */}
+            <div className="form-group">
+              <label htmlFor="upc">UPC / Barcode (Optional)</label>
+              <input id="upc" type="text" name="upc" value={formData.upc} onChange={handleChange} placeholder="e.g., 012345678901" />
             </div>
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
