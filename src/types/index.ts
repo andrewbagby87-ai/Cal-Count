@@ -52,6 +52,9 @@ export interface Food {
   fiber?: number;
   fat?: number;
   saturatedFat?: number;
+  transFat?: number;
+  cholesterol?: number;
+  sodium?: number;
   carbs?: number;
   sugar?: number;
   servingSize: number;
@@ -75,6 +78,9 @@ export interface FoodLog {
   fiber?: number;
   fat?: number;
   saturatedFat?: number;
+  transFat?: number;
+  cholesterol?: number;
+  sodium?: number;
   carbs?: number;
   sugar?: number;
   timestamp: number;
@@ -86,6 +92,9 @@ export interface FoodLog {
     fiber?: number;
     fat?: number;
     saturatedFat?: number;
+    transFat?: number;
+    cholesterol?: number;
+    sodium?: number;
     carbs?: number;
     sugar?: number;
   };

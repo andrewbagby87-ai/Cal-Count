@@ -10,7 +10,6 @@ interface UserSettingsProps {
 }
 
 export default function UserSettings({ onBack }: UserSettingsProps) {
-  // Extract user to access the uid for the copy button
   const { user, userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   
   const [formData, setFormData] = useState({
@@ -156,10 +155,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       ]);
 
       const foodsWithDates = foods.map(food => {
-        // Find logs where the underlying foodId matches
         const foodLogs = logs.filter(l => l.foodId === food.id || l.food?.id === food.id);
-        
-        // They are already sorted by `getAllFoodLogs`, but safety sort just in case
         foodLogs.sort((a, b) => b.timestamp - a.timestamp);
         
         return {
@@ -168,7 +164,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
         };
       });
 
-      // Sort alphabetically by name
       foodsWithDates.sort((a, b) => a.food.name.localeCompare(b.food.name));
 
       setCreatedFoods(foodsWithDates);
@@ -215,46 +210,8 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
             </section>
 
             <section className="settings-section" style={{ marginTop: '1rem' }}>
-              <h2>Profile & Health Sync</h2>
-              
+              <h2>Profile</h2>
               <div className="form-group">
-                <label>Apple Health Sync Setup</label>
-                <small style={{ color: '#666', marginTop: '4px', marginBottom: '12px', display: 'block' }}>
-                  Paste these values into the Health Auto Export app's REST API automation.
-                </small>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard('https://synchealthdata-iyfojguipa-uc.a.run.app/', 'Sync URL copied!')}
-                    >
-                      Copy Sync URL
-                    </button>
-                  </div>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard('x-user-id', 'Header Key copied!')}
-                    >
-                      Copy Key (x-user-id)
-                    </button>
-                  </div>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard(userId, 'User ID copied!')}
-                    >
-                      Copy Value (User ID)
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '1rem' }}>
                 <label>Name *</label>
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
               </div>
@@ -341,6 +298,46 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
                   <input type="number" name="proteinBudget" value={formData.proteinBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
                 </div>
               )}
+            </section>
+
+            {/* MOVED TO THE BOTTOM */}
+            <section className="settings-section" style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem' }}>
+              <h2>Apple Health Sync Setup</h2>
+              <div className="form-group">
+                <small style={{ color: '#666', marginTop: '4px', marginBottom: '12px', display: 'block' }}>
+                  Paste these values into the Health Auto Export app's REST API automation.
+                </small>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard('https://synchealthdata-iyfojguipa-uc.a.run.app/', 'Sync URL copied!')}
+                    >
+                      Copy Sync URL
+                    </button>
+                  </div>
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard('x-user-id', 'Header Key copied!')}
+                    >
+                      Copy Key (x-user-id)
+                    </button>
+                  </div>
+                  <div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={() => copyToClipboard(userId, 'User ID copied!')}
+                    >
+                      Copy Value (User ID)
+                    </button>
+                  </div>
+                </div>
+              </div>
             </section>
 
             <div className="settings-actions">

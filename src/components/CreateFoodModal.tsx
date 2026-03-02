@@ -1,7 +1,7 @@
 // src/components/CreateFoodModal.tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { createFoodLog } from '../services/database';
+import { createFoodLog, createFood } from '../services/database';
 import { Food } from '../types';
 import './CreateFoodModal.css';
 
@@ -231,6 +231,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         Object.entries(baseNutrition).filter(([_, v]) => v !== undefined)
       ) as any;
 
+      // --- FIX: Actually save the created food into the user's "Foods" database ---
+      const newFoodId = await createFood(user.uid, cleanBaseNutrition);
+
       // 3. Helper to multiply the label values by what you actually ate
       const calcConsumed = (val: string) => {
         const parsed = parseFloat(val);
@@ -261,10 +264,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
         cleanConsumedNutrition.volumeUnit = finalUnit;
       }
 
-      const foodId = crypto.randomUUID();
-
       const foodObject: Food = {
-        id: foodId,
+        id: newFoodId,
         userId: user.uid,
         ...cleanBaseNutrition,
         createdAt: Date.now(),
@@ -273,7 +274,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
       // 5. Save the final calculated log to the database
       await createFoodLog(user.uid, {
         date: logDetails.date, 
-        foodId: foodId,
+        foodId: newFoodId,
         food: foodObject, 
         amount: finalAmount, 
         unit: finalUnit as any,

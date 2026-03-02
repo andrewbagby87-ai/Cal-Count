@@ -1,3 +1,4 @@
+// src/services/database.ts
 import {
   getFirestore,
   collection,
@@ -83,11 +84,15 @@ export async function createFood(userId: string, food: Omit<Food, 'id' | 'userId
 export async function getUserFoods(userId: string): Promise<Food[]> {
   const q = query(collection(db, 'foods'), where('userId', '==', userId));
   const querySnapshot = await getDocs(q);
-  const foods = querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data() as Omit<Food, 'id'>,
-    createdAt: (doc.data().createdAt as Timestamp).toMillis(),
-  }));
+  const foods = querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data as Omit<Food, 'id'>,
+      // Safely parse createdAt to prevent crashes on older foods
+      createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt || 0),
+    };
+  });
   return foods.sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -100,26 +105,24 @@ export async function deleteFood(id: string) {
   await deleteDoc(doc(db, 'foods', id));
 }
 
-// --- Food Log Operations (Updated for Array Structure) ---
+// --- Food Log Operations ---
 export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' | 'userId' | 'timestamp'>) {
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
   
   const newLog = {
     ...foodLog,
-    id: crypto.randomUUID(), // Generate a unique ID for the log entry
+    id: crypto.randomUUID(), 
     timestamp: Timestamp.now().toMillis(),
   };
 
   if (docSnap.exists()) {
-    // If document exists, append to the foodData array
     const data = docSnap.data();
     const existingData = data.foodData || data.logs || [];
     await updateDoc(docRef, {
       foodData: [newLog, ...existingData]
     });
   } else {
-    // If document doesn't exist, create it with the foodData array
     await setDoc(docRef, {
       userId,
       foodData: [newLog]
@@ -130,41 +133,52 @@ export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' 
 
 export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
+  
   try {
     const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
     if (exactDoc.exists()) {
       const data = exactDoc.data();
-      if (data.foodData) {
-        allLogs.push(...data.foodData);
-      } else if (data.logs) {
-        allLogs.push(...data.logs);
-      }
+      if (data.foodData) allLogs.push(...data.foodData);
+      else if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
-    console.warn("Could not fetch all foodLogs doc:", e);
+    console.warn("Could not fetch all foodLogs array:", e);
   }
+
+  // Backup fetch for old legacy multi-doc logs
+  try {
+    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId));
+    const snapExact = await getDocs(qExact);
+    snapExact.docs.forEach(d => {
+      if (d.id !== userId) {
+        allLogs.push({
+          id: d.id,
+          ...d.data(),
+          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
+        });
+      }
+    });
+  } catch (e) {
+    console.warn("Could not fetch multi-doc format logs:", e);
+  }
+
   return allLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
   
-  // 1. Fetch exact match document (Single doc array format)
   try {
     const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
     if (exactDoc.exists()) {
       const data = exactDoc.data();
-      if (data.foodData) {
-        allLogs.push(...data.foodData);
-      } else if (data.logs) {
-        allLogs.push(...data.logs); // Fallback so you don't lose older logs
-      }
+      if (data.foodData) allLogs.push(...data.foodData);
+      else if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
     console.warn("Could not fetch exact foodLogs doc:", e);
   }
 
-  // 2. Fetch multi-doc format fallback (so old single-document entries aren't lost)
   try {
     const qExact = query(
       collection(db, 'foodLogs'),
@@ -185,7 +199,6 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
     console.warn("Could not fetch multi-doc format logs:", e);
   }
 
-  // Filter to the requested date and sort descending
   const dailyLogs = allLogs.filter((log: any) => log.date === date);
   return dailyLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
@@ -198,7 +211,6 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
     const data = docSnap.data();
     let updated = false;
     
-    // Scan and update inside the foodData array
     if (data.foodData) {
       const newFoodData = data.foodData.map((log: any) => {
         if (log.id === id) {
@@ -213,7 +225,6 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
       }
     }
     
-    // Check legacy logs array
     if (data.logs && !updated) {
       const newLogs = data.logs.map((log: any) => {
         if (log.id === id) {
@@ -229,7 +240,6 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
     }
   }
 
-  // Fallback for old multi-doc formatting
   try {
     const fallbackRef = doc(db, 'foodLogs', id);
     await updateDoc(fallbackRef, updates);
@@ -246,7 +256,6 @@ export async function deleteFoodLog(userId: string, id: string) {
     const data = docSnap.data();
     let updated = false;
 
-    // Remove from foodData array
     if (data.foodData) {
       const initialLength = data.foodData.length;
       const newFoodData = data.foodData.filter((log: any) => log.id !== id);
@@ -256,7 +265,6 @@ export async function deleteFoodLog(userId: string, id: string) {
       }
     }
 
-    // Check legacy logs array
     if (data.logs && !updated) {
       const initialLength = data.logs.length;
       const newLogs = data.logs.filter((log: any) => log.id !== id);
@@ -269,7 +277,6 @@ export async function deleteFoodLog(userId: string, id: string) {
     if (updated) return;
   }
 
-  // Fallback for old multi-doc format
   try {
     const fallbackRef = doc(db, 'foodLogs', id);
     await deleteDoc(fallbackRef);
@@ -385,7 +392,6 @@ export async function getHealthLogs(userId: string) {
   const allSyncs: any[] = [];
   const lowerUserId = userId.toLowerCase();
 
-  // 1. Fetch exact match document (Single doc array format)
   try {
     const exactDoc = await getDoc(doc(db, 'healthLogs', userId));
     if (exactDoc.exists() && exactDoc.data().syncs) {
@@ -395,7 +401,6 @@ export async function getHealthLogs(userId: string) {
     console.warn("Could not fetch exact health doc:", e);
   }
 
-  // 2. Fetch lowercase match document
   if (userId !== lowerUserId) {
     try {
       const lowerDoc = await getDoc(doc(db, 'healthLogs', lowerUserId));
@@ -407,7 +412,6 @@ export async function getHealthLogs(userId: string) {
     }
   }
 
-  // 3. Fetch exact match queries (Multi-doc format) - No OrderBy!
   try {
     const qExact = query(collection(db, 'healthLogs'), where('userId', '==', userId));
     const snapExact = await getDocs(qExact);
@@ -418,7 +422,6 @@ export async function getHealthLogs(userId: string) {
     console.warn("Could not fetch exact health queries:", e);
   }
 
-  // 4. Fetch lowercase match queries - No OrderBy!
   if (userId !== lowerUserId) {
     try {
       const qLower = query(collection(db, 'healthLogs'), where('userId', '==', lowerUserId));
