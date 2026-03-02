@@ -1,6 +1,8 @@
 // src/components/AddPreviousFoodModal.tsx
-import { useState, useEffect } from 'react';
-import { Food } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import { Food, FoodLog } from '../types';
+import { deleteFood, getAllFoodLogs } from '../services/database';
+import { useAuth } from '../contexts/AuthContext';
 import './AddPreviousFoodModal.css';
 
 interface Props {
@@ -22,7 +24,37 @@ const getLocalTodayString = () => {
 };
 
 export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate }: Props) {
+  const { user } = useAuth();
+  const [localFoods, setLocalFoods] = useState<Food[]>([]);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Store all logs to find the last logged amount
+  const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
+  
+  // Double-tap reference
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync prop to local state
+  useEffect(() => {
+    setLocalFoods(foods);
+  }, [foods]);
+
+  // Fetch all logs once to power the "last logged amount" memory
+  useEffect(() => {
+    if (user) {
+      getAllFoodLogs(user.uid)
+        .then(logs => setAllLogs(logs))
+        .catch(console.error);
+    }
+  }, [user]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    };
+  }, []);
   
   // State for what the user actually consumed
   const [logDetails, setLogDetails] = useState({
@@ -68,6 +100,59 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setLogDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, food: Food) => {
+    if (tapTimerRef.current) {
+      // Second tap detected - Clear timer and trigger double tap action
+      clearTimeout(tapTimerRef.current);
+      tapTimerRef.current = null;
+      
+      if (window.confirm(`Are you sure you want to permanently delete ${food.name} from your saved foods list? (It will remain in your past daily logs)`)) {
+        deleteFood(food.id)
+          .then(() => {
+            setLocalFoods(prev => prev.filter(f => f.id !== food.id));
+          })
+          .catch(err => {
+            console.error("Failed to delete food:", err);
+            setError("Failed to delete food.");
+          });
+      }
+    } else {
+      // First tap detected - start timer
+      tapTimerRef.current = setTimeout(() => {
+        tapTimerRef.current = null;
+        setSelectedFood(food);
+        
+        let method = 'serving';
+        let servings = '1';
+        let volume = '';
+
+        // Find the most recent log for this food
+        const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+
+        if (lastLog) {
+          if (lastLog.unit === 'serving') {
+            method = 'serving';
+            servings = lastLog.amount.toString();
+          } else {
+            // It's a volume. Find the index in the food's volumes array.
+            const volIndex = food.volumes?.findIndex(v => v.unit === lastLog.unit);
+            if (volIndex !== undefined && volIndex >= 0) {
+              method = `volume-${volIndex}`;
+              volume = lastLog.amount.toString();
+            }
+          }
+        }
+        
+        setLogDetails(prev => ({
+            ...prev,
+            consumptionMethod: method,
+            servingsConsumed: servings,
+            volumeConsumed: volume
+        }));
+      }, 250); 
+    }
   };
 
   // --- EDIT NUTRITION HANDLERS ---
@@ -282,7 +367,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
         protein: calcConsumed(selectedFood.protein),
       };
 
-const cleanConsumedNutrition = Object.fromEntries(
+      const cleanConsumedNutrition = Object.fromEntries(
         Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
       ) as any;
 
@@ -319,33 +404,69 @@ const cleanConsumedNutrition = Object.fromEntries(
   // --- RENDERING VIEWS ---
 
   if (!selectedFood) {
+    // Filter the foods array based on the search term
+    const filteredFoods = localFoods.filter(food => {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
+      const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
+      const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
+      return matchesName || matchesBrand || matchesUPC;
+    });
+
     return (
       <div className="previous-food-modal">
-        <h3>Add Previous Food</h3>
-        <div className="food-list">
-          {foods.map((food) => (
-            <button
-              key={food.id}
-              className="food-option"
-              onClick={() => {
-                setSelectedFood(food);
-                setLogDetails(prev => ({
-                    ...prev,
-                    consumptionMethod: 'serving',
-                    servingsConsumed: '1',
-                    volumeConsumed: ''
-                }));
-              }}
-            >
-              <div className="food-name">{food.name}</div>
-              {food.brand && <div className="food-brand">{food.brand}</div>}
-              <div className="food-serving">
-                {food.servingSize}{food.servingUnit} - {food.calories} cal
-              </div>
-            </button>
-          ))}
+        <h3 style={{ marginBottom: '1rem' }}>Add Previous Food</h3>
+        
+        {/* Search Bar */}
+        <div className="search-bar-container">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search by name, brand, or UPC..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-        <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+
+        {error && <div className="error">{error}</div>}
+
+        <div className="food-list">
+          {filteredFoods.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>No foods found.</p>
+          ) : (
+            filteredFoods.map((food) => {
+              // Find the last log entry for this specific food
+              const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+
+              return (
+                <button
+                  key={food.id}
+                  className="food-option"
+                  onClick={(e) => handleItemInteraction(e, food)}
+                >
+                  <div className="food-name">{food.name}</div>
+                  {food.brand && <div className="food-brand">{food.brand}</div>}
+                  <div className="food-serving">
+                    {food.servingSize} {food.servingUnit} - {food.calories} cal
+                  </div>
+                  
+                  {/* Show the last logged amount directly on the card */}
+                  {lastLog && (
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.35rem', fontWeight: 500 }}>
+                      Last logged: {lastLog.amount} {lastLog.unit}
+                    </div>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+        
+        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '0 0 1rem 0', fontStyle: 'italic' }}>
+          * Double-tap a food to permanently delete it from this list.
+        </p>
+
+        <div className="modal-actions">
           <button className="btn btn-secondary" onClick={onBack}>
             Back
           </button>
@@ -525,7 +646,7 @@ const cleanConsumedNutrition = Object.fromEntries(
                 value="serving" 
                 checked={logDetails.consumptionMethod === 'serving'} 
                 onChange={handleLogDetailsChange} 
-                style={{ width: 'auto', margin: 0 }} /* ADDED STYLE FIX */
+                style={{ width: 'auto', margin: 0 }} 
               /> 
               By Servings
             </label>
@@ -540,7 +661,7 @@ const cleanConsumedNutrition = Object.fromEntries(
                     value={`volume-${index}`} 
                     checked={logDetails.consumptionMethod === `volume-${index}`} 
                     onChange={handleLogDetailsChange} 
-                    style={{ width: 'auto', margin: 0 }} /* ADDED STYLE FIX */
+                    style={{ width: 'auto', margin: 0 }} 
                   /> 
                   By {vol.unit}
                 </label>
