@@ -1,5 +1,5 @@
 // src/components/FoodLogTab.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs } from '../services/database';
 import { Food, FoodLog } from '../types';
@@ -9,7 +9,6 @@ import BarcodeScanner from './BarcodeScanner';
 import './FoodLogTab.css';
 
 // --- Helper Functions for Navigator ---
-
 const getWeekDates = (date: Date) => {
   const start = new Date(date);
   start.setDate(date.getDate() - date.getDay());
@@ -42,7 +41,6 @@ const getMonthDates = (date: Date) => {
 };
 
 // --- Main Component ---
-
 export default function FoodLogTab() {
   const { user, userProfile } = useAuth();
   const [foods, setFoods] = useState<Food[]>([]);
@@ -58,15 +56,20 @@ export default function FoodLogTab() {
   const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
 
-  // Popup Modal State (Replaces the inline dropdown expansion)
+  // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
 
-  // Swipe State (Kept just in case, but modal makes it less necessary)
-  const [swipedLogId, setSwipedLogId] = useState<string | null>(null);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchStartY, setTouchStartY] = useState<number | null>(null);
-  const [swipingId, setSwipingId] = useState<string | null>(null);
-  const [swipeOffset, setSwipeOffset] = useState<number>(0);
+  // --- Double Tap / Drag and Drop State ---
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
+  const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    };
+  }, []);
 
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -137,7 +140,6 @@ export default function FoodLogTab() {
 
   useEffect(() => {
     loadData();
-    setSwipedLogId(null);
   }, [user, viewDate]);
 
   useEffect(() => {
@@ -185,8 +187,7 @@ export default function FoodLogTab() {
     try {
       await deleteFoodLog(user.uid, logId);
       await loadData();
-      setSelectedLog(null); // Close modal if open
-      setSwipedLogId(null);
+      setSelectedLog(null);
     } catch (error) {
       console.error('Failed to delete food log:', error);
     }
@@ -204,62 +205,148 @@ export default function FoodLogTab() {
     }
   };
 
-  // --- Touch Event Handlers for Swipe to Delete ---
-  const handleTouchStart = (e: React.TouchEvent, id: string) => {
-    setTouchStartX(e.touches[0].clientX);
-    setTouchStartY(e.touches[0].clientY);
-    setSwipingId(id);
-    setSwipeOffset(swipedLogId === id ? 80 : 0);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent, id: string) => {
-    if (!touchStartX || !touchStartY || swipingId !== id) return;
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const diffX = currentX - touchStartX;
-    const diffY = currentY - touchStartY;
-    
-    // Ignore swipe if they are primarily scrolling vertically
-    if (Math.abs(diffY) > Math.abs(diffX) + 5) return;
-    
-    let newOffset = (swipedLogId === id ? 80 : 0) + diffX;
-    if (newOffset < 0) newOffset = 0; // Prevent swiping left
-    if (newOffset > 100) newOffset = 100; // Cap swipe right
-    
-    setSwipeOffset(newOffset);
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent, id: string) => {
-    if (swipingId !== id) return;
-    
-    // Snap open if swiped past threshold
-    if (swipeOffset > 40) {
-      setSwipedLogId(id);
-    } else {
-      setSwipedLogId(null);
-    }
-    
-    setSwipingId(null);
-    setTouchStartX(null);
-    setTouchStartY(null);
-  };
-
-  const handleItemClick = (e: React.MouseEvent, log: FoodLog) => {
-    // If they click an inner button, ignore
+  // --- Double Tap / Interaction Handler ---
+  const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, log: FoodLog) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
+    if ((e.target as HTMLElement).classList.contains('drag-handle')) return;
 
-    if (swipedLogId === log.id) {
-      setSwipedLogId(null); // Close swipe if clicking it
-    } else if (swipedLogId) {
-      setSwipedLogId(null); // Close other swipes before opening popup
+    if (tapTimerRef.current) {
+      // Second tap detected - Clear timer and trigger double tap action
+      clearTimeout(tapTimerRef.current);
+      tapTimerRef.current = null;
+      
+      if (window.confirm(`Are you sure you want to delete ${log.food.name}?`)) {
+        handleDeleteLog(log.id);
+      }
     } else {
-      setSelectedLog(log); // Open Popup
+      // First tap detected - start timer
+      tapTimerRef.current = setTimeout(() => {
+        tapTimerRef.current = null;
+        setSelectedLog(log); // Trigger single tap action
+      }, 250); 
+    }
+  };
+
+  // --- Drag and Drop Handlers ---
+  const handleDragStart = (e: React.DragEvent, log: FoodLog) => {
+    setDraggedLog(log);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', log.id);
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, logId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverLogId !== logId) {
+      setDragOverLogId(logId);
+    }
+  };
+
+  const handleDropItem = (e: React.DragEvent, targetMealType: string, targetLogId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleDrop(e, targetMealType, targetLogId);
+  };
+
+  const handleDragOverMeal = (e: React.DragEvent, mealName: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverLogId !== `meal-${mealName}`) {
+      setDragOverLogId(`meal-${mealName}`);
+    }
+  };
+
+  const handleDragLeaveMeal = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverLogId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedLog(null);
+    setDragOverLogId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetMealType: string, targetLogId?: string) => {
+    e.preventDefault();
+    setDragOverLogId(null);
+    
+    if (!draggedLog || !user) return;
+    if (draggedLog.id === targetLogId) {
+      setDraggedLog(null);
+      return; 
+    }
+
+    const finalMealType = targetMealType === 'Uncategorized' ? '' : targetMealType;
+
+    // Get logs of the target category sorted ASCENDING (Oldest first)
+    const targetLogs = foodLogs
+      .filter(log => {
+        if (targetMealType === 'Uncategorized') {
+           return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
+        }
+        return log.mealType === targetMealType;
+      })
+      .filter(log => log.id !== draggedLog.id)
+      .sort((a, b) => a.timestamp - b.timestamp); 
+
+    let newTimestamp = draggedLog.timestamp;
+
+    if (targetLogId) {
+      const targetIndex = targetLogs.findIndex(l => l.id === targetLogId);
+      if (targetIndex !== -1) {
+        if (targetIndex === 0) {
+          newTimestamp = targetLogs[0].timestamp - 1000; 
+        } else {
+          newTimestamp = (targetLogs[targetIndex - 1].timestamp + targetLogs[targetIndex].timestamp) / 2;
+        }
+      }
+    } else {
+      if (targetLogs.length > 0) {
+        newTimestamp = targetLogs[targetLogs.length - 1].timestamp + 1000;
+      } else {
+        newTimestamp = Date.now(); 
+      }
+    }
+
+    const updatedLog = { ...draggedLog, mealType: finalMealType, timestamp: newTimestamp };
+    
+    setFoodLogs(prev => {
+      const filtered = prev.filter(l => l.id !== draggedLog.id);
+      return [...filtered, updatedLog].sort((a, b) => a.timestamp - b.timestamp);
+    });
+    setDraggedLog(null);
+
+    try {
+      await updateFoodLog(user.uid, draggedLog.id, { 
+        mealType: finalMealType, 
+        timestamp: newTimestamp 
+      });
+    } catch (error) {
+      console.error("Failed to update log position:", error);
+      loadData(); 
     }
   };
 
   if (loading && foodLogs.length === 0) return <div className="loading">Loading foods...</div>;
 
-  const totalCalories = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
+  // --- Nutrient Calculations ---
+  const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
+  
+  const fatConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
+  const saturatedFatConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
+  const carbsConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.carbs ?? (log as any).carbs ?? 0), 0));
+  const fiberConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.fiber ?? (log as any).fiber ?? 0), 0));
+  const sugarConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.sugar ?? (log as any).sugar ?? 0), 0));
+  const proteinConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
+
+  const trackedMacros = [];
+  if (userProfile?.trackFat) trackedMacros.push({ label: 'Fat', total: fatConsumed, budget: userProfile.fatBudget, unit: 'g', color: '#f59e0b' });
+  if (userProfile?.trackSaturatedFat) trackedMacros.push({ label: 'Sat Fat', total: saturatedFatConsumed, budget: userProfile.saturatedFatBudget, unit: 'g', color: '#dc2626' });
+  if (userProfile?.trackCarbs) trackedMacros.push({ label: 'Carbs', total: carbsConsumed, budget: userProfile.carbsBudget, unit: 'g', color: '#10b981' });
+  if (userProfile?.trackFiber) trackedMacros.push({ label: 'Fiber', total: fiberConsumed, budget: userProfile.fiberBudget, unit: 'g', color: '#8b5cf6' });
+  if (userProfile?.trackSugar) trackedMacros.push({ label: 'Sugar', total: sugarConsumed, budget: userProfile.sugarBudget, unit: 'g', color: '#ec4899' });
+  if (userProfile?.trackProtein) trackedMacros.push({ label: 'Protein', total: proteinConsumed, budget: userProfile.proteinBudget, unit: 'g', color: '#3b82f6' });
 
   const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Uncategorized'];
 
@@ -344,8 +431,52 @@ export default function FoodLogTab() {
         </div>
       </div>
 
+      {/* --- NUTRIENT PROGRESS BAR SUMMARY --- */}
       <div className="food-summary">
-        <span>Total: {totalCalories} cal</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2563eb' }}>
+            {totalCalories} {userProfile?.caloriesBudget ? `/ ${userProfile.caloriesBudget} cal` : 'cal'}
+          </span>
+        </div>
+        
+        {userProfile?.caloriesBudget && (
+          <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
+            <div 
+              className="progress-fill" 
+              style={{ 
+                width: `${Math.min((totalCalories / userProfile.caloriesBudget) * 100, 100)}%`, 
+                /* Override any global CSS with 'background' instead of 'backgroundColor' */
+                background: totalCalories > userProfile.caloriesBudget ? '#ef4444' : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' 
+              }} 
+            />
+          </div>
+        )}
+
+        {trackedMacros.length > 0 && (
+          <div className="macros-grid">
+            {trackedMacros.map(macro => (
+              <div key={macro.label} className="macro-item">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
+                  <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.85rem' }}>
+                    {macro.total}{macro.unit} {macro.budget ? `/ ${macro.budget}${macro.unit}` : ''}
+                  </span>
+                </div>
+                <div className="progress-bg">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      /* Override any global CSS with 'background' instead of 'backgroundColor' */
+                      background: macro.color, 
+                      width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
+                    }} 
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* --- MEAL DIARY SECTIONS --- */}
@@ -356,46 +487,49 @@ export default function FoodLogTab() {
               return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
             }
             return log.mealType === mealName;
-          });
+          }).sort((a, b) => a.timestamp - b.timestamp);
 
           if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
 
-          const mealCalories = logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0);
+          const mealCalories = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
 
           return (
-            <div key={mealName} className="meal-section">
+            <div 
+              key={mealName} 
+              className={`meal-section ${dragOverLogId === `meal-${mealName}` ? 'drag-over-meal' : ''}`}
+              onDragOver={(e) => handleDragOverMeal(e, mealName)}
+              onDragLeave={handleDragLeaveMeal}
+              onDrop={(e) => handleDrop(e, mealName)}
+            >
               <div className="meal-header">
                 <h3>{mealName}</h3>
                 <span className="meal-calories">{mealCalories} cal</span>
               </div>
               
               {logsForMeal.length === 0 ? (
-                <div className="meal-empty">No foods logged</div>
+                <div className="meal-empty">No foods logged. Drop foods here.</div>
               ) : (
                 <div className="food-logs-list">
                   {logsForMeal.map((log) => {
-                    const isSwiped = swipedLogId === log.id;
-                    const isSwiping = swipingId === log.id;
-                    
-                    let transformValue = 'translateX(0px)';
-                    if (isSwiping) transformValue = `translateX(${swipeOffset}px)`;
-                    else if (isSwiped) transformValue = `translateX(80px)`;
+                    const isDragging = draggedLog?.id === log.id;
+                    const isDragOver = dragOverLogId === log.id;
 
                     return (
-                      <div key={log.id} className="swipe-container">
-                        <div className="swipe-actions-left" onClick={() => handleDeleteLog(log.id)}>
-                          <span>🗑️ Delete</span>
-                        </div>
-                        
-                        <div 
-                          className={`food-log-item ${isSwiping ? 'is-swiping' : ''}`}
-                          style={{ transform: transformValue }}
-                          onTouchStart={(e) => handleTouchStart(e, log.id)}
-                          onTouchMove={(e) => handleTouchMove(e, log.id)}
-                          onTouchEnd={(e) => handleTouchEnd(e, log.id)}
-                          onClick={(e) => handleItemClick(e, log)}
-                        >
-                          <div className="food-log-summary">
+                      <div 
+                        key={log.id} 
+                        className={`food-log-item ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                        onClick={(e) => handleItemInteraction(e, log)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, log)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOverItem(e, log.id)}
+                        onDrop={(e) => handleDropItem(e, mealName, log.id)}
+                      >
+                        <div className="food-log-summary">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div className="drag-handle" title="Drag to reorder">
+                              ⠿
+                            </div>
                             <div className="food-info">
                               <h4>{log.food.name}</h4>
                               {log.food.brand && <span className="brand">{log.food.brand}</span>}
@@ -403,9 +537,9 @@ export default function FoodLogTab() {
                                 {log.amount} {log.unit}
                               </span>
                             </div>
-                            <div className="food-calories">
-                              <span className="calories">{log.editedNutrition?.calories ?? log.calories} cal</span>
-                            </div>
+                          </div>
+                          <div className="food-calories">
+                            <span className="calories">{Math.round(log.editedNutrition?.calories ?? log.calories)} cal</span>
                           </div>
                         </div>
                       </div>
@@ -416,9 +550,14 @@ export default function FoodLogTab() {
             </div>
           );
         })}
+        
+        {/* --- MOVED TEXT: Double tap to delete --- */}
+        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem', fontStyle: 'italic' }}>
+          * Double-tap a food to delete it.
+        </p>
       </div>
 
-      {/* --- NEW: Selected Log Detail Popup --- */}
+      {/* --- Selected Log Detail Popup --- */}
       {selectedLog && (
         <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
@@ -482,7 +621,7 @@ export default function FoodLogTab() {
                 onClick={() => {
                   setEditingLog(selectedLog);
                   setShowEditModal(true);
-                  setSelectedLog(null); // Close preview when editing
+                  setSelectedLog(null);
                 }}
               >
                 ✏️ Edit

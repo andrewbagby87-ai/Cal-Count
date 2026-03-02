@@ -471,6 +471,7 @@ const handleContinue = (e: React.FormEvent) => {
                     value="serving" 
                     checked={logDetails.consumptionMethod === 'serving'} 
                     onChange={handleLogDetailsChange} 
+                    style={{ width: 'auto', margin: 0 }}
                   /> 
                   By Servings
                 </label>
@@ -485,6 +486,7 @@ const handleContinue = (e: React.FormEvent) => {
                         value={`volume-${index}`} 
                         checked={logDetails.consumptionMethod === `volume-${index}`} 
                         onChange={handleLogDetailsChange} 
+                        style={{ width: 'auto', margin: 0 }}
                       /> 
                       By {vol.unit}
                     </label>

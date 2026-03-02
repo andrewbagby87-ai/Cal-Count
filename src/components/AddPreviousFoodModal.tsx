@@ -525,6 +525,7 @@ const cleanConsumedNutrition = Object.fromEntries(
                 value="serving" 
                 checked={logDetails.consumptionMethod === 'serving'} 
                 onChange={handleLogDetailsChange} 
+                style={{ width: 'auto', margin: 0 }} /* ADDED STYLE FIX */
               /> 
               By Servings
             </label>
@@ -539,6 +540,7 @@ const cleanConsumedNutrition = Object.fromEntries(
                     value={`volume-${index}`} 
                     checked={logDetails.consumptionMethod === `volume-${index}`} 
                     onChange={handleLogDetailsChange} 
+                    style={{ width: 'auto', margin: 0 }} /* ADDED STYLE FIX */
                   /> 
                   By {vol.unit}
                 </label>

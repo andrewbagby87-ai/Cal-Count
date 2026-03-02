@@ -70,6 +70,7 @@ export interface FoodLog {
   id: string;
   userId: string;
   date: string; // YYYY-MM-DD
+  mealType?: string;
   foodId: string;
   food: Food;
   amount: number;
