@@ -10,7 +10,9 @@ interface Props {
   onAdd: (foodData: any) => Promise<void>;
   onClose: () => void;
   onBack: () => void;
+  onFoodDeleted?: () => void; // NEW: Triggers parent to reload foods list
   initialDate?: string;
+  isVitaminMode?: boolean; 
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -23,7 +25,7 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate }: Props) {
+export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
@@ -59,7 +61,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
   // State for what the user actually consumed
   const [logDetails, setLogDetails] = useState({
     date: initialDate || getLocalTodayString(),
-    mealType: '', 
+    mealType: isVitaminMode ? 'Vitamins' : '', 
     consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
@@ -108,10 +110,12 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
       
-      if (window.confirm(`Are you sure you want to permanently delete ${food.name} from your saved foods list? (It will remain in your past daily logs)`)) {
+      const targetType = isVitaminMode ? 'vitamin' : 'food';
+      if (window.confirm(`Are you sure you want to permanently delete ${food.name} from your saved ${targetType}s list? (It will remain in your past daily logs)`)) {
         deleteFood(food.id)
           .then(() => {
             setLocalFoods(prev => prev.filter(f => f.id !== food.id));
+            if (onFoodDeleted) onFoodDeleted(); // <-- NEW: Notify parent of deletion
           })
           .catch(err => {
             console.error("Failed to delete food:", err);
@@ -220,7 +224,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
     e.preventDefault();
     if (!selectedFood) return;
 
-    if (!editFormData.name.trim()) { setError('Food name is required'); return; }
+    if (!editFormData.name.trim()) { setError('Name is required'); return; }
     if (!editFormData.calories) { setError('Calories is required'); return; }
 
     const safeParse = (val: string) => {
@@ -315,7 +319,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
     setError('');
     
     try {
-      if (!logDetails.mealType) throw new Error('Please select a meal category');
+      if (!isVitaminMode && !logDetails.mealType) throw new Error('Please select a meal category');
 
       let multiplier = 1;
       let finalAmount = 1;
@@ -415,7 +419,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
 
     return (
       <div className="previous-food-modal">
-        <h3 style={{ marginBottom: '1rem' }}>Add Previous Food</h3>
+        <h3 style={{ marginBottom: '1rem' }}>{isVitaminMode ? 'Add Previous Vitamin' : 'Add Previous Food'}</h3>
         
         {/* Search Bar */}
         <div className="search-bar-container">
@@ -432,7 +436,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
 
         <div className="food-list">
           {filteredFoods.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>No foods found.</p>
+            <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
+              {isVitaminMode ? 'No vitamins found.' : 'No foods found.'}
+            </p>
           ) : (
             filteredFoods.map((food) => {
               // Find the last log entry for this specific food
@@ -463,7 +469,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
         </div>
         
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '0 0 1rem 0', fontStyle: 'italic' }}>
-          * Double-tap a food to permanently delete it from this list.
+          * Double-tap an item to permanently delete it from this list.
         </p>
 
         <div className="modal-actions">
@@ -487,13 +493,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
         
         <form onSubmit={handleSaveNutrition}>
           <div className="form-group">
-            <label htmlFor="name">Food Name *</label>
-            <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} placeholder="e.g., Grilled Chicken Breast" required />
+            <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
+            <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} placeholder={isVitaminMode ? "e.g., Vitamin C" : "e.g., Grilled Chicken Breast"} required />
           </div>
 
           <div className="form-group">
             <label htmlFor="brand">Brand (Optional)</label>
-            <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} placeholder="e.g., Tyson" />
+            <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} placeholder="e.g., Nature Made" />
           </div>
 
           <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
@@ -588,7 +594,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
       <div style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Log Details</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
-          When did you eat <strong>{selectedFood.name}</strong>, and how much?
+          When did you {isVitaminMode ? 'take' : 'eat'} <strong>{selectedFood.name}</strong>, and how much?
         </p>
         <button 
           type="button" 
@@ -616,23 +622,25 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
           />
         </div>
 
-        <div className="form-group">
-          <label htmlFor="mealType">Meal Category *</label>
-          <select
-            id="mealType"
-            name="mealType"
-            value={logDetails.mealType}
-            onChange={handleLogDetailsChange}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-            required
-          >
-            <option value="" disabled>Select a Category...</option>
-            <option value="Breakfast">🌅 Breakfast</option>
-            <option value="Lunch">☀️ Lunch</option>
-            <option value="Dinner">🌙 Dinner</option>
-            <option value="Snack">🍎 Snack</option>
-          </select>
-        </div>
+        {!isVitaminMode && (
+          <div className="form-group">
+            <label htmlFor="mealType">Meal Category *</label>
+            <select
+              id="mealType"
+              name="mealType"
+              value={logDetails.mealType}
+              onChange={handleLogDetailsChange}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+              required
+            >
+              <option value="" disabled>Select a Category...</option>
+              <option value="Breakfast">🌅 Breakfast</option>
+              <option value="Lunch">☀️ Lunch</option>
+              <option value="Dinner">🌙 Dinner</option>
+              <option value="Snack">🍎 Snack</option>
+            </select>
+          </div>
+        )}
 
         <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
@@ -677,7 +685,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
 
         {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
           <div className="form-group">
-            <label htmlFor="servingsConsumed">Number of Servings Eaten *</label>
+            <label htmlFor="servingsConsumed">Number of Servings {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
             <input
               id="servingsConsumed"
               type="text"
@@ -691,7 +699,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
           </div>
         ) : (
           <div className="form-group">
-            <label htmlFor="volumeConsumed">Amount Eaten *</label>
+            <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
             <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <input
                 id="volumeConsumed"
@@ -756,10 +764,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, initialDate
                   paddingBottom: idx !== 9 ? '0.2rem' : '0'
                 }}>
                   <span style={{ 
-                    fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
-                    textTransform: 'uppercase', 
-                    color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                    fontWeight: nutrient.isHighlight ? 700 : 400
+                     fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                     textTransform: 'uppercase', 
+                     color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                     fontWeight: nutrient.isHighlight ? 700 : 400
                   }}>
                     {nutrient.label}
                   </span>

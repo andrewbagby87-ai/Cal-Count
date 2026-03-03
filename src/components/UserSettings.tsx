@@ -27,6 +27,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     trackFiber: false,
     trackSugar: false,
     trackProtein: false,
+    trackVitamins: false,
   });
   
   const [password, setPassword] = useState('');
@@ -55,6 +56,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
         trackFiber: userProfile.trackFiber || false,
         trackSugar: userProfile.trackSugar || false,
         trackProtein: userProfile.trackProtein || false,
+        trackVitamins: userProfile.trackVitamins || false,
       });
     }
   }, [userProfile]);
@@ -202,9 +204,13 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
               <div className="checkbox-group">
                 <label><input type="checkbox" name="trackProtein" checked={formData.trackProtein} onChange={handleChange} disabled={isBusy} /> Protein</label>
               </div>
+              <div className="checkbox-group">
+                <label><input type="checkbox" name="trackVitamins" checked={formData.trackVitamins} onChange={handleChange} disabled={isBusy} /> Vitamins</label>
+              </div>
             </section>
 
-            <section className="settings-section">
+            {/* ADDED style={{ marginTop: '2.5rem' }} HERE FOR EXTRA SEPARATION */}
+            <section className="settings-section" style={{ marginTop: '2.5rem' }}>
               <h2>Budget Settings</h2>
               <div className="form-group">
                 <label>Daily Calories Budget *</label>
@@ -249,7 +255,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
               )}
             </section>
 
-            {/* MOVED TO THE BOTTOM */}
             <section className="settings-section" style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem' }}>
               <h2>Apple Health Sync Setup</h2>
               <div className="form-group">

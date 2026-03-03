@@ -47,6 +47,7 @@ export default function FoodLogTab() {
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isVitaminMode, setIsVitaminMode] = useState(false);
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -279,11 +280,25 @@ export default function FoodLogTab() {
 
     const finalMealType = targetMealType === 'Uncategorized' ? '' : targetMealType;
 
+    // --- Vitamin Contamination Restriction Check ---
+    const isDraggedVitamin = draggedLog.mealType === 'Vitamins';
+    const isTargetVitamin = targetMealType === 'Vitamins';
+    
+    if (isDraggedVitamin && !isTargetVitamin) {
+      setDraggedLog(null);
+      return; // Cannot drop a vitamin into a normal category
+    }
+    
+    if (!isDraggedVitamin && isTargetVitamin) {
+      setDraggedLog(null);
+      return; // Cannot drop a normal food into the vitamins category
+    }
+
     // Get logs of the target category sorted ASCENDING (Oldest first)
     const targetLogs = foodLogs
       .filter(log => {
         if (targetMealType === 'Uncategorized') {
-           return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
+           return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Vitamins'].includes(log.mealType);
         }
         return log.mealType === targetMealType;
       })
@@ -348,7 +363,12 @@ export default function FoodLogTab() {
   if (userProfile?.trackSugar) trackedMacros.push({ label: 'Sugar', total: sugarConsumed, budget: userProfile.sugarBudget, unit: 'g', color: '#ec4899' });
   if (userProfile?.trackProtein) trackedMacros.push({ label: 'Protein', total: proteinConsumed, budget: userProfile.proteinBudget, unit: 'g', color: '#3b82f6' });
 
+  const hasVitaminsLogs = foodLogs.some(log => log.mealType === 'Vitamins');
   const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Uncategorized'];
+  
+  if (userProfile?.trackVitamins || hasVitaminsLogs) {
+    mealCategories.unshift('Vitamins');
+  }
 
   return (
     <div className="food-log-tab">
@@ -425,9 +445,14 @@ export default function FoodLogTab() {
           <button className="btn btn-secondary btn-sm" onClick={() => setIsScannerOpen(true)}>
             📷 Scan
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+          <button className="btn btn-primary btn-sm" onClick={() => { setIsVitaminMode(false); setShowAddModal(true); }}>
             + Add Food
           </button>
+          {userProfile?.trackVitamins && (
+            <button className="btn btn-primary btn-sm" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { setIsVitaminMode(true); setShowAddModal(true); }}>
+              + Add Vitamins
+            </button>
+          )}
         </div>
       </div>
 
@@ -446,7 +471,6 @@ export default function FoodLogTab() {
               className="progress-fill" 
               style={{ 
                 width: `${Math.min((totalCalories / userProfile.caloriesBudget) * 100, 100)}%`, 
-                /* Override any global CSS with 'background' instead of 'backgroundColor' */
                 background: totalCalories > userProfile.caloriesBudget ? '#ef4444' : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' 
               }} 
             />
@@ -467,7 +491,6 @@ export default function FoodLogTab() {
                   <div 
                     className="progress-fill" 
                     style={{ 
-                      /* Override any global CSS with 'background' instead of 'backgroundColor' */
                       background: macro.color, 
                       width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
                     }} 
@@ -484,7 +507,7 @@ export default function FoodLogTab() {
         {mealCategories.map(mealName => {
           const logsForMeal = foodLogs.filter((log: any) => {
             if (mealName === 'Uncategorized') {
-              return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(log.mealType);
+              return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Vitamins'].includes(log.mealType);
             }
             return log.mealType === mealName;
           }).sort((a, b) => a.timestamp - b.timestamp);
@@ -507,7 +530,7 @@ export default function FoodLogTab() {
               </div>
               
               {logsForMeal.length === 0 ? (
-                <div className="meal-empty">No foods logged. Drop foods here.</div>
+                <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Drop {mealName === 'Vitamins' ? 'vitamins' : 'foods'} here.</div>
               ) : (
                 <div className="food-logs-list">
                   {logsForMeal.map((log) => {
@@ -551,9 +574,8 @@ export default function FoodLogTab() {
           );
         })}
         
-        {/* --- MOVED TEXT: Double tap to delete --- */}
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem', fontStyle: 'italic' }}>
-          * Double-tap a food to delete it.
+          * Double-tap an item to delete it.
         </p>
       </div>
 
@@ -645,7 +667,11 @@ export default function FoodLogTab() {
             setShowAddModal(false);
             loadData(); 
           }} 
+          onFoodDeleted={() => {
+            loadData(); // NEW: Refresh silently
+          }}
           selectedDate={getDateString(viewDate)} 
+          isVitaminMode={isVitaminMode}
         />
       )}
 

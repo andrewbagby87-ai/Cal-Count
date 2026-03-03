@@ -9,11 +9,12 @@ interface Props {
   onCreated: (food: Food) => void;
   onClose: () => void;
   initialDate?: string; 
+  isVitaminMode?: boolean; // NEW
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
-export default function CreateFoodModal({ onCreated, onClose, initialDate }: Props) {
+export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
@@ -39,7 +40,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate }: Pro
   // Step 2 State: What the user actually consumed
   const [logDetails, setLogDetails] = useState({
     date: initialDate || new Date().toISOString().split('T')[0],
-    mealType: '', 
+    mealType: isVitaminMode ? 'Vitamins' : '', 
     consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
@@ -114,7 +115,7 @@ const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!formData.name.trim()) { setError('Food name is required'); return; }
+    if (!formData.name.trim()) { setError('Name is required'); return; }
     
     // Add UPC validation here: if it's filled in, it MUST be 12 digits
     if (formData.upc.trim() && formData.upc.trim().length !== 12) { 
@@ -178,7 +179,7 @@ const handleContinue = (e: React.FormEvent) => {
 
     try {
       if (!user) throw new Error('User not found');
-      if (!logDetails.mealType) throw new Error('Please select a meal category');
+      if (!isVitaminMode && !logDetails.mealType) throw new Error('Please select a meal category');
 
       let multiplier = 1;
       let finalAmount = 1;
@@ -234,6 +235,7 @@ const handleContinue = (e: React.FormEvent) => {
         protein: safeParse(formData.protein),
         servingSize: parseFloat(formData.labelServings) || 1, 
         servingUnit: 'serving',
+        isVitamin: isVitaminMode ? true : false,
       };
 
       if (validVolumes.length > 0) {
@@ -325,13 +327,13 @@ const handleContinue = (e: React.FormEvent) => {
           
           <form onSubmit={handleContinue}>
             <div className="form-group">
-              <label htmlFor="name">Food Name *</label>
-              <input id="name" type="text" name="name" value={formData.name} onChange={handleChange} placeholder="e.g., Grilled Chicken Breast" required />
+              <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
+              <input id="name" type="text" name="name" value={formData.name} onChange={handleChange} placeholder={isVitaminMode ? "e.g., Vitamin C" : "e.g., Grilled Chicken Breast"} required />
             </div>
 
             <div className="form-group">
               <label htmlFor="brand">Brand (Optional)</label>
-              <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Tyson" />
+              <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Nature Made" />
             </div>
 
             {/* Add the UPC form group here */}
@@ -422,7 +424,7 @@ const handleContinue = (e: React.FormEvent) => {
         <>
           <h3 style={{ marginBottom: '0.25rem' }}>Step 2: Log Details</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            When did you eat this, and how much did you have?
+            When did you {isVitaminMode ? 'take' : 'eat'} this, and how much did you have?
           </p>
 
           {error && <div className="error">{error}</div>}
@@ -441,23 +443,25 @@ const handleContinue = (e: React.FormEvent) => {
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="mealType">Meal Category *</label>
-              <select
-                id="mealType"
-                name="mealType"
-                value={logDetails.mealType}
-                onChange={handleLogDetailsChange}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-                required
-              >
-                <option value="" disabled>Select a Category...</option>
-                <option value="Breakfast">🌅 Breakfast</option>
-                <option value="Lunch">☀️ Lunch</option>
-                <option value="Dinner">🌙 Dinner</option>
-                <option value="Snack">🍎 Snack</option>
-              </select>
-            </div>
+            {!isVitaminMode && (
+              <div className="form-group">
+                <label htmlFor="mealType">Meal Category *</label>
+                <select
+                  id="mealType"
+                  name="mealType"
+                  value={logDetails.mealType}
+                  onChange={handleLogDetailsChange}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+                  required
+                >
+                  <option value="" disabled>Select a Category...</option>
+                  <option value="Breakfast">🌅 Breakfast</option>
+                  <option value="Lunch">☀️ Lunch</option>
+                  <option value="Dinner">🌙 Dinner</option>
+                  <option value="Snack">🍎 Snack</option>
+                </select>
+              </div>
+            )}
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
@@ -502,7 +506,7 @@ const handleContinue = (e: React.FormEvent) => {
 
             {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
               <div className="form-group">
-                <label htmlFor="servingsConsumed">Number of Servings Eaten *</label>
+                <label htmlFor="servingsConsumed">Number of Servings {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
                 <input
                   id="servingsConsumed"
                   type="text"
@@ -516,7 +520,7 @@ const handleContinue = (e: React.FormEvent) => {
               </div>
             ) : (
               <div className="form-group">
-                <label htmlFor="volumeConsumed">Amount Eaten *</label>
+                <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
                 <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
                     id="volumeConsumed"

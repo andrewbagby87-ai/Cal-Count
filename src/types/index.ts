@@ -25,6 +25,7 @@ export interface UserProfile {
   trackSaturatedFat?: boolean;
   trackCarbs?: boolean;
   trackSugar?: boolean;
+  trackVitamins?: boolean; // NEW
   
   createdAt: Date | number | string;
   updatedAt?: Date | number | string;
@@ -64,13 +65,14 @@ export interface Food {
   volumeUnit?: string;
   volumes?: { amount: number; unit: string }[];
   createdAt: number;
+  isVitamin?: boolean; // NEW
 }
 
 export interface FoodLog {
   id: string;
   userId: string;
   date: string; // YYYY-MM-DD
-  mealType?: string;
+  mealType?: string; 
   foodId: string;
   food: Food;
   amount: number;
