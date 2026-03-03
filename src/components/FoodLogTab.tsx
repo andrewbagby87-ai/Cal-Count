@@ -528,7 +528,23 @@ export default function FoodLogTab() {
 
           if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
 
+          // Calculate Meal-Specific Nutrients
           const mealCalories = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
+          const mealFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
+          const mealSatFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
+          const mealCarbs = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.carbs ?? (log as any).carbs ?? 0), 0));
+          const mealFiber = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fiber ?? (log as any).fiber ?? 0), 0));
+          const mealSugar = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.sugar ?? (log as any).sugar ?? 0), 0));
+          const mealProtein = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
+
+          // Construct tracked badges for this meal
+          const mealMacros = [];
+          if (userProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
+          if (userProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
+          if (userProfile?.trackFat) mealMacros.push({ label: 'Fat', value: mealFat, color: '#b45309', bg: '#fef3c7' });
+          if (userProfile?.trackSaturatedFat) mealMacros.push({ label: 'Sat Fat', value: mealSatFat, color: '#991b1b', bg: '#fee2e2' });
+          if (userProfile?.trackFiber) mealMacros.push({ label: 'Fiber', value: mealFiber, color: '#5b21b6', bg: '#ede9fe' });
+          if (userProfile?.trackSugar) mealMacros.push({ label: 'Sugar', value: mealSugar, color: '#be185d', bg: '#fce7f3' });
 
           return (
             <div 
@@ -538,9 +554,30 @@ export default function FoodLogTab() {
               onDragLeave={handleDragLeaveMeal}
               onDrop={(e) => handleDrop(e, mealName)}
             >
-              <div className="meal-header">
-                <h3>{mealName}</h3>
-                <span className="meal-calories">{mealCalories} cal</span>
+              <div className="meal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>{mealName}</h3>
+                  
+                  {/* --- NEW: Meal Specific Macros --- */}
+                  {mealMacros.length > 0 && logsForMeal.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      {mealMacros.map((macro, idx) => (
+                        <span key={idx} style={{ 
+                          fontSize: '0.7rem', 
+                          color: macro.color, 
+                          backgroundColor: macro.bg,
+                          padding: '0.15rem 0.4rem', 
+                          borderRadius: '0.25rem',
+                          fontWeight: 600
+                        }}>
+                          {macro.label}: {macro.value}g
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <span className="meal-calories" style={{ margin: 0 }}>{mealCalories} cal</span>
               </div>
               
               {logsForMeal.length === 0 ? (
