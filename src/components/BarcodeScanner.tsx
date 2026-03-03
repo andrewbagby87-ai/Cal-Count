@@ -1,3 +1,4 @@
+// src/components/BarcodeScanner.tsx
 import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import './BarcodeScanner.css';
@@ -9,126 +10,176 @@ interface BarcodeScannerProps {
 
 export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScannerProps) {
   const [cameraError, setCameraError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   
-  // We use refs to keep track of the latest functions without triggering re-renders
   const onScanSuccessRef = useRef(onScanSuccess);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const hasScannedRef = useRef(false);
 
   useEffect(() => {
     onScanSuccessRef.current = onScanSuccess;
   }, [onScanSuccess]);
 
+  // 1. Initialize the LIVE camera (as a convenience)
   useEffect(() => {
     let isMounted = true;
-    
-    // THE GOLDEN FIX: We delay the camera startup by 150ms. 
-    // This perfectly intercepts React Strict Mode's double-mounting behavior
-    // so the camera is never instructed to boot up twice simultaneously.
-    const startTimer = setTimeout(async () => {
-      try {
-        const html5QrCode = new Html5Qrcode("barcode-reader-container");
-        scannerRef.current = html5QrCode;
+    const html5QrCode = new Html5Qrcode("barcode-reader-container");
+    scannerRef.current = html5QrCode;
 
+    const startScanner = async () => {
+      try {
         await html5QrCode.start(
-          { facingMode: "environment" }, // Prioritize rear camera on phones
+          { facingMode: "environment" },
           {
             fps: 10,
             qrbox: { width: 250, height: 150 },
-            aspectRatio: 1.0,
           },
           (decodedText) => {
-            // SUCCESS: Only process if we are still mounted and scanning
-            if (isMounted && html5QrCode.isScanning) {
-              html5QrCode.stop()
-                .then(() => html5QrCode.clear())
-                .then(() => onScanSuccessRef.current(decodedText))
-                .catch(console.error);
+            if (isMounted && !hasScannedRef.current) {
+              hasScannedRef.current = true;
+              onScanSuccessRef.current(decodedText);
             }
           },
-          () => {} // Silently ignore frame-by-frame background errors
+          () => {} // Silently ignore background frame errors
         );
       } catch (err) {
-        console.error("Scanner Error:", err);
+        console.warn("Live camera init failed (expected on some devices):", err);
         if (isMounted) {
-          setCameraError("Camera blocked or not found. Please check your browser permissions.");
+          setCameraError("Live camera unavailable. Please use the 'Snap Photo' button below.");
         }
       }
-    }, 150);
+    };
 
-    // CLEANUP: If the user exits or React unmounts, clear the timer and cleanly shut down
+    // Small delay to allow modal animation to finish before grabbing camera hardware
+    const timer = setTimeout(startScanner, 200);
+
     return () => {
       isMounted = false;
-      clearTimeout(startTimer);
-      
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop()
-            .then(() => scannerRef.current?.clear())
-            .catch(console.error);
-        } else {
-          scannerRef.current.clear();
-        }
+      clearTimeout(timer);
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+      } else {
+        html5QrCode.clear();
       }
     };
   }, []);
 
-  // Guarantee the camera turns off immediately when the user clicks the explicit Close button
-  const handleForceClose = async () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (e) {
-        console.error("Error stopping on close:", e);
+  // 2. The NATIVE Camera Fallback (The Silver Bullet)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+
+    try {
+      // Create a temporary scanner just for analyzing this high-quality photo
+      const fileScanner = new Html5Qrcode("hidden-file-scanner");
+      const decodedText = await fileScanner.scanFile(file, true);
+      
+      if (decodedText) {
+        hasScannedRef.current = true;
+        onScanSuccessRef.current(decodedText);
+      }
+    } catch (err) {
+      alert("Could not detect a barcode in that photo. Please ensure it is well-lit and in focus, or type it manually.");
+    } finally {
+      setIsProcessing(false);
+      e.target.value = ''; // Reset input so they can try again if needed
+    }
+  };
+
+  const handleManualEntry = () => {
+    const code = window.prompt("Enter the 12-digit barcode/UPC manually:");
+    if (code !== null) {
+      const trimmedCode = code.trim();
+      if (/^\d{12}$/.test(trimmedCode)) {
+        hasScannedRef.current = true;
+        onScanSuccessRef.current(trimmedCode);
+      } else {
+        alert("Invalid barcode. Please enter exactly 12 numbers.");
       }
     }
-    onClose();
   };
 
   return (
-    <div className="barcode-scanner-overlay">
-      <div className="barcode-scanner-modal" style={{ position: 'relative' }}>
+    <div className="barcode-scanner-overlay" style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 9999,
+      display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem'
+    }}>
+      <div className="barcode-scanner-modal" style={{
+        backgroundColor: '#ffffff', width: '100%', maxWidth: '400px',
+        borderRadius: '1rem', padding: '1.5rem', position: 'relative',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+      }}>
         
-        {/* BULLETPROOF CLOSE BUTTON - Forced to the absolute top layer */}
+        {/* Close Button */}
         <button 
-          onClick={handleForceClose}
+          onClick={onClose}
           style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            zIndex: 999999,
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            backgroundColor: '#ef4444',
-            color: 'white',
-            border: 'none',
-            fontSize: '1.2rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+            position: 'absolute', top: '12px', right: '12px', zIndex: 10,
+            width: '36px', height: '36px', borderRadius: '50%',
+            backgroundColor: '#f1f5f9', color: '#64748b', border: 'none',
+            fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
           ✕
         </button>
 
-        <div className="scanner-header" style={{ paddingRight: '60px' }}>
-          <h3>Scan Barcode</h3>
+        <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.25rem' }}>Scan Barcode</h3>
+        
+        {/* Live Camera Viewfinder */}
+        <div style={{ borderRadius: '0.75rem', overflow: 'hidden', backgroundColor: '#0f172a', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {cameraError ? (
+            <p style={{ color: '#94a3b8', padding: '2rem', textAlign: 'center', margin: 0 }}>{cameraError}</p>
+          ) : (
+            <div id="barcode-reader-container" style={{ width: '100%' }}></div>
+          )}
         </div>
         
-        {cameraError ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#dc2626' }}>
-            <p style={{ fontSize: '3rem', margin: '0 0 1rem 0' }}>📷</p>
-            <p>{cameraError}</p>
-          </div>
-        ) : (
-          <div id="barcode-reader-container" className="scanner-container"></div>
-        )}
-        
-        <p className="scanner-hint">Point your camera at a product barcode</p>
+        <p style={{ color: '#64748b', fontSize: '0.85rem', textAlign: 'center', margin: '1rem 0', padding: '0 1rem' }}>
+          If the live camera won't focus, use your phone's native camera below!
+        </p>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          
+          {/* NATIVE CAMERA BUTTON (Requires <label> to wrap the file input) */}
+          <label style={{
+            width: '100%', padding: '0.85rem', backgroundColor: '#2563eb', color: 'white',
+            borderRadius: '0.5rem', fontWeight: '600', cursor: 'pointer',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem',
+            textAlign: 'center', margin: 0, opacity: isProcessing ? 0.7 : 1
+          }}>
+            {isProcessing ? 'Processing Photo...' : '📸 Snap Photo (Recommended)'}
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              onChange={handleFileUpload} 
+              style={{ display: 'none' }} 
+              disabled={isProcessing}
+            />
+          </label>
+
+          {/* MANUAL ENTRY BUTTON */}
+          <button 
+            onClick={handleManualEntry}
+            style={{
+              width: '100%', padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569',
+              border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: '600',
+              cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem'
+            }}
+          >
+            ⌨️ Type Manually
+          </button>
+
+        </div>
+
+        {/* Invisible div required by library to process static photos */}
+        <div id="hidden-file-scanner" style={{ display: 'none' }}></div>
+
       </div>
     </div>
   );

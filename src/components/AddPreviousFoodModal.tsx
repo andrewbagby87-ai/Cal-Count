@@ -10,9 +10,10 @@ interface Props {
   onAdd: (foodData: any) => Promise<void>;
   onClose: () => void;
   onBack: () => void;
-  onFoodDeleted?: () => void; // NEW: Triggers parent to reload foods list
+  onFoodDeleted?: () => void; 
   initialDate?: string;
   isVitaminMode?: boolean; 
+  initialFood?: Food; // NEW
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -25,10 +26,12 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode }: Props) {
+export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
-  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  
+  // Set to initialFood immediately if present
+  const [selectedFood, setSelectedFood] = useState<Food | null>(initialFood || null);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Store all logs to find the last logged amount
@@ -50,6 +53,35 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         .catch(console.error);
     }
   }, [user]);
+
+  // Handle auto-populating amounts when entering from a Barcode Scan (initialFood)
+  useEffect(() => {
+    if (initialFood && selectedFood?.id === initialFood.id && allLogs.length > 0) {
+      const lastLog = allLogs.find(l => l.foodId === initialFood.id || l.food?.id === initialFood.id);
+      if (lastLog) {
+        let method = 'serving';
+        let volume = '';
+        let servings = '1';
+
+        if (lastLog.unit === 'serving') {
+          servings = lastLog.amount.toString();
+        } else {
+          const volIndex = initialFood.volumes?.findIndex(v => v.unit === lastLog.unit);
+          if (volIndex !== undefined && volIndex >= 0) {
+            method = `volume-${volIndex}`;
+            volume = lastLog.amount.toString();
+          }
+        }
+        
+        setLogDetails(prev => ({
+            ...prev,
+            consumptionMethod: method,
+            servingsConsumed: servings,
+            volumeConsumed: volume
+        }));
+      }
+    }
+  }, [initialFood, allLogs, selectedFood]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -115,7 +147,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         deleteFood(food.id)
           .then(() => {
             setLocalFoods(prev => prev.filter(f => f.id !== food.id));
-            if (onFoodDeleted) onFoodDeleted(); // <-- NEW: Notify parent of deletion
+            if (onFoodDeleted) onFoodDeleted(); 
           })
           .catch(err => {
             console.error("Failed to delete food:", err);
@@ -792,7 +824,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => setSelectedFood(null)}
+            onClick={() => {
+              if (initialFood) {
+                onBack(); // If launched directly from scanner, backing out fully escapes
+              } else {
+                setSelectedFood(null); // Just goes back to search list
+              }
+            }}
           >
             Back
           </button>

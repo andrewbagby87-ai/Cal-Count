@@ -65,6 +65,10 @@ export default function FoodLogTab() {
   const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
   const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
 
+  // --- Scanned Item State ---
+  const [scannedFood, setScannedFood] = useState<Food | null>(null);
+  const [scannedUpc, setScannedUpc] = useState<string | null>(null);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -445,11 +449,21 @@ export default function FoodLogTab() {
           <button className="btn btn-secondary btn-sm" onClick={() => setIsScannerOpen(true)}>
             📷 Scan
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => { setIsVitaminMode(false); setShowAddModal(true); }}>
+          <button className="btn btn-primary btn-sm" onClick={() => { 
+            setIsVitaminMode(false); 
+            setScannedFood(null); 
+            setScannedUpc(null); 
+            setShowAddModal(true); 
+          }}>
             + Add Food
           </button>
           {userProfile?.trackVitamins && (
-            <button className="btn btn-primary btn-sm" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { setIsVitaminMode(true); setShowAddModal(true); }}>
+            <button className="btn btn-primary btn-sm" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { 
+              setIsVitaminMode(true); 
+              setScannedFood(null); 
+              setScannedUpc(null); 
+              setShowAddModal(true); 
+            }}>
               + Add Vitamins
             </button>
           )}
@@ -665,13 +679,17 @@ export default function FoodLogTab() {
           onAdd={handleAddFood} 
           onClose={() => {
             setShowAddModal(false);
+            setScannedFood(null);
+            setScannedUpc(null);
             loadData(); 
           }} 
           onFoodDeleted={() => {
-            loadData(); // NEW: Refresh silently
+            loadData(); 
           }}
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
+          initialFood={scannedFood}
+          initialUpc={scannedUpc}
         />
       )}
 
@@ -684,8 +702,20 @@ export default function FoodLogTab() {
           onClose={() => setIsScannerOpen(false)}
           onScanSuccess={(code) => {
             setIsScannerOpen(false);
-            alert(`Successfully scanned barcode: ${code}`);
-            console.log("Barcode:", code);
+            // Check if UPC matches ANY logged item
+            const matchedFood = foods.find(f => f.upc === code);
+            
+            if (matchedFood) {
+              setScannedFood(matchedFood);
+              setScannedUpc(null);
+              setIsVitaminMode(!!matchedFood.isVitamin);
+              setShowAddModal(true);
+            } else {
+              // Not found! We'll pass just the UPC and let AddFoodModal prompt the user.
+              setScannedFood(null);
+              setScannedUpc(code);
+              setShowAddModal(true);
+            }
           }}
         />
       )}

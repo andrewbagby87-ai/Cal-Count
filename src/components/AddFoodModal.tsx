@@ -9,17 +9,30 @@ interface Props {
   foods: Food[];
   onAdd: (foodData: any) => Promise<void>;
   onClose: () => void;
-  onFoodDeleted?: () => void; // NEW
+  onFoodDeleted?: () => void; 
   selectedDate?: string; 
   isVitaminMode?: boolean; 
+  initialFood?: Food | null; 
+  initialUpc?: string | null; 
 }
 
-export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode }: Props) {
-  const [mode, setMode] = useState<'choose' | 'create' | 'previous'>('choose');
+export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialFood, initialUpc }: Props) {
+  
+  // If scanner found a match, jump straight to 'previous' view. 
+  // If no match but UPC is present, jump to our new prompt screen!
+  const [mode, setMode] = useState<'choose' | 'create' | 'previous' | 'choose-scan-type'>(
+    initialFood ? 'previous' : (initialUpc ? 'choose-scan-type' : 'choose')
+  );
+  
   const [newFood, setNewFood] = useState<Food | null>(null);
+  
+  // Tracks if the user chose Food or Vitamin on the prompt screen
+  const [scanVitaminMode, setScanVitaminMode] = useState<boolean | undefined>(undefined);
 
-  // Filters perfectly: Only show vitamins in Vitamin mode, only show foods in Food mode
-  const filteredFoods = foods.filter(f => isVitaminMode ? f.isVitamin : !f.isVitamin);
+  // If they made a choice in the scan prompt, use it. Otherwise, rely on the main tab's choice.
+  const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
+
+  const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
   const handleFoodCreated = (food: Food) => {
     setNewFood(food);
@@ -29,20 +42,44 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        
         {mode === 'choose' && (
           <div className="choose-mode">
-            <h3>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
+            <h3>{activeVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
             <div className="button-group">
               <button className="btn btn-primary" onClick={() => setMode('create')}>
-                ➕ Create New {isVitaminMode ? 'Vitamin' : 'Food'}
+                ➕ Create New {activeVitaminMode ? 'Vitamin' : 'Food'}
               </button>
               {filteredFoods.length > 0 && (
                 <button className="btn btn-secondary" onClick={() => setMode('previous')}>
-                  ⏱️ Add Previous {isVitaminMode ? 'Vitamin' : 'Food'}
+                  ⏱️ Add Previous {activeVitaminMode ? 'Vitamin' : 'Food'}
                 </button>
               )}
             </div>
             <button className="btn btn-outline cancel-btn" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* --- THE NEW INTERCEPT PROMPT --- */}
+        {mode === 'choose-scan-type' && (
+          <div className="choose-mode">
+            <h3>Barcode Not Found</h3>
+            <p style={{color: '#64748b', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', padding: '0 1rem'}}>
+              We didn't recognize the barcode <br/>
+              <strong style={{color: '#1e293b', fontSize: '1rem', display: 'inline-block', margin: '0.5rem 0'}}>{initialUpc}</strong><br/>
+              What type of item are you scanning?
+            </p>
+            <div className="button-group">
+              <button className="btn btn-primary" onClick={() => { setScanVitaminMode(false); setMode('create'); }}>
+                🍎 Food
+              </button>
+              <button className="btn btn-primary" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { setScanVitaminMode(true); setMode('create'); }}>
+                💊 Vitamin
+              </button>
+            </div>
+            <button className="btn btn-outline cancel-btn" style={{marginTop: '1rem'}} onClick={onClose}>
               Cancel
             </button>
           </div>
@@ -53,19 +90,23 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
             onCreated={handleFoodCreated} 
             onClose={onClose} 
             initialDate={selectedDate} 
-            isVitaminMode={isVitaminMode}
+            isVitaminMode={activeVitaminMode}
+            initialUpc={initialUpc || undefined}
           />
         )}
 
         {mode === 'previous' && (
           <AddPreviousFoodModal
+            // If newFood exists, throw it at the top of the list so they can easily pick it
             foods={newFood ? [newFood, ...filteredFoods] : filteredFoods}
             onAdd={onAdd}
             onClose={onClose}
             onBack={() => setMode('choose')}
-            onFoodDeleted={onFoodDeleted} // NEW: Pass the handler down
+            onFoodDeleted={onFoodDeleted} 
             initialDate={selectedDate}
-            isVitaminMode={isVitaminMode}
+            isVitaminMode={activeVitaminMode}
+            // If they just created a new item, auto-select it instantly!
+            initialFood={initialFood || newFood || undefined}
           />
         )}
       </div>

@@ -9,12 +9,13 @@ interface Props {
   onCreated: (food: Food) => void;
   onClose: () => void;
   initialDate?: string; 
-  isVitaminMode?: boolean; // NEW
+  isVitaminMode?: boolean; 
+  initialUpc?: string;
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
-export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode }: Props) {
+export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
@@ -22,7 +23,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
-    upc: '',
+    upc: initialUpc || '', 
     calories: '',
     fat: '',
     saturatedFat: '',
@@ -49,11 +50,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-// Handler for Step 1 (Nutrition Label)
+  // Handler for Step 1 (Nutrition Label)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // Ensure UPC only accepts digits and is max 12 characters
     if (name === 'upc') {
       if (value !== '' && !/^\d*$/.test(value)) return;
       if (value.length > 12) return; 
@@ -111,13 +111,12 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     return isNaN(parsed) ? undefined : Number(parsed.toFixed(2));
   };
 
-const handleContinue = (e: React.FormEvent) => {
+  const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!formData.name.trim()) { setError('Name is required'); return; }
     
-    // Add UPC validation here: if it's filled in, it MUST be 12 digits
     if (formData.upc.trim() && formData.upc.trim().length !== 12) { 
       setError('UPC must be exactly 12 digits'); 
       return; 
@@ -214,11 +213,12 @@ const handleContinue = (e: React.FormEvent) => {
         finalUnit = selectedVol.unit; 
       }
 
+      // Safely parse volumes
       const validVolumes = formData.labelVolumes
-        .filter(v => v.amount.trim() !== '')
-        .map(v => ({ amount: safeParse(v.amount)!, unit: v.unit }));
+        .filter(v => v.amount.trim() !== '' && !isNaN(parseFloat(v.amount)))
+        .map(v => ({ amount: Number(parseFloat(v.amount).toFixed(2)), unit: v.unit }));
 
-      // 2. Build the BASE object to save inside the log's 'food' dictionary
+      // 2. Build the BASE object to save to the user's food database
       const baseNutrition: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
@@ -240,26 +240,24 @@ const handleContinue = (e: React.FormEvent) => {
 
       if (validVolumes.length > 0) {
         baseNutrition.volumes = validVolumes;
-        // Keep first available flat string/num for backward compatibility with older logs
         baseNutrition.volume = validVolumes[0].amount;
         baseNutrition.volumeUnit = validVolumes[0].unit;
       }
 
-      const cleanBaseNutrition = Object.fromEntries(
-        Object.entries(baseNutrition).filter(([_, v]) => v !== undefined)
-      ) as any;
+      // --- THE FIX: Deep stringify/parse fully purges all `undefined` values! ---
+      const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
 
-      // --- FIX: Actually save the created food into the user's "Foods" database ---
+      // 3. Save the food item
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
-      // 3. Helper to multiply the label values by what you actually ate
+      // 4. Helper to multiply the label values by what you actually ate
       const calcConsumed = (val: string) => {
         const parsed = parseFloat(val);
         if (isNaN(parsed)) return undefined;
         return Number((parsed * multiplier).toFixed(2));
       };
 
-      // 4. Build the CONSUMED object with the multiplied math applied
+      // 5. Build the CONSUMED object with the multiplied math applied
       const consumedNutrition: any = {
         calories: calcConsumed(formData.calories) || 0,
         fat: calcConsumed(formData.fat),
@@ -273,13 +271,9 @@ const handleContinue = (e: React.FormEvent) => {
         protein: calcConsumed(formData.protein),
       };
 
-      const cleanConsumedNutrition = Object.fromEntries(
-        Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
-      ) as any;
-
       if (isVolumeSelected) {
-        cleanConsumedNutrition.volume = finalAmount;
-        cleanConsumedNutrition.volumeUnit = finalUnit;
+        consumedNutrition.volume = finalAmount;
+        consumedNutrition.volumeUnit = finalUnit;
       }
 
       const foodObject: Food = {
@@ -289,16 +283,21 @@ const handleContinue = (e: React.FormEvent) => {
         createdAt: Date.now(),
       };
 
-      // 5. Save the final calculated log to the database
-      await createFoodLog(user.uid, {
+      const payload = {
         date: logDetails.date, 
         foodId: newFoodId,
         food: foodObject, 
         amount: finalAmount, 
-        unit: finalUnit as any,
+        unit: finalUnit,
         mealType: logDetails.mealType, 
-        ...cleanConsumedNutrition 
-      });
+        ...consumedNutrition 
+      };
+
+      // --- THE FIX 2: Deep stringify/parse the final log payload to guarantee no 400 errors ---
+      const cleanPayload = JSON.parse(JSON.stringify(payload));
+
+      // 6. Save the final calculated log to the database
+      await createFoodLog(user.uid, cleanPayload);
 
       onCreated(foodObject);
       onClose();
@@ -336,7 +335,6 @@ const handleContinue = (e: React.FormEvent) => {
               <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Nature Made" />
             </div>
 
-            {/* Add the UPC form group here */}
             <div className="form-group">
               <label htmlFor="upc">UPC / Barcode (Optional)</label>
               <input id="upc" type="text" name="upc" value={formData.upc} onChange={handleChange} placeholder="e.g., 012345678901" />
