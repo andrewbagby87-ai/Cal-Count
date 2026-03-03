@@ -1,6 +1,7 @@
+// src/components/DailyStatsTab.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs } from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -52,7 +53,7 @@ const parseUnit = (u: string) => {
 
 const getWeekDates = (date: Date) => {
   const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay()); // Start on Sunday
+  start.setDate(date.getDate() - date.getDay());
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -124,6 +125,7 @@ export default function DailyStatsTab() {
   const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
+  const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -147,33 +149,29 @@ export default function DailyStatsTab() {
     setViewDate(next);
   };
 
-  const handleGoToToday = () => {
-    setViewDate(new Date());
-  };
+  const handleGoToToday = () => setViewDate(new Date());
 
-const handlePrevMonth = () => {
+  const handlePrevMonth = () => {
     const targetDate = new Date(viewDate);
-    targetDate.setDate(1); // Set to 1st to prevent month-skipping overflow bugs
+    targetDate.setDate(1);
     targetDate.setMonth(viewDate.getMonth() - 1);
-    
     const today = new Date();
     if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date()); // It's the current month, default to today
+      setViewDate(new Date());
     } else {
-      setViewDate(targetDate); // It's a different month, default to the 1st
+      setViewDate(targetDate);
     }
   };
 
   const handleNextMonth = () => {
     const targetDate = new Date(viewDate);
-    targetDate.setDate(1); // Set to 1st to prevent month-skipping overflow bugs
+    targetDate.setDate(1);
     targetDate.setMonth(viewDate.getMonth() + 1);
-    
     const today = new Date();
     if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date()); // It's the current month, default to today
+      setViewDate(new Date());
     } else {
-      setViewDate(targetDate); // It's a different month, default to the 1st
+      setViewDate(targetDate);
     }
   };
 
@@ -184,16 +182,37 @@ const handlePrevMonth = () => {
       const datesToFetch = viewMode === 'monthly' ? getMonthDates(viewDate) : getWeekDates(viewDate);
       const summaries: Record<string, number> = {};
 
+      const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // THE TS FIX
+      ]);
+
       await Promise.all(datesToFetch.map(async (date) => {
         const dStr = getDateString(date);
         const [foods, workouts] = await Promise.all([
           getDayFoodLogs(user.uid, dStr),
           getDayWorkoutLogs(user.uid, dStr)
         ]);
+
+        const todaysSynced = allHealthWorkouts.filter((w: any) => {
+          const wDate = new Date(w.start || w.date || w.timestamp);
+          const isToday = getDateString(wDate) === dStr;
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // THE TS FIX
+          return isToday && !isIgnored; 
+        });
+
+        let dailyBurned = todaysSynced.reduce((sum, w) => {
+          if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
+             return sum + Math.round(w.activeEnergyBurned.qty);
+          }
+          return sum;
+        }, 0);
         
+        const manualBurned = workouts.reduce((sum, log) => sum + log.caloriesBurned, 0);
+        dailyBurned += manualBurned;
+
         const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-        const burned = workouts.reduce((sum, log) => sum + log.caloriesBurned, 0);
-        const budget = (userProfile?.caloriesBudget || 0) + burned;
+        const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
         summaries[dStr] = budget > 0 ? (consumed / budget) : 0;
       }));
 
@@ -210,15 +229,26 @@ const handlePrevMonth = () => {
       setLoading(true);
       try {
         const dateStr = getDateString(viewDate);
-        const [foods, workouts, manualWeights, healthLogsRaw] = await Promise.all([
+        const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts] = await Promise.all([
           getDayFoodLogs(user.uid, dateStr),
           getDayWorkoutLogs(user.uid, dateStr),
           getAllWeightLogs(user.uid),
-          getHealthLogs(user.uid)
+          getHealthLogs(user.uid),
+          getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
+          getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // THE TS FIX
         ]);
         
         setFoodLogs(foods || []);
         setWorkoutLogs(workouts || []);
+
+        const todaysSyncedWorkouts = syncedWorkoutsRaw.filter((w: any) => {
+          const wDate = new Date(w.start || w.date || w.timestamp);
+          const isToday = getDateString(wDate) === dateStr;
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // THE TS FIX
+          return isToday && !isIgnored; 
+        });
+        
+        setSyncedWorkouts(todaysSyncedWorkouts);
         
         const todaysManualWeights = (manualWeights || []).filter(w => w.date === dateStr).map(w => ({
           ...w,
@@ -294,7 +324,16 @@ const handlePrevMonth = () => {
   const isToday = todayStr === viewStr;
 
   const caloriesConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-  const caloriesBurned = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
+  
+  const manualBurned = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
+  const healthBurned = syncedWorkouts.reduce((sum, w) => {
+    if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
+       return sum + Math.round(w.activeEnergyBurned.qty);
+    }
+    return sum;
+  }, 0);
+  const caloriesBurned = manualBurned + healthBurned;
+
   const totalBudget = (userProfile?.caloriesBudget || 0) + caloriesBurned;
   const remaining = totalBudget - caloriesConsumed;
   const percentage = Math.round((caloriesConsumed / (totalBudget || 1)) * 100);
@@ -339,7 +378,6 @@ const handlePrevMonth = () => {
 
       {viewMode !== 'none' && (
         <div className={`navigator-container ${viewMode}-view`}>
-          {/* MONTH HEADER: Shows the month name only in Monthly View */}
           {viewMode === 'monthly' && (
             <div className="month-header">
               <button className="nav-btn small-nav-btn" onClick={handlePrevMonth}>←</button>
@@ -392,7 +430,12 @@ const handlePrevMonth = () => {
               <div className="stat-value full-width">
                 <span className="consumed">{Math.round(caloriesConsumed)}</span>
                 <span className="separator">/</span>
-                <span className="budget">{totalBudget} kcal</span>
+                <span className="budget">
+                  {totalBudget} kcal
+                  {caloriesBurned > 0 && (
+                    <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
+                  )}
+                </span>
               </div>
             </div>
 

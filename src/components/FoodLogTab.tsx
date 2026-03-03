@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs } from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts } from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -45,6 +45,7 @@ export default function FoodLogTab() {
   const { user, userProfile } = useAuth();
   const [foods, setFoods] = useState<Food[]>([]);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [burnedCalories, setBurnedCalories] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isVitaminMode, setIsVitaminMode] = useState(false);
@@ -130,12 +131,38 @@ export default function FoodLogTab() {
     setLoading(true);
     try {
       const dateStr = getDateString(viewDate);
-      const [userFoods, logs] = await Promise.all([
+      const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts] = await Promise.all([
         getUserFoods(user.uid),
         getDayFoodLogs(user.uid, dateStr),
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), // TS Fix
+        getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // TS Fix
       ]);
+      
       setFoods(userFoods);
       setFoodLogs(logs);
+
+      // Filter Apple Health workouts for the current viewing day AND exclude ignored workouts
+      const todaysSyncedWorkouts = syncedWorkouts.filter((w: any) => {
+        const wDate = new Date(w.start || w.date || w.timestamp);
+        const isToday = getDateString(wDate) === dateStr;
+        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // TS Fix
+        return isToday && !isIgnored; 
+      });
+
+      let totalBurned = todaysSyncedWorkouts.reduce((sum, w) => {
+        if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
+          return sum + Math.round(w.activeEnergyBurned.qty);
+        }
+        return sum;
+      }, 0);
+
+      if (manualWorkouts) {
+        totalBurned += manualWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
+      }
+
+      setBurnedCalories(totalBurned);
+
     } catch (error) {
       console.error('Failed to load food data:', error);
     } finally {
@@ -153,16 +180,39 @@ export default function FoodLogTab() {
       const datesToFetch = viewMode === 'monthly' ? getMonthDates(viewDate) : getWeekDates(viewDate);
       const summaries: Record<string, number> = {};
 
+      const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), // TS Fix
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // TS Fix
+      ]);
+
       await Promise.all(datesToFetch.map(async (date) => {
         const dStr = getDateString(date);
-        const [dayFoods, workouts] = await Promise.all([
-          getDayFoodLogs(user.uid, dStr),
-          getDayWorkoutLogs(user.uid, dStr)
+        const [dayFoods, manualWorkouts] = await Promise.all([
+          getDayFoodLogs(user.uid, dStr).catch(() => []),
+          getDayWorkoutLogs(user.uid, dStr).catch(() => [])
         ]);
         
+        const todaysSynced = allHealthWorkouts.filter((w: any) => {
+          const wDate = new Date(w.start || w.date || w.timestamp);
+          const isToday = getDateString(wDate) === dStr;
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // TS Fix
+          return isToday && !isIgnored; 
+        });
+
+        let dailyBurned = todaysSynced.reduce((sum, w) => {
+          if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
+             return sum + Math.round(w.activeEnergyBurned.qty);
+          }
+          return sum;
+        }, 0);
+
+        if (manualWorkouts) {
+          dailyBurned += manualWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
+        }
+
         const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-        const burned = workouts.reduce((sum, log) => sum + log.caloriesBurned, 0);
-        const budget = (userProfile?.caloriesBudget || 0) + burned;
+        const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
+        
         summaries[dStr] = budget > 0 ? (consumed / budget) : 0;
       }));
 
@@ -350,6 +400,7 @@ export default function FoodLogTab() {
   if (loading && foodLogs.length === 0) return <div className="loading">Loading foods...</div>;
 
   // --- Nutrient Calculations ---
+  const adjustedBudget = (userProfile?.caloriesBudget || 0) + burnedCalories;
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
   
   const fatConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
@@ -474,8 +525,11 @@ export default function FoodLogTab() {
       <div className="food-summary">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
-          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2563eb' }}>
-            {totalCalories} {userProfile?.caloriesBudget ? `/ ${userProfile.caloriesBudget} cal` : 'cal'}
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2563eb', display: 'flex', alignItems: 'center' }}>
+            {totalCalories} {userProfile?.caloriesBudget ? `/ ${adjustedBudget} cal` : 'cal'}
+            {burnedCalories > 0 && (
+              <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
+            )}
           </span>
         </div>
         
@@ -484,8 +538,8 @@ export default function FoodLogTab() {
             <div 
               className="progress-fill" 
               style={{ 
-                width: `${Math.min((totalCalories / userProfile.caloriesBudget) * 100, 100)}%`, 
-                background: totalCalories > userProfile.caloriesBudget ? '#ef4444' : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' 
+                width: `${Math.min((totalCalories / adjustedBudget) * 100, 100)}%`, 
+                background: totalCalories > adjustedBudget ? '#ef4444' : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' 
               }} 
             />
           </div>

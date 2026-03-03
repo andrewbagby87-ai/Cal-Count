@@ -12,6 +12,8 @@ import {
   updateDoc,
   deleteDoc,
   addDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -436,3 +438,108 @@ export async function getHealthLogs(userId: string) {
 
   return allSyncs;
 }
+
+export const getSyncedHealthWorkouts = async (userId: string) => {
+  let allWorkouts: any[] = [];
+  
+  // Helper function to force Firebase Object Maps back into usable Arrays
+  const extractData = (dataPart: any) => {
+    if (!dataPart) return [];
+    if (Array.isArray(dataPart)) return dataPart;
+    if (typeof dataPart === 'object') return Object.values(dataPart);
+    return [];
+  };
+
+  try {
+    const userDocRef = doc(db, 'healthLogs', userId);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      const payload = userDocSnap.data();
+
+      // THE FIX: Loop through the 'syncs' array to find the hidden workouts!
+      if (payload.syncs && Array.isArray(payload.syncs)) {
+        payload.syncs.forEach((syncBatch: any) => {
+          if (syncBatch.data && syncBatch.data.workouts) {
+            allWorkouts.push(...extractData(syncBatch.data.workouts));
+          } else if (syncBatch.workouts) {
+            allWorkouts.push(...extractData(syncBatch.workouts));
+          }
+        });
+      } 
+      // Fallback 1: Just in case it's saved directly to data
+      else if (payload.data && payload.data.workouts) {
+        allWorkouts.push(...extractData(payload.data.workouts));
+      } 
+      // Fallback 2: Just in case it's sitting at the root level
+      else if (payload.workouts) {
+        allWorkouts.push(...extractData(payload.workouts));
+      }
+    }
+  } catch (err: any) {
+    console.warn(`❌ Error reading root doc:`, err.message);
+  }
+
+  // Fallback 3: Double-check the sub-collection just in case
+  try {
+    const workoutsRef = collection(db, `healthLogs/${userId}/workouts`);
+    const snapshot = await getDocs(workoutsRef);
+    
+    if (snapshot.docs.length > 0) {
+        snapshot.docs.forEach(docSnap => {
+          const payload = docSnap.data();
+          if (payload.data && payload.data.workouts) {
+            allWorkouts.push(...extractData(payload.data.workouts));
+          } else if (payload.workouts) {
+            allWorkouts.push(...extractData(payload.workouts));
+          } else if (payload.name && payload.duration) {
+            allWorkouts.push({ dbId: docSnap.id, ...payload });
+          }
+        });
+    }
+  } catch (err: any) {
+    // Silently ignore missing sub-collections
+  }
+
+  // Remove any duplicates (Using Apple Health's unique ID so workouts don't double up)
+  const uniqueWorkouts = Array.from(
+    new Map(allWorkouts.filter(w => w != null).map(w => [w.id || w.dbId || Math.random(), w])).values()
+  );
+
+  // Sort newest on top
+  uniqueWorkouts.sort((a: any, b: any) => {
+    const dateA = new Date(a.start || a.date || a.timestamp || 0).getTime();
+    const dateB = new Date(b.start || b.date || b.timestamp || 0).getTime();
+    return dateB - dateA; // Descending order
+  });
+
+  return uniqueWorkouts;
+};
+
+export const getIgnoredWorkouts = async (userId: string): Promise<string[]> => {
+  try {
+    // FIX: Read directly from the main user profile document
+    const docRef = doc(db, 'users', userId);
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data().ignoredWorkouts) {
+      return snap.data().ignoredWorkouts;
+    }
+    return [];
+  } catch (e) {
+    console.error("Error fetching ignored workouts:", e);
+    return [];
+  }
+};
+
+export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ignore: boolean) => {
+  try {
+    // FIX: Save directly to the main user profile document
+    const docRef = doc(db, 'users', userId);
+    await setDoc(docRef, {
+      ignoredWorkouts: ignore ? arrayUnion(workoutId) : arrayRemove(workoutId)
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error toggling workout:", error);
+    throw error;
+  }
+};
