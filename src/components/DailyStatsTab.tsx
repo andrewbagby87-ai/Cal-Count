@@ -82,6 +82,21 @@ const getMonthDates = (date: Date) => {
   return dates;
 };
 
+// --- THE FIX: Robust Date Matcher ---
+const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
+  if (!rawDate) return false;
+  if (typeof rawDate === 'string') {
+    // Extracts exactly "YYYY-MM-DD" from strings like "2026-03-03 16:44:36 -0500"
+    const prefix = rawDate.split(' ')[0].split('T')[0];
+    return prefix === targetDateStr;
+  }
+  const d = new Date(rawDate);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}` === targetDateStr;
+};
+
 // --- Sub-Components ---
 
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
@@ -184,7 +199,7 @@ export default function DailyStatsTab() {
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // THE TS FIX
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
       ]);
 
       await Promise.all(datesToFetch.map(async (date) => {
@@ -195,9 +210,8 @@ export default function DailyStatsTab() {
         ]);
 
         const todaysSynced = allHealthWorkouts.filter((w: any) => {
-          const wDate = new Date(w.start || w.date || w.timestamp);
-          const isToday = getDateString(wDate) === dStr;
-          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // THE TS FIX
+          const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dStr);
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
           return isToday && !isIgnored; 
         });
 
@@ -235,21 +249,17 @@ export default function DailyStatsTab() {
           getAllWeightLogs(user.uid),
           getHealthLogs(user.uid),
           getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
-          getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // THE TS FIX
+          getIgnoredWorkouts(user.uid).catch(() => [] as string[])
         ]);
         
         setFoodLogs(foods || []);
         setWorkoutLogs(workouts || []);
 
         const todaysSyncedWorkouts = syncedWorkoutsRaw.filter((w: any) => {
-        const rawDate = w.start || w.date || w.timestamp;
-        const safeDateStr = typeof rawDate === 'string' ? rawDate.replace(' ', 'T') : rawDate;
-        const wDate = new Date(safeDateStr);
-  
-        const isToday = getDateString(wDate) === dateStr;
-        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
-        return isToday && !isIgnored; 
-      });
+          const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
+          return isToday && !isIgnored; 
+        });
         
         setSyncedWorkouts(todaysSyncedWorkouts);
         

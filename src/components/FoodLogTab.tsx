@@ -40,6 +40,20 @@ const getMonthDates = (date: Date) => {
   return dates;
 };
 
+// --- THE FIX: Robust Date Matcher ---
+const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
+  if (!rawDate) return false;
+  if (typeof rawDate === 'string') {
+    const prefix = rawDate.split(' ')[0].split('T')[0];
+    return prefix === targetDateStr;
+  }
+  const d = new Date(rawDate);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}` === targetDateStr;
+};
+
 // --- Main Component ---
 export default function FoodLogTab() {
   const { user, userProfile } = useAuth();
@@ -134,19 +148,17 @@ export default function FoodLogTab() {
       const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts] = await Promise.all([
         getUserFoods(user.uid),
         getDayFoodLogs(user.uid, dateStr),
-        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), // TS Fix
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // TS Fix
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
       ]);
       
       setFoods(userFoods);
       setFoodLogs(logs);
 
-      // Filter Apple Health workouts for the current viewing day AND exclude ignored workouts
       const todaysSyncedWorkouts = syncedWorkouts.filter((w: any) => {
-        const wDate = new Date(w.start || w.date || w.timestamp);
-        const isToday = getDateString(wDate) === dateStr;
-        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // TS Fix
+        const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
+        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
         return isToday && !isIgnored; 
       });
 
@@ -181,8 +193,8 @@ export default function FoodLogTab() {
       const summaries: Record<string, number> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
-        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), // TS Fix
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) // TS Fix
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), 
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
       ]);
 
       await Promise.all(datesToFetch.map(async (date) => {
@@ -193,9 +205,8 @@ export default function FoodLogTab() {
         ]);
         
         const todaysSynced = allHealthWorkouts.filter((w: any) => {
-          const wDate = new Date(w.start || w.date || w.timestamp);
-          const isToday = getDateString(wDate) === dStr;
-          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // TS Fix
+          const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dStr);
+          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
           return isToday && !isIgnored; 
         });
 
