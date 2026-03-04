@@ -6,20 +6,22 @@ import { Food } from '../types';
 import './CreateFoodModal.css';
 
 interface Props {
-  onCreated: (food: Food) => void;
+  onCreated?: (food: Food) => void;
   onClose: () => void;
   initialDate?: string; 
   isVitaminMode?: boolean; 
   initialUpc?: string;
+  // --- NEW RECIPE MODE PROPS ---
+  isRecipeIngredientMode?: boolean;
+  onIngredientCalculated?: (foodObject: Food, consumedNutrition: any, amount: number, unit: string) => void;
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
-export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc }: Props) {
+export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
-  // Step 1 State: The raw nutrition label data
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
@@ -38,7 +40,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
 
-  // Step 2 State: What the user actually consumed
   const [logDetails, setLogDetails] = useState({
     date: initialDate || new Date().toISOString().split('T')[0],
     mealType: isVitaminMode ? 'Vitamins' : '', 
@@ -50,18 +51,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Handler for Step 1 (Nutrition Label)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    if (name === 'upc') {
-      if (value !== '' && !/^\d*$/.test(value)) return;
-      if (value.length > 12) return; 
-    }
-
-    if (name !== 'name' && name !== 'brand' && name !== 'upc') {
-      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
-    }
+    if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
+    if (name === 'upc' && value.length > 12) return; 
+    if (name !== 'name' && name !== 'brand' && name !== 'upc' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -78,13 +72,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     setFormData(prev => {
       const usedUnits = prev.labelVolumes.map(v => v.unit);
       const nextAvailableUnit = ALL_UNITS.find(u => !usedUnits.includes(u));
-      
       if (!nextAvailableUnit) return prev; 
-
-      return {
-        ...prev,
-        labelVolumes: [...prev.labelVolumes, { amount: '', unit: nextAvailableUnit }]
-      };
+      return { ...prev, labelVolumes: [...prev.labelVolumes, { amount: '', unit: nextAvailableUnit }] };
     });
   };
 
@@ -96,12 +85,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     });
   };
 
-  // Handler for Step 2 (Consumption Details)
   const handleLogDetailsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'servingsConsumed' || name === 'volumeConsumed') {
-      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
-    }
+    if ((name === 'servingsConsumed' || name === 'volumeConsumed') && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     setLogDetails(prev => ({ ...prev, [name]: value }));
   };
 
@@ -114,21 +100,13 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
     if (!formData.name.trim()) { setError('Name is required'); return; }
-    
-    if (formData.upc.trim() && formData.upc.trim().length !== 12) { 
-      setError('UPC must be exactly 12 digits'); 
-      return; 
-    }
-    
+    if (formData.upc.trim() && formData.upc.trim().length !== 12) { setError('UPC must be exactly 12 digits'); return; }
     if (!formData.calories) { setError('Calories is required'); return; }
     if (!formData.labelServings) { setError('Number of servings on the label is required'); return; }
-
     setStep('meal');
   };
 
-  // --- Dynamic Preview Logic for Step 2 ---
   const calculatePreview = () => {
     let multiplier = 1;
     const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
@@ -156,16 +134,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     };
 
     return {
-      calories: calc(formData.calories),
-      protein: calc(formData.protein),
-      carbs: calc(formData.carbs),
-      fat: calc(formData.fat),
-      saturatedFat: calc(formData.saturatedFat),
-      transFat: calc(formData.transFat),
-      cholesterol: calc(formData.cholesterol),
-      sodium: calc(formData.sodium),
-      fiber: calc(formData.fiber),
-      sugar: calc(formData.sugar),
+      calories: calc(formData.calories), protein: calc(formData.protein), carbs: calc(formData.carbs), fat: calc(formData.fat),
+      saturatedFat: calc(formData.saturatedFat), transFat: calc(formData.transFat), cholesterol: calc(formData.cholesterol),
+      sodium: calc(formData.sodium), fiber: calc(formData.fiber), sugar: calc(formData.sugar),
     };
   };
 
@@ -178,47 +149,37 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
     try {
       if (!user) throw new Error('User not found');
-      if (!isVitaminMode && !logDetails.mealType) throw new Error('Please select a meal category');
+      if (!isVitaminMode && !isRecipeIngredientMode && !logDetails.mealType) throw new Error('Please select a meal category');
 
       let multiplier = 1;
       let finalAmount = 1;
       let finalUnit = 'serving';
-
       const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
 
-      // 1. Calculate the math multiplier based on the CHOSEN method
       if (logDetails.consumptionMethod === 'serving') {
-        if (!logDetails.servingsConsumed) throw new Error('Please enter how many servings you ate');
+        if (!logDetails.servingsConsumed) throw new Error(`Please enter how many servings you ${isRecipeIngredientMode ? 'added' : 'ate'}`);
         const labelServings = parseFloat(formData.labelServings) || 1;
         const consumedServings = parseFloat(logDetails.servingsConsumed) || 1;
-        
         multiplier = consumedServings / labelServings;
         finalAmount = consumedServings;
         finalUnit = 'serving';
       } else if (isVolumeSelected) {
-        if (!logDetails.volumeConsumed) throw new Error('Please enter the volume/amount you ate');
-        
+        if (!logDetails.volumeConsumed) throw new Error(`Please enter the amount you ${isRecipeIngredientMode ? 'added' : 'ate'}`);
         const volIndex = parseInt(logDetails.consumptionMethod.split('-')[1]);
         const selectedVol = formData.labelVolumes[volIndex];
-
         if (!selectedVol || !selectedVol.amount) throw new Error('Cannot calculate based on an invalid volume');
-        
         const labelVol = parseFloat(selectedVol.amount);
         const consumedVol = parseFloat(logDetails.volumeConsumed) || 0;
-        
         if (labelVol === 0) throw new Error('Label volume cannot be zero');
-        
         multiplier = consumedVol / labelVol;
         finalAmount = consumedVol;
         finalUnit = selectedVol.unit; 
       }
 
-      // Safely parse volumes
       const validVolumes = formData.labelVolumes
         .filter(v => v.amount.trim() !== '' && !isNaN(parseFloat(v.amount)))
         .map(v => ({ amount: Number(parseFloat(v.amount).toFixed(2)), unit: v.unit }));
 
-      // 2. Build the BASE object to save to the user's food database
       const baseNutrition: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
@@ -244,20 +205,15 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         baseNutrition.volumeUnit = validVolumes[0].unit;
       }
 
-      // --- THE FIX: Deep stringify/parse fully purges all `undefined` values! ---
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
-
-      // 3. Save the food item
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
-      // 4. Helper to multiply the label values by what you actually ate
       const calcConsumed = (val: string) => {
         const parsed = parseFloat(val);
         if (isNaN(parsed)) return undefined;
         return Number((parsed * multiplier).toFixed(2));
       };
 
-      // 5. Build the CONSUMED object with the multiplied math applied
       const consumedNutrition: any = {
         calories: calcConsumed(formData.calories) || 0,
         fat: calcConsumed(formData.fat),
@@ -283,6 +239,12 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         createdAt: Date.now(),
       };
 
+      // --- RECIPE INGREDIENT MODE INTERCEPT ---
+      if (isRecipeIngredientMode && onIngredientCalculated) {
+        onIngredientCalculated(foodObject, consumedNutrition, finalAmount, finalUnit);
+        return; 
+      }
+
       const payload = {
         date: logDetails.date, 
         foodId: newFoodId,
@@ -293,13 +255,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         ...consumedNutrition 
       };
 
-      // --- THE FIX 2: Deep stringify/parse the final log payload to guarantee no 400 errors ---
       const cleanPayload = JSON.parse(JSON.stringify(payload));
-
-      // 6. Save the final calculated log to the database
       await createFoodLog(user.uid, cleanPayload);
 
-      onCreated(foodObject);
+      if (onCreated) onCreated(foodObject);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -308,7 +267,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     }
   };
 
-  // Helper for rendering Step 2 options safely
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
@@ -317,7 +275,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     <div className="create-food-modal">
       {step === 'form' ? (
         <>
-          <h3 style={{ marginBottom: '0.25rem' }}>Step 1: Nutrition Label</h3>
+          <h3 style={{ marginBottom: '0.25rem' }}>{isRecipeIngredientMode ? 'Create Recipe Ingredient' : 'Step 1: Nutrition Label'}</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
             Enter the exact values shown on the nutrition label.
           </p>
@@ -353,19 +311,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
                 const usedUnits = formData.labelVolumes.map(v => v.unit);
                 return (
                   <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      style={{ flex: 1 }}
-                      value={vol.amount}
-                      onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)}
-                      placeholder="e.g., 100"
-                    />
-                    <select
-                      style={{ width: 'auto', padding: '0.75rem' }}
-                      value={vol.unit}
-                      onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}
-                    >
+                    <input type="text" inputMode="decimal" style={{ flex: 1 }} value={vol.amount} onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)} placeholder="e.g., 100" />
+                    <select style={{ width: 'auto', padding: '0.75rem' }} value={vol.unit} onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}>
                       <option value="g" disabled={usedUnits.includes('g') && vol.unit !== 'g'}>Grams (g)</option>
                       <option value="oz" disabled={usedUnits.includes('oz') && vol.unit !== 'oz'}>Ounces (oz)</option>
                       <option value="cup" disabled={usedUnits.includes('cup') && vol.unit !== 'cup'}>Cup(s)</option>
@@ -373,35 +320,19 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
                       <option value="each" disabled={usedUnits.includes('each') && vol.unit !== 'each'}>Each</option>
                     </select>
                     {formData.labelVolumes.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeVolume(index)}
-                        style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}
-                      >
-                        X
-                      </button>
+                      <button type="button" onClick={() => removeVolume(index)} style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}>X</button>
                     )}
                   </div>
                 );
               })}
               {formData.labelVolumes.length < ALL_UNITS.length && (
-                <button 
-                  type="button" 
-                  onClick={addVolume}
-                  style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}
-                >
-                  + Add Another Option
-                </button>
+                <button type="button" onClick={addVolume} style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}>+ Add Another Option</button>
               )}
             </div>
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
-            <div className="form-group">
-              <label htmlFor="calories">Calories (from label) *</label>
-              <input id="calories" type="text" inputMode="decimal" name="calories" value={formData.calories} onChange={handleChange} placeholder="0" required />
-            </div>
-
+            <div className="form-group"><label htmlFor="calories">Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={formData.calories} onChange={handleChange} placeholder="0" required /></div>
             <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={formData.fat} onChange={handleChange} placeholder="0" /></div>
             <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={formData.saturatedFat} onChange={handleChange} placeholder="0" /></div>
             <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={formData.transFat} onChange={handleChange} placeholder="0" /></div>
@@ -420,197 +351,94 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         </>
       ) : (
         <>
-          <h3 style={{ marginBottom: '0.25rem' }}>Step 2: Log Details</h3>
+          <h3 style={{ marginBottom: '0.25rem' }}>{isRecipeIngredientMode ? 'Ingredient Amount' : 'Step 2: Log Details'}</h3>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            When did you {isVitaminMode ? 'take' : 'eat'} this, and how much did you have?
+            {isRecipeIngredientMode ? 'How much of this went into the recipe?' : `When did you ${isVitaminMode ? 'take' : 'eat'} this, and how much did you have?`}
           </p>
 
           {error && <div className="error">{error}</div>}
 
           <form onSubmit={handleFinalSubmit}>
-            <div className="form-group">
-              <label htmlFor="date">Date *</label>
-              <input 
-                type="date" 
-                id="date"
-                name="date"
-                value={logDetails.date} 
-                onChange={handleLogDetailsChange}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
-                required
-              />
-            </div>
+            
+            {!isRecipeIngredientMode && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="date">Date *</label>
+                  <input type="date" id="date" name="date" value={logDetails.date} onChange={handleLogDetailsChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }} required />
+                </div>
 
-            {!isVitaminMode && (
-              <div className="form-group">
-                <label htmlFor="mealType">Meal Category *</label>
-                <select
-                  id="mealType"
-                  name="mealType"
-                  value={logDetails.mealType}
-                  onChange={handleLogDetailsChange}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-                  required
-                >
-                  <option value="" disabled>Select a Category...</option>
-                  <option value="Breakfast">🌅 Breakfast</option>
-                  <option value="Lunch">☀️ Lunch</option>
-                  <option value="Dinner">🌙 Dinner</option>
-                  <option value="Snack">🍎 Snack</option>
-                </select>
-              </div>
+                {!isVitaminMode && (
+                  <div className="form-group">
+                    <label htmlFor="mealType">Meal Category *</label>
+                    <select id="mealType" name="mealType" value={logDetails.mealType} onChange={handleLogDetailsChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }} required>
+                      <option value="" disabled>Select a Category...</option>
+                      <option value="Breakfast">🌅 Breakfast</option>
+                      <option value="Lunch">☀️ Lunch</option>
+                      <option value="Dinner">🌙 Dinner</option>
+                      <option value="Snack">🍎 Snack</option>
+                    </select>
+                  </div>
+                )}
+                <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
+              </>
             )}
 
-            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
-
             <div className="form-group">
-              <label style={{ display: 'block', marginBottom: '0.75rem' }}>How do you want to log this? *</label>
+              <label style={{ display: 'block', marginBottom: '0.75rem' }}>How do you want to add this? *</label>
               <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
-                  <input 
-                    type="radio" 
-                    name="consumptionMethod" 
-                    value="serving" 
-                    checked={logDetails.consumptionMethod === 'serving'} 
-                    onChange={handleLogDetailsChange} 
-                    style={{ width: 'auto', margin: 0 }}
-                  /> 
-                  By Servings
+                  <input type="radio" name="consumptionMethod" value="serving" checked={logDetails.consumptionMethod === 'serving'} onChange={handleLogDetailsChange} style={{ width: 'auto', margin: 0 }} /> By Servings
                 </label>
-                
                 {formData.labelVolumes.map((vol, index) => {
                   if (!vol.amount.trim()) return null;
                   return (
                     <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
-                      <input 
-                        type="radio" 
-                        name="consumptionMethod" 
-                        value={`volume-${index}`} 
-                        checked={logDetails.consumptionMethod === `volume-${index}`} 
-                        onChange={handleLogDetailsChange} 
-                        style={{ width: 'auto', margin: 0 }}
-                      /> 
-                      By {vol.unit}
+                      <input type="radio" name="consumptionMethod" value={`volume-${index}`} checked={logDetails.consumptionMethod === `volume-${index}`} onChange={handleLogDetailsChange} style={{ width: 'auto', margin: 0 }} /> By {vol.unit}
                     </label>
                   );
                 })}
               </div>
-              {!formData.labelVolumes.some(v => v.amount.trim() !== '') && (
-                 <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
-                   * Logging by weight/volume/amount is disabled because you did not enter any in Step 1.
-                 </span>
-              )}
             </div>
 
             {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
               <div className="form-group">
-                <label htmlFor="servingsConsumed">Number of Servings {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
-                <input
-                  id="servingsConsumed"
-                  type="text"
-                  inputMode="decimal"
-                  name="servingsConsumed"
-                  value={logDetails.servingsConsumed}
-                  onChange={handleLogDetailsChange}
-                  placeholder="1"
-                  required
-                />
+                <label htmlFor="servingsConsumed">Number of Servings {isRecipeIngredientMode ? 'Added' : (isVitaminMode ? 'Taken' : 'Eaten')} *</label>
+                <input id="servingsConsumed" type="text" inputMode="decimal" name="servingsConsumed" value={logDetails.servingsConsumed} onChange={handleLogDetailsChange} placeholder="1" required />
               </div>
             ) : (
               <div className="form-group">
-                <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
+                <label htmlFor="volumeConsumed">Amount {isRecipeIngredientMode ? 'Added' : (isVitaminMode ? 'Taken' : 'Eaten')} *</label>
                 <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input
-                    id="volumeConsumed"
-                    type="text"
-                    inputMode="decimal"
-                    name="volumeConsumed"
-                    style={{ flex: 1 }}
-                    value={logDetails.volumeConsumed}
-                    onChange={handleLogDetailsChange}
-                    placeholder={`e.g., ${selectedVol.amount}`}
-                    required
-                  />
-                  <span style={{ 
-                    padding: '0.75rem 1rem', 
-                    backgroundColor: '#f1f5f9', 
-                    borderRadius: '0.5rem', 
-                    border: '1px solid #cbd5e1', 
-                    color: '#475569', 
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: '3rem'
-                  }}>
-                    {selectedVol.unit}
-                  </span>
+                  <input id="volumeConsumed" type="text" inputMode="decimal" name="volumeConsumed" style={{ flex: 1 }} value={logDetails.volumeConsumed} onChange={handleLogDetailsChange} placeholder={`e.g., ${selectedVol.amount}`} required />
+                  <span style={{ padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '3rem' }}>{selectedVol.unit}</span>
                 </div>
               </div>
             )}
 
-            {/* --- Dynamic Nutrient Preview --- */}
             {preview && (
-              <div style={{ 
-                marginTop: '1.5rem', 
-                padding: '1.25rem', 
-                backgroundColor: '#f8fafc', 
-                borderRadius: '0.75rem', 
-                border: '1px solid #e2e8f0'
-              }}>
-                <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
-                  Nutrition Preview
-                </h4>
-                
+              <div style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>Nutrition Preview</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                   {[
                     { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true },
                     { label: 'Protein', value: `${preview.protein}g`, isHighlight: false },
                     { label: 'Carbs', value: `${preview.carbs}g`, isHighlight: false },
                     { label: 'Fat', value: `${preview.fat}g`, isHighlight: false },
-                    { label: 'Sat Fat', value: `${preview.saturatedFat}g`, isHighlight: false },
-                    { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false },
-                    { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false },
-                    { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false },
-                    { label: 'Fiber', value: `${preview.fiber}g`, isHighlight: false },
-                    { label: 'Sugar', value: `${preview.sugar}g`, isHighlight: false },
                   ].map((nutrient, idx) => (
-                    <div key={idx} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
-                      paddingBottom: idx !== 9 ? '0.2rem' : '0'
-                    }}>
-                      <span style={{ 
-                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
-                        textTransform: 'uppercase', 
-                        color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                        fontWeight: nutrient.isHighlight ? 700 : 400
-                      }}>
-                        {nutrient.label}
-                      </span>
-                      <span style={{ 
-                        fontWeight: 700, 
-                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
-                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
-                      }}>
-                        {nutrient.value}
-                      </span>
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx !== 3 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 3 ? '0.2rem' : '0' }}>
+                      <span style={{ fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400 }}>{nutrient.label}</span>
+                      <span style={{ fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' }}>{nutrient.value}</span>
                     </div>
                   ))}
                 </div>
-
               </div>
             )}
 
             <div className="form-actions" style={{ marginTop: '2.5rem' }}>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Saving...' : 'Save Food Log'}
+                {loading ? 'Saving...' : (isRecipeIngredientMode ? 'Add Ingredient' : 'Save Food Log')}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setStep('form')}>
-                Back
-              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setStep('form')}>Back</button>
             </div>
           </form>
         </>

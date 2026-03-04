@@ -6,6 +6,7 @@ import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
 import BarcodeScanner from './BarcodeScanner';
+import CreateRecipeModal from './CreateRecipeModal';
 import './FoodLogTab.css';
 
 // --- Helper Functions for Navigator ---
@@ -40,7 +41,6 @@ const getMonthDates = (date: Date) => {
   return dates;
 };
 
-// --- THE FIX: Robust Date Matcher ---
 const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   if (!rawDate) return false;
   if (typeof rawDate === 'string') {
@@ -61,9 +61,16 @@ export default function FoodLogTab() {
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [burnedCalories, setBurnedCalories] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [isVitaminMode, setIsVitaminMode] = useState(false);
+  
+  // --- NEW: Separate Edit States for normal foods vs recipes ---
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
+  const [editingRecipeLog, setEditingRecipeLog] = useState<FoodLog | null>(null);
+  
   const [showEditModal, setShowEditModal] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
@@ -511,6 +518,7 @@ export default function FoodLogTab() {
           <button className="btn btn-secondary btn-sm" onClick={() => setIsScannerOpen(true)}>
             📷 Scan
           </button>
+          
           <button className="btn btn-primary btn-sm" onClick={() => { 
             setIsVitaminMode(false); 
             setScannedFood(null); 
@@ -519,6 +527,7 @@ export default function FoodLogTab() {
           }}>
             + Add Food
           </button>
+
           {userProfile?.trackVitamins && (
             <button className="btn btn-primary btn-sm" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { 
               setIsVitaminMode(true); 
@@ -757,8 +766,14 @@ export default function FoodLogTab() {
               <button 
                 className="btn btn-secondary" 
                 onClick={() => {
-                  setEditingLog(selectedLog);
-                  setShowEditModal(true);
+                  // --- THE FIX: Routing to the correct Edit Screen ---
+                  if ((selectedLog.food as any).isRecipe) {
+                    setEditingRecipeLog(selectedLog);
+                    setShowRecipeModal(true);
+                  } else {
+                    setEditingLog(selectedLog);
+                    setShowEditModal(true);
+                  }
                   setSelectedLog(null);
                 }}
               >
@@ -792,6 +807,29 @@ export default function FoodLogTab() {
           isVitaminMode={isVitaminMode}
           initialFood={scannedFood}
           initialUpc={scannedUpc}
+          
+          onOpenRecipe={() => {
+            setShowAddModal(false);
+            setEditingRecipeLog(null); // Ensure we are creating a fresh recipe, not editing an old one
+            setShowRecipeModal(true);
+          }}
+        />
+      )}
+      
+      {showRecipeModal && (
+        <CreateRecipeModal 
+          foods={foods}
+          editLog={editingRecipeLog} // <-- Passes the log data straight into the recipe builder!
+          onClose={() => {
+            setShowRecipeModal(false);
+            setEditingRecipeLog(null);
+          }}
+          onCreated={() => {
+            setShowRecipeModal(false);
+            setEditingRecipeLog(null);
+            loadData();
+          }}
+          selectedDate={getDateString(viewDate)}
         />
       )}
 

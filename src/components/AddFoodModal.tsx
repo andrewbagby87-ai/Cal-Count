@@ -14,9 +14,10 @@ interface Props {
   isVitaminMode?: boolean; 
   initialFood?: Food | null; 
   initialUpc?: string | null; 
+  onOpenRecipe?: () => void; // <-- THE TYPESCRIPT FIX
 }
 
-export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialFood, initialUpc }: Props) {
+export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialFood, initialUpc, onOpenRecipe }: Props) {
   
   // If scanner found a match, jump straight to 'previous' view. 
   // If no match but UPC is present, jump to our new prompt screen!
@@ -50,6 +51,14 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
               <button className="btn btn-primary" onClick={() => setMode('create')}>
                 ➕ Create New {activeVitaminMode ? 'Vitamin' : 'Food'}
               </button>
+              
+              {/* --- THE NEW RECIPE BUTTON --- */}
+              {!activeVitaminMode && onOpenRecipe && (
+                <button className="btn btn-primary" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }} onClick={onOpenRecipe}>
+                  🥘 Create Recipe
+                </button>
+              )}
+
               {filteredFoods.length > 0 && (
                 <button className="btn btn-secondary" onClick={() => setMode('previous')}>
                   ⏱️ Add Previous {activeVitaminMode ? 'Vitamin' : 'Food'}
