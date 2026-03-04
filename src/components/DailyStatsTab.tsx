@@ -242,11 +242,14 @@ export default function DailyStatsTab() {
         setWorkoutLogs(workouts || []);
 
         const todaysSyncedWorkouts = syncedWorkoutsRaw.filter((w: any) => {
-          const wDate = new Date(w.start || w.date || w.timestamp);
-          const isToday = getDateString(wDate) === dateStr;
-          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); // THE TS FIX
-          return isToday && !isIgnored; 
-        });
+        const rawDate = w.start || w.date || w.timestamp;
+        const safeDateStr = typeof rawDate === 'string' ? rawDate.replace(' ', 'T') : rawDate;
+        const wDate = new Date(safeDateStr);
+  
+        const isToday = getDateString(wDate) === dateStr;
+        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
+        return isToday && !isIgnored; 
+      });
         
         setSyncedWorkouts(todaysSyncedWorkouts);
         

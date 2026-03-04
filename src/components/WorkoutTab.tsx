@@ -31,10 +31,7 @@ export default function WorkoutsTab() {
     if (!user) return;
     const willIgnore = !currentlyIgnored;
     
-    // Instantly update the UI so it feels snappy
     setIgnoredIds(prev => willIgnore ? [...prev, workoutId] : prev.filter(id => id !== workoutId));
-    
-    // Save to database in the background
     await toggleIgnoredWorkout(user.uid, workoutId, willIgnore);
   };
 
@@ -64,7 +61,11 @@ export default function WorkoutsTab() {
               calories = Math.round(workout.activeEnergyBurned.qty);
             }
 
-            const workoutDate = new Date(workout.start || workout.date || workout.timestamp);
+            // THE SAFARI FIX: Replace the space with a 'T' so Safari can read the ISO date
+            const rawDate = workout.start || workout.date || workout.timestamp;
+            const safeDateStr = typeof rawDate === 'string' ? rawDate.replace(' ', 'T') : rawDate;
+            const workoutDate = new Date(safeDateStr);
+            
             const dateString = isNaN(workoutDate.getTime()) 
               ? 'Unknown Date' 
               : workoutDate.toLocaleDateString('en-US', { 
@@ -72,22 +73,16 @@ export default function WorkoutsTab() {
                   hour: 'numeric', minute: '2-digit' 
                 });
 
-            const uniqueKey = workout.id || workout.dbId || String(index);
+            const uniqueKey = String(workout.id || workout.dbId || index);
             const isIgnored = ignoredIds.includes(uniqueKey);
 
             return (
               <div key={uniqueKey} style={{
-                backgroundColor: 'white',
-                borderRadius: '0.75rem',
-                padding: '1.25rem',
-                marginBottom: '1rem',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                opacity: isIgnored ? 0.6 : 1,
-                transition: 'opacity 0.3s ease'
+                backgroundColor: 'white', borderRadius: '0.75rem', padding: '1.25rem',
+                marginBottom: '1rem', border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', display: 'flex',
+                justifyContent: 'space-between', alignItems: 'center',
+                opacity: isIgnored ? 0.6 : 1, transition: 'opacity 0.3s ease'
               }}>
                 <div>
                   <h3 style={{ margin: '0 0 0.35rem 0', color: '#1e293b', fontSize: '1.1rem', textDecoration: isIgnored ? 'line-through' : 'none' }}>
@@ -97,19 +92,16 @@ export default function WorkoutsTab() {
                     {dateString}
                   </p>
                   
-                  {/* --- CUSTOM TOGGLE SWITCH --- */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
                     <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
                       <input 
-                        type="checkbox" 
-                        checked={!isIgnored} 
+                        type="checkbox" checked={!isIgnored} 
                         onChange={() => handleToggle(uniqueKey, isIgnored)} 
                         style={{ opacity: 0, width: 0, height: 0 }} 
                       />
                       <span style={{
                         position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: isIgnored ? '#cbd5e1' : '#10b981',
-                        transition: '.3s', borderRadius: '34px'
+                        backgroundColor: isIgnored ? '#cbd5e1' : '#10b981', transition: '.3s', borderRadius: '34px'
                       }}>
                         <span style={{
                           position: 'absolute', content: '""', height: '16px', width: '16px',
@@ -122,7 +114,6 @@ export default function WorkoutsTab() {
                       {isIgnored ? 'Ignored' : 'Counted'}
                     </span>
                   </div>
-
                 </div>
                 
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
