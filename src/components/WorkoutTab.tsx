@@ -61,9 +61,17 @@ export default function WorkoutsTab() {
               calories = Math.round(workout.activeEnergyBurned.qty);
             }
 
-            // THE SAFARI FIX: Replace the space with a 'T' so Safari can read the ISO date
+            // --- THE ULTIMATE SAFARI DATE FIX ---
             const rawDate = workout.start || workout.date || workout.timestamp;
-            const safeDateStr = typeof rawDate === 'string' ? rawDate.replace(' ', 'T') : rawDate;
+            let safeDateStr = rawDate;
+            if (typeof rawDate === 'string') {
+              // Splits "2026-03-03 16:44:36 -0500" into ["2026-03-03", "16:44:36", "-0500"]
+              const parts = rawDate.split(' ');
+              if (parts.length >= 2) {
+                // Glues it back together as "2026-03-03T16:44:36-0500"
+                safeDateStr = `${parts[0]}T${parts[1]}${parts[2] ? parts[2] : ''}`;
+              }
+            }
             const workoutDate = new Date(safeDateStr);
             
             const dateString = isNaN(workoutDate.getTime()) 
