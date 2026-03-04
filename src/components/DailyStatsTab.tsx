@@ -86,7 +86,6 @@ const getMonthDates = (date: Date) => {
 const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   if (!rawDate) return false;
   if (typeof rawDate === 'string') {
-    // Extracts exactly "YYYY-MM-DD" from strings like "2026-03-03 16:44:36 -0500"
     const prefix = rawDate.split(' ')[0].split('T')[0];
     return prefix === targetDateStr;
   }
@@ -205,8 +204,8 @@ export default function DailyStatsTab() {
       await Promise.all(datesToFetch.map(async (date) => {
         const dStr = getDateString(date);
         const [foods, workouts] = await Promise.all([
-          getDayFoodLogs(user.uid, dStr),
-          getDayWorkoutLogs(user.uid, dStr)
+          getDayFoodLogs(user.uid, dStr).catch(() => []),
+          getDayWorkoutLogs(user.uid, dStr).catch(() => [])
         ]);
 
         const todaysSynced = allHealthWorkouts.filter((w: any) => {
@@ -243,11 +242,14 @@ export default function DailyStatsTab() {
       setLoading(true);
       try {
         const dateStr = getDateString(viewDate);
+        
+        // --- BULLETPROOF DATA FETCHING ---
+        // If one fails, the others still succeed!
         const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts] = await Promise.all([
-          getDayFoodLogs(user.uid, dateStr),
-          getDayWorkoutLogs(user.uid, dateStr),
-          getAllWeightLogs(user.uid),
-          getHealthLogs(user.uid),
+          getDayFoodLogs(user.uid, dateStr).catch(() => []),
+          getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
+          getAllWeightLogs(user.uid).catch(() => []),
+          getHealthLogs(user.uid).catch(() => []), // This was likely crashing and cancelling everything!
           getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
           getIgnoredWorkouts(user.uid).catch(() => [] as string[])
         ]);
@@ -255,9 +257,9 @@ export default function DailyStatsTab() {
         setFoodLogs(foods || []);
         setWorkoutLogs(workouts || []);
 
-        const todaysSyncedWorkouts = syncedWorkoutsRaw.filter((w: any) => {
+        const todaysSyncedWorkouts = (syncedWorkoutsRaw || []).filter((w: any) => {
           const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
-          const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
+          const isIgnored = (ignoredWorkouts || []).includes(String(w.id || w.dbId)); 
           return isToday && !isIgnored; 
         });
         
@@ -269,7 +271,11 @@ export default function DailyStatsTab() {
         }));
 
         const todaysHealthWeights: any[] = [];
-        healthLogsRaw.forEach((log: any) => {
+        
+        // --- SAFELY LOOP HEALTH LOGS ---
+        const safeHealthLogsRaw = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
+        
+        safeHealthLogsRaw.forEach((log: any) => {
           const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
           const baseTimestamp = baseTimestampObj.getTime();
 
