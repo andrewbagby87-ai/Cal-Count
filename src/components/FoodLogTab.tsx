@@ -70,6 +70,7 @@ export default function FoodLogTab() {
   // --- NEW: Separate Edit States for normal foods vs recipes ---
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [editingRecipeLog, setEditingRecipeLog] = useState<FoodLog | null>(null);
+  const [editingRecipeFood, setEditingRecipeFood] = useState<Food | null>(null);
   
   const [showEditModal, setShowEditModal] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -722,18 +723,18 @@ export default function FoodLogTab() {
               <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
                 Nutrition Logged
               </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {[
-                  { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true },
-                  { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false },
-                  { label: 'Carbs', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false },
-                  { label: 'Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false },
-                  { label: 'Sat Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false },
-                  { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false },
-                  { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false },
-                  { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false },
-                  { label: 'Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false },
-                  { label: 'Sugar', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false },
+                  { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
+                  { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
+                  { label: 'Saturated Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false, indent: true },
+                  { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false, indent: true },
+                  { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false, indent: false },
+                  { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false, indent: false },
+                  { label: 'Total Carbohydrate', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false, indent: false },
+                  { label: 'Dietary Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false, indent: true },
+                  { label: 'Total Sugars', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false, indent: true },
+                  { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false, indent: false },
                 ].map((nutrient, idx) => (
                   <div key={idx} style={{ 
                     display: 'flex', 
@@ -746,7 +747,8 @@ export default function FoodLogTab() {
                       fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
                       textTransform: 'uppercase', 
                       color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                      fontWeight: nutrient.isHighlight ? 700 : 400
+                      fontWeight: nutrient.isHighlight ? 700 : 400,
+                      paddingLeft: nutrient.indent ? '0.75rem' : '0'
                     }}>
                       {nutrient.label}
                     </span>
@@ -808,8 +810,13 @@ export default function FoodLogTab() {
           initialFood={scannedFood}
           initialUpc={scannedUpc}
           
-          onOpenRecipe={() => {
+          onOpenRecipe={(foodToEdit?: Food) => {
             setShowAddModal(false);
+            if (foodToEdit) {
+              setEditingRecipeFood(foodToEdit);
+            } else {
+              setEditingRecipeFood(null);
+            }
             setEditingRecipeLog(null); // Ensure we are creating a fresh recipe, not editing an old one
             setShowRecipeModal(true);
           }}
@@ -820,13 +827,16 @@ export default function FoodLogTab() {
         <CreateRecipeModal 
           foods={foods}
           editLog={editingRecipeLog} // <-- Passes the log data straight into the recipe builder!
+          editFood={editingRecipeFood}
           onClose={() => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
+            setEditingRecipeFood(null);
           }}
           onCreated={() => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
+            setEditingRecipeFood(null);
             loadData();
           }}
           selectedDate={getDateString(viewDate)}

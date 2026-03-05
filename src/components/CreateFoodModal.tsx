@@ -420,14 +420,40 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
                 <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>Nutrition Preview</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                   {[
-                    { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true },
-                    { label: 'Protein', value: `${preview.protein}g`, isHighlight: false },
-                    { label: 'Carbs', value: `${preview.carbs}g`, isHighlight: false },
-                    { label: 'Fat', value: `${preview.fat}g`, isHighlight: false },
+                    { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
+                    { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
+                    { label: 'Saturated Fat', value: `${preview.saturatedFat}g`, isHighlight: false, indent: true },
+                    { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false, indent: true },
+                    { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false, indent: false },
+                    { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false, indent: false },
+                    { label: 'Total Carbohydrate', value: `${preview.carbs}g`, isHighlight: false, indent: false },
+                    { label: 'Dietary Fiber', value: `${preview.fiber}g`, isHighlight: false, indent: true },
+                    { label: 'Total Sugars', value: `${preview.sugar}g`, isHighlight: false, indent: true },
+                    { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
                   ].map((nutrient, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx !== 3 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 3 ? '0.2rem' : '0' }}>
-                      <span style={{ fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400 }}>{nutrient.label}</span>
-                      <span style={{ fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' }}>{nutrient.value}</span>
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                      paddingBottom: idx !== 9 ? '0.2rem' : '0' 
+                    }}>
+                      <span style={{ 
+                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                        textTransform: 'uppercase', 
+                        color: nutrient.isHighlight ? '#475569' : '#94a3b8', 
+                        fontWeight: nutrient.isHighlight ? 700 : 400,
+                        paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                      }}>
+                        {nutrient.label}
+                      </span>
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                      }}>
+                        {nutrient.value}
+                      </span>
                     </div>
                   ))}
                 </div>

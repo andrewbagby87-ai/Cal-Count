@@ -14,6 +14,7 @@ interface Props {
   initialDate?: string;
   isVitaminMode?: boolean; 
   initialFood?: Food; // NEW
+  onEditRecipe?: (food: Food) => void;
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -26,7 +27,7 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood }: Props) {
+export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, onEditRecipe }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
   
@@ -194,6 +195,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   // --- EDIT NUTRITION HANDLERS ---
   const handleEditClick = () => {
     if (!selectedFood) return;
+    
+    // NEW: Hand off to the recipe builder if this is a recipe!
+    if ((selectedFood as any).isRecipe && onEditRecipe) {
+      onEditRecipe(selectedFood);
+      return;
+    }
+
     setEditFormData({
       name: selectedFood.name || '',
       brand: selectedFood.brand || '',
@@ -775,18 +783,18 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
               Nutrition Preview
             </h4>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {[
-                { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true },
-                { label: 'Protein', value: `${preview.protein}g`, isHighlight: false },
-                { label: 'Carbs', value: `${preview.carbs}g`, isHighlight: false },
-                { label: 'Fat', value: `${preview.fat}g`, isHighlight: false },
-                { label: 'Sat Fat', value: `${preview.saturatedFat}g`, isHighlight: false },
-                { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false },
-                { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false },
-                { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false },
-                { label: 'Fiber', value: `${preview.fiber}g`, isHighlight: false },
-                { label: 'Sugar', value: `${preview.sugar}g`, isHighlight: false },
+                { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
+                { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
+                { label: 'Saturated Fat', value: `${preview.saturatedFat}g`, isHighlight: false, indent: true },
+                { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false, indent: true },
+                { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false, indent: false },
+                { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false, indent: false },
+                { label: 'Total Carbohydrate', value: `${preview.carbs}g`, isHighlight: false, indent: false },
+                { label: 'Dietary Fiber', value: `${preview.fiber}g`, isHighlight: false, indent: true },
+                { label: 'Total Sugars', value: `${preview.sugar}g`, isHighlight: false, indent: true },
+                { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
               ].map((nutrient, idx) => (
                 <div key={idx} style={{ 
                   display: 'flex', 
@@ -799,7 +807,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                      fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
                      textTransform: 'uppercase', 
                      color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                     fontWeight: nutrient.isHighlight ? 700 : 400
+                     fontWeight: nutrient.isHighlight ? 700 : 400,
+                     paddingLeft: nutrient.indent ? '0.75rem' : '0'
                   }}>
                     {nutrient.label}
                   </span>

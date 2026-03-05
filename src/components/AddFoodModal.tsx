@@ -14,7 +14,7 @@ interface Props {
   isVitaminMode?: boolean; 
   initialFood?: Food | null; 
   initialUpc?: string | null; 
-  onOpenRecipe?: () => void; // <-- THE TYPESCRIPT FIX
+  onOpenRecipe?: (foodToEdit?: Food) => void; // <-- THE TYPESCRIPT FIX
 }
 
 export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialFood, initialUpc, onOpenRecipe }: Props) {
@@ -54,7 +54,7 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
               
               {/* --- THE NEW RECIPE BUTTON --- */}
               {!activeVitaminMode && onOpenRecipe && (
-                <button className="btn btn-primary" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }} onClick={onOpenRecipe}>
+                <button className="btn btn-primary" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }} onClick={() => onOpenRecipe()}>
                   🥘 Create Recipe
                 </button>
               )}
@@ -116,6 +116,7 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
             isVitaminMode={activeVitaminMode}
             // If they just created a new item, auto-select it instantly!
             initialFood={initialFood || newFood || undefined}
+            onEditRecipe={onOpenRecipe}
           />
         )}
       </div>

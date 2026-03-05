@@ -19,17 +19,21 @@ interface Props {
   onCreated: () => void;
   selectedDate: string;
   editLog?: FoodLog | null; // <-- NEW: Accepts an existing log to edit!
+  editFood?: Food | null;
 }
 
-export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog }: Props) {
+export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood }: Props) {
   const { user } = useAuth();
-  const isEditMode = !!editLog;
+  const isEditLogMode = !!editLog;
+  const isEditFoodMode = !!editFood;
+  const sourceFood = editLog?.food || editFood;
+
   const [step, setStep] = useState<'builder' | 'select-previous' | 'size-ingredient' | 'create-ingredient' | 'scan' | 'final-log'>('builder');
   
   // --- Initialize state with the existing recipe data if we are editing! ---
-  const [recipeName, setRecipeName] = useState(editLog?.food.name || '');
-  const [recipeServings, setRecipeServings] = useState((editLog?.food as any)?.recipeServings?.toString() || '1');
-  const [ingredients, setIngredients] = useState<RecipeIngredient[]>((editLog?.food as any)?.recipeIngredients || []);
+  const [recipeName, setRecipeName] = useState(sourceFood?.name || '');
+  const [recipeServings, setRecipeServings] = useState((sourceFood as any)?.recipeServings?.toString() || '1');
+  const [ingredients, setIngredients] = useState<RecipeIngredient[]>((sourceFood as any)?.recipeIngredients || []);
   
   const [activeFood, setActiveFood] = useState<Food | null>(null);
   const [scannedUpc, setScannedUpc] = useState<string | null>(null);
@@ -173,7 +177,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       };
 
       // 3. Either Update the existing log, or Create a new one
-      if (isEditMode && editLog) {
+      if (isEditLogMode && editLog) {
         await updateFoodLog(user.uid, editLog.id, JSON.parse(JSON.stringify(payload)));
       } else {
         await createFoodLog(user.uid, JSON.parse(JSON.stringify(payload)));
@@ -219,7 +223,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         {step === 'builder' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0 }}>{isEditMode ? 'Edit Recipe Log' : 'Create Recipe'}</h2>
+              <h2 style={{ margin: 0 }}>{isEditLogMode ? 'Edit Recipe Log' : (isEditFoodMode ? 'Edit Recipe' : 'Create Recipe')}</h2>
               <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
             </div>
 
@@ -262,9 +266,56 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
               <button onClick={() => setStep('scan')} style={{ gridColumn: 'span 2', padding: '0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>📷 Scan Barcode</button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #bfdbfe', marginBottom: '1.5rem' }}>
-              <span style={{ fontWeight: 600, color: '#1e3a8a' }}>Total Recipe Calories:</span>
-              <span style={{ fontWeight: 700, fontSize: '1.25rem', color: '#1d4ed8' }}>{Math.round(totalMacros.calories)} cal</span>
+            {/* --- NEW TOTAL MACROS PREVIEW --- */}
+<div style={{ 
+              padding: '1.25rem', 
+              backgroundColor: '#f8fafc', 
+              borderRadius: '0.75rem', 
+              border: '1px solid #e2e8f0',
+              marginBottom: '1.5rem'
+            }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
+                Total Recipe Nutrition
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {[
+                  { label: 'Calories', value: `${Math.round(totalMacros.calories)} cal`, isHighlight: true, indent: false },
+                  { label: 'Total Fat', value: `${Math.round(totalMacros.fat)}g`, isHighlight: false, indent: false },
+                  { label: 'Saturated Fat', value: `${Math.round(totalMacros.saturatedFat)}g`, isHighlight: false, indent: true },
+                  { label: 'Trans Fat', value: `${Math.round(totalMacros.transFat)}g`, isHighlight: false, indent: true },
+                  { label: 'Cholesterol', value: `${Math.round(totalMacros.cholesterol)}mg`, isHighlight: false, indent: false },
+                  { label: 'Sodium', value: `${Math.round(totalMacros.sodium)}mg`, isHighlight: false, indent: false },
+                  { label: 'Total Carbohydrate', value: `${Math.round(totalMacros.carbs)}g`, isHighlight: false, indent: false },
+                  { label: 'Dietary Fiber', value: `${Math.round(totalMacros.fiber)}g`, isHighlight: false, indent: true },
+                  { label: 'Total Sugars', value: `${Math.round(totalMacros.sugar)}g`, isHighlight: false, indent: true },
+                  { label: 'Protein', value: `${Math.round(totalMacros.protein)}g`, isHighlight: false, indent: false },
+                ].map((nutrient, idx) => (
+                  <div key={idx} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                    paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                  }}>
+                    <span style={{ 
+                      fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                      textTransform: 'uppercase', 
+                      color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                      fontWeight: nutrient.isHighlight ? 700 : 400,
+                      paddingLeft: nutrient.indent ? '0.75rem' : '0' // Added indentation for sub-nutrients
+                    }}>
+                      {nutrient.label}
+                    </span>
+                    <span style={{ 
+                      fontWeight: 700, 
+                      color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                      fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                    }}>
+                      {nutrient.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <button 
@@ -330,7 +381,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
 
         {step === 'final-log' && (
           <form onSubmit={handleFinalLog}>
-            <h3 style={{ marginBottom: '1.5rem' }}>{isEditMode ? 'Update Recipe Details' : 'Log Your Recipe'}</h3>
+            <h3 style={{ marginBottom: '1.5rem' }}>{isEditLogMode ? 'Update Recipe Details' : 'Log Your Recipe'}</h3>
             
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
@@ -356,7 +407,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
 
             <div style={{ display: 'flex', gap: '1rem' }}>
                 <button type="submit" disabled={isLogging} style={{ flex: 1, padding: '1rem', backgroundColor: '#2563eb', color: 'white', borderRadius: '0.5rem', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
-                  {isLogging ? 'Saving...' : (isEditMode ? 'Update Recipe Log' : 'Save & Log Recipe')}
+                  {isLogging ? 'Saving...' : (isEditLogMode ? 'Update Recipe Log' : 'Save & Log Recipe')}
                 </button>
                 <button type="button" onClick={() => setStep('builder')} style={{ padding: '1rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}>Back</button>
             </div>
