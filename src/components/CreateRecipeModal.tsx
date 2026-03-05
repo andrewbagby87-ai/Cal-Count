@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void;
   onCreated: () => void;
   selectedDate: string;
-  editLog?: FoodLog | null; // <-- NEW: Accepts an existing log to edit!
+  editLog?: FoodLog | null; 
   editFood?: Food | null;
 }
 
@@ -200,8 +200,8 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
 
   if (step === 'create-ingredient') {
     return (
-      <div className="add-food-overlay">
-        <div className="add-food-modal">
+      <div className="add-food-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
+        <div className="add-food-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
            <CreateFoodModal 
              isRecipeIngredientMode={true} 
              initialUpc={scannedUpc || ''} 
@@ -266,8 +266,8 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
               <button onClick={() => setStep('scan')} style={{ gridColumn: 'span 2', padding: '0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>📷 Scan Barcode</button>
             </div>
 
-            {/* --- NEW TOTAL MACROS PREVIEW --- */}
-<div style={{ 
+            {/* --- TOTAL MACROS PREVIEW --- */}
+            <div style={{ 
               padding: '1.25rem', 
               backgroundColor: '#f8fafc', 
               borderRadius: '0.75rem', 
@@ -302,7 +302,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                       textTransform: 'uppercase', 
                       color: nutrient.isHighlight ? '#475569' : '#94a3b8',
                       fontWeight: nutrient.isHighlight ? 700 : 400,
-                      paddingLeft: nutrient.indent ? '0.75rem' : '0' // Added indentation for sub-nutrients
+                      paddingLeft: nutrient.indent ? '0.75rem' : '0' 
                     }}>
                       {nutrient.label}
                     </span>

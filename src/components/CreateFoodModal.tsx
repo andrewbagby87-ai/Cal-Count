@@ -206,6 +206,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       }
 
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
+      // 1. THIS SAVES THE NEW FOOD TO YOUR "PREVIOUS FOODS" DATABASE
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
       const calcConsumed = (val: string) => {
@@ -239,12 +240,15 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         createdAt: Date.now(),
       };
 
-      // --- RECIPE INGREDIENT MODE INTERCEPT ---
+      // --- 2. RECIPE INGREDIENT MODE INTERCEPT ---
+      // If we are creating an ingredient, we return immediately here!
+      // This sends the data back to CreateRecipeModal and skips step 3.
       if (isRecipeIngredientMode && onIngredientCalculated) {
         onIngredientCalculated(foodObject, consumedNutrition, finalAmount, finalUnit);
         return; 
       }
 
+      // 3. THIS ONLY RUNS IF WE ARE *NOT* IN RECIPE MODE
       const payload = {
         date: logDetails.date, 
         foodId: newFoodId,
@@ -360,6 +364,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
           <form onSubmit={handleFinalSubmit}>
             
+            {/* THIS IS WHERE THE DATE AND MEAL CATEGORY ARE HIDDEN */}
             {!isRecipeIngredientMode && (
               <>
                 <div className="form-group">
