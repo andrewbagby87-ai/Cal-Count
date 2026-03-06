@@ -1,3 +1,21 @@
+/* src/components/CreateFoodModal.css */
+.create-food-modal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  
+  /* Hide scrollbar */
+  -ms-overflow-style: none;  
+  scrollbar-width: none; 
+}
+
+.create-food-modal::-webkit-scrollbar {
+  display: none;
+}
+
 .create-food-modal h3 {
   margin-bottom: 1.5rem;
   color: #0f172a;
@@ -43,7 +61,6 @@
   box-sizing: border-box;
 }
 
-/* Ensure the secondary button looks identical in structure to the primary */
 .btn-secondary {
   border: 1px solid transparent;
 }

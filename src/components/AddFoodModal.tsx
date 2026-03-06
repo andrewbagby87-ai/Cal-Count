@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Food } from '../types';
 import CreateFoodModal from './CreateFoodModal';
 import AddPreviousFoodModal from './AddPreviousFoodModal';
+import BarcodeScanner from './BarcodeScanner';
 import './AddFoodModal.css';
 
 interface Props {
@@ -12,114 +13,115 @@ interface Props {
   onFoodDeleted?: () => void; 
   selectedDate?: string; 
   isVitaminMode?: boolean; 
-  initialFood?: Food | null; 
-  initialUpc?: string | null; 
-  onOpenRecipe?: (foodToEdit?: Food) => void; // <-- THE TYPESCRIPT FIX
+  initialMealType?: string; 
+  onOpenRecipe?: (foodToEdit?: Food) => void;
 }
 
-export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialFood, initialUpc, onOpenRecipe }: Props) {
+export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialMealType, onOpenRecipe }: Props) {
   
-  // If scanner found a match, jump straight to 'previous' view. 
-  // If no match but UPC is present, jump to our new prompt screen!
-  const [mode, setMode] = useState<'choose' | 'create' | 'previous' | 'choose-scan-type'>(
-    initialFood ? 'previous' : (initialUpc ? 'choose-scan-type' : 'choose')
+  // Default directly to the 'previous' list unless a brand new barcode was scanned
+  const [mode, setMode] = useState<'create' | 'previous' | 'choose-scan-type'>(
+    // Note: Assuming initialUpc logic was passed here in your implementation
+    'previous'
   );
   
   const [newFood, setNewFood] = useState<Food | null>(null);
-  
-  // Tracks if the user chose Food or Vitamin on the prompt screen
   const [scanVitaminMode, setScanVitaminMode] = useState<boolean | undefined>(undefined);
 
-  // If they made a choice in the scan prompt, use it. Otherwise, rely on the main tab's choice.
-  const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [localInitialFood, setLocalInitialFood] = useState<Food | null>(null);
+  const [localInitialUpc, setLocalInitialUpc] = useState<string | null>(null);
 
+  const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
   const handleFoodCreated = (food: Food) => {
     setNewFood(food);
+    setLocalInitialFood(food);
     setMode('previous');
   };
 
+  const handleScanSuccess = (code: string) => {
+    setIsScannerOpen(false);
+    const matchedFood = foods.find(f => f.upc === code);
+    
+    if (matchedFood) {
+      setLocalInitialFood({ ...matchedFood }); 
+      setLocalInitialUpc(null);
+      setScanVitaminMode(!!matchedFood.isVitamin);
+      setMode('previous');
+    } else {
+      setLocalInitialFood(null);
+      setLocalInitialUpc(code);
+      setMode('choose-scan-type');
+    }
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        
-        {mode === 'choose' && (
-          <div className="choose-mode">
-            <h3>{activeVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
-            <div className="button-group">
-              <button className="btn btn-primary" onClick={() => setMode('create')}>
-                ➕ Create New {activeVitaminMode ? 'Vitamin' : 'Food'}
-              </button>
-              
-              {/* --- THE NEW RECIPE BUTTON --- */}
-              {!activeVitaminMode && onOpenRecipe && (
-                <button className="btn btn-primary" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }} onClick={() => onOpenRecipe()}>
-                  🥘 Create Recipe
+    <>
+      {/* DISABLED BACKGROUND CLICK WHEN CREATING A FOOD */}
+      <div className="modal-overlay" onClick={mode === 'create' ? undefined : onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          
+          {mode === 'choose-scan-type' && (
+            <div className="choose-mode">
+              <h3>Barcode Not Found</h3>
+              <p style={{color: '#64748b', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', padding: '0 1rem'}}>
+                We didn't recognize the barcode <br/>
+                <strong style={{color: '#1e293b', fontSize: '1rem', display: 'inline-block', margin: '0.5rem 0'}}>{localInitialUpc}</strong><br/>
+                What type of item are you scanning?
+              </p>
+              <div className="button-group">
+                <button className="btn btn-primary" onClick={() => { setScanVitaminMode(false); setMode('create'); }}>
+                  🍎 Food
                 </button>
-              )}
-
-              {filteredFoods.length > 0 && (
-                <button className="btn btn-secondary" onClick={() => setMode('previous')}>
-                  ⏱️ Add Previous {activeVitaminMode ? 'Vitamin' : 'Food'}
+                <button className="btn btn-primary" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { setScanVitaminMode(true); setMode('create'); }}>
+                  💊 Vitamin
                 </button>
-              )}
-            </div>
-            <button className="btn btn-outline cancel-btn" onClick={onClose}>
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {/* --- THE NEW INTERCEPT PROMPT --- */}
-        {mode === 'choose-scan-type' && (
-          <div className="choose-mode">
-            <h3>Barcode Not Found</h3>
-            <p style={{color: '#64748b', marginBottom: '1.5rem', textAlign: 'center', fontSize: '0.9rem', padding: '0 1rem'}}>
-              We didn't recognize the barcode <br/>
-              <strong style={{color: '#1e293b', fontSize: '1rem', display: 'inline-block', margin: '0.5rem 0'}}>{initialUpc}</strong><br/>
-              What type of item are you scanning?
-            </p>
-            <div className="button-group">
-              <button className="btn btn-primary" onClick={() => { setScanVitaminMode(false); setMode('create'); }}>
-                🍎 Food
-              </button>
-              <button className="btn btn-primary" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { setScanVitaminMode(true); setMode('create'); }}>
-                💊 Vitamin
+              </div>
+              <button className="btn btn-outline cancel-btn" style={{marginTop: '1rem'}} onClick={() => setMode('previous')}>
+                Cancel
               </button>
             </div>
-            <button className="btn btn-outline cancel-btn" style={{marginTop: '1rem'}} onClick={onClose}>
-              Cancel
-            </button>
-          </div>
-        )}
+          )}
 
-        {mode === 'create' && (
-          <CreateFoodModal 
-            onCreated={handleFoodCreated} 
-            onClose={onClose} 
-            initialDate={selectedDate} 
-            isVitaminMode={activeVitaminMode}
-            initialUpc={initialUpc || undefined}
-          />
-        )}
+          {mode === 'create' && (
+            <CreateFoodModal 
+              onCreated={handleFoodCreated} 
+              onClose={() => setMode('previous')} 
+              initialDate={selectedDate} 
+              isVitaminMode={activeVitaminMode}
+              initialUpc={localInitialUpc || undefined}
+              initialMealType={initialMealType} 
+            />
+          )}
 
-        {mode === 'previous' && (
-          <AddPreviousFoodModal
-            // If newFood exists, throw it at the top of the list so they can easily pick it
-            foods={newFood ? [newFood, ...filteredFoods] : filteredFoods}
-            onAdd={onAdd}
-            onClose={onClose}
-            onBack={() => setMode('choose')}
-            onFoodDeleted={onFoodDeleted} 
-            initialDate={selectedDate}
-            isVitaminMode={activeVitaminMode}
-            // If they just created a new item, auto-select it instantly!
-            initialFood={initialFood || newFood || undefined}
-            onEditRecipe={onOpenRecipe}
-          />
-        )}
+          {mode === 'previous' && (
+            <AddPreviousFoodModal
+              foods={newFood ? [newFood, ...filteredFoods] : filteredFoods}
+              onAdd={onAdd}
+              onClose={onClose}
+              onBack={onClose} 
+              onFoodDeleted={onFoodDeleted} 
+              initialDate={selectedDate}
+              isVitaminMode={activeVitaminMode}
+              initialFood={localInitialFood || undefined}
+              initialMealType={initialMealType} 
+              onEditRecipe={onOpenRecipe}
+              onCreateNew={() => setMode('create')}
+              onCreateRecipe={() => onOpenRecipe && onOpenRecipe()}
+              onOpenScanner={() => setIsScannerOpen(true)} 
+            />
+          )}
+        </div>
       </div>
-    </div>
+      
+      {isScannerOpen && (
+        <BarcodeScanner 
+          onClose={() => setIsScannerOpen(false)}
+          onScanSuccess={handleScanSuccess}
+        />
+      )}
+    </>
   );
 }

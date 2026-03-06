@@ -13,8 +13,12 @@ interface Props {
   onFoodDeleted?: () => void; 
   initialDate?: string;
   isVitaminMode?: boolean; 
-  initialFood?: Food; // NEW
+  initialFood?: Food; 
+  initialMealType?: string;
   onEditRecipe?: (food: Food) => void;
+  onCreateNew?: () => void;
+  onCreateRecipe?: () => void;
+  onOpenScanner?: () => void; 
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -27,35 +31,28 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, onEditRecipe }: Props) {
+export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, initialMealType, onEditRecipe, onCreateNew, onCreateRecipe, onOpenScanner }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
-  
-  // Set to initialFood immediately if present
   const [selectedFood, setSelectedFood] = useState<Food | null>(initialFood || null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Store all logs to find the last logged amount
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
-  
-  // Double-tap reference
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync prop to local state
-  useEffect(() => {
-    setLocalFoods(foods);
-  }, [foods]);
+  useEffect(() => { setLocalFoods(foods); }, [foods]);
 
-  // Fetch all logs once to power the "last logged amount" memory
   useEffect(() => {
     if (user) {
-      getAllFoodLogs(user.uid)
-        .then(logs => setAllLogs(logs))
-        .catch(console.error);
+      getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
     }
   }, [user]);
 
-  // Handle auto-populating amounts when entering from a Barcode Scan (initialFood)
+  useEffect(() => {
+    if (initialFood) {
+      setSelectedFood(initialFood);
+    }
+  }, [initialFood]);
+
   useEffect(() => {
     if (initialFood && selectedFood?.id === initialFood.id && allLogs.length > 0) {
       const lastLog = allLogs.find(l => l.foodId === initialFood.id || l.food?.id === initialFood.id);
@@ -84,49 +81,32 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }
   }, [initialFood, allLogs, selectedFood]);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
     };
   }, []);
   
-  // State for what the user actually consumed
   const [logDetails, setLogDetails] = useState({
     date: initialDate || getLocalTodayString(),
-    mealType: isVitaminMode ? 'Vitamins' : '', 
+    mealType: isVitaminMode ? 'Vitamins' : (initialMealType || ''),
     consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
   });
 
-  // State for editing the base nutrition label
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
   const [editFormData, setEditFormData] = useState({
-    name: '',
-    brand: '',
-    calories: '',
-    fat: '',
-    saturatedFat: '',
-    transFat: '',
-    cholesterol: '',
-    sodium: '',
-    carbs: '',
-    fiber: '',
-    sugar: '',
-    protein: '',
-    labelServings: '1',
+    name: '', brand: '', calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
+    carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
     labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Update date if initialDate prop changes
   useEffect(() => {
-    if (initialDate) {
-      setLogDetails(prev => ({ ...prev, date: initialDate }));
-    }
+    if (initialDate) setLogDetails(prev => ({ ...prev, date: initialDate }));
   }, [initialDate]);
 
   const handleLogDetailsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -139,7 +119,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, food: Food) => {
     if (tapTimerRef.current) {
-      // Second tap detected - Clear timer and trigger double tap action
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
       
@@ -156,7 +135,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           });
       }
     } else {
-      // First tap detected - start timer
       tapTimerRef.current = setTimeout(() => {
         tapTimerRef.current = null;
         setSelectedFood(food);
@@ -165,7 +143,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         let servings = '1';
         let volume = '';
 
-        // Find the most recent log for this food
         const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
 
         if (lastLog) {
@@ -173,7 +150,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             method = 'serving';
             servings = lastLog.amount.toString();
           } else {
-            // It's a volume. Find the index in the food's volumes array.
             const volIndex = food.volumes?.findIndex(v => v.unit === lastLog.unit);
             if (volIndex !== undefined && volIndex >= 0) {
               method = `volume-${volIndex}`;
@@ -192,16 +168,12 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }
   };
 
-  // --- EDIT NUTRITION HANDLERS ---
   const handleEditClick = () => {
     if (!selectedFood) return;
-    
-    // NEW: Hand off to the recipe builder if this is a recipe!
     if ((selectedFood as any).isRecipe && onEditRecipe) {
       onEditRecipe(selectedFood);
       return;
     }
-
     setEditFormData({
       name: selectedFood.name || '',
       brand: selectedFood.brand || '',
@@ -299,7 +271,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setIsEditingNutrition(false);
     setError('');
     
-    // Reset consumption to default serving to avoid math mismatch errors
     setLogDetails(prev => ({
       ...prev,
       consumptionMethod: 'serving',
@@ -308,7 +279,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }));
   };
 
-  // --- DYNAMIC PREVIEW ---
   const calculatePreview = () => {
     if (!selectedFood) return null;
     
@@ -422,7 +392,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
       setLoading(true);
 
-      // Create the raw payload
       const payload = {
         date: logDetails.date,
         foodId: selectedFood.id,
@@ -433,9 +402,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         ...cleanConsumedNutrition,
       };
 
-      // Strip all undefined values (Firebase rejects undefined fields)
       const cleanPayload = JSON.parse(JSON.stringify(payload));
-
       await onAdd(cleanPayload);
 
     } catch (err) {
@@ -445,10 +412,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }
   };
 
-  // --- RENDERING VIEWS ---
-
   if (!selectedFood) {
-    // Filter the foods array based on the search term
     const filteredFoods = localFoods.filter(food => {
       const searchLower = searchTerm.toLowerCase();
       const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
@@ -458,21 +422,55 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
 
     return (
-      <div className="previous-food-modal">
-        <h3 style={{ marginBottom: '1rem' }}>{isVitaminMode ? 'Add Previous Vitamin' : 'Add Previous Food'}</h3>
+      // --- CHANGED TO list-view ---
+      <div className="previous-food-modal list-view">
+        <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
-        {/* Search Bar */}
-        <div className="search-bar-container">
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexShrink: 0 }}>
+          {onCreateNew && (
+            <button className="btn btn-primary btn-sm" style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem' }} onClick={onCreateNew}>
+              ➕ Create {isVitaminMode ? 'Vitamin' : 'Food'}
+            </button>
+          )}
+          {!isVitaminMode && onCreateRecipe && (
+            <button className="btn btn-primary btn-sm" style={{ flex: 1, backgroundColor: '#0f766e', borderColor: '#0f766e', padding: '0.6rem', fontSize: '0.9rem' }} onClick={onCreateRecipe}>
+              🥘 Create Recipe
+            </button>
+          )}
+        </div>
+
+        <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
           <input
             type="text"
             className="search-input"
-            placeholder="Search by name, brand, or UPC..."
+            placeholder={`Search previous ${isVitaminMode ? 'vitamins' : 'foods'}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ flex: 1, margin: 0 }}
           />
+          {onOpenScanner && (
+            <button 
+              type="button"
+              onClick={onOpenScanner}
+              style={{
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                padding: '0.65rem 0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.2rem'
+              }}
+              title="Scan Barcode"
+            >
+              📷
+            </button>
+          )}
         </div>
 
-        {error && <div className="error">{error}</div>}
+        {error && <div className="error" style={{ flexShrink: 0 }}>{error}</div>}
 
         <div className="food-list">
           {filteredFoods.length === 0 ? (
@@ -481,7 +479,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             </p>
           ) : (
             filteredFoods.map((food) => {
-              // Find the last log entry for this specific food
               const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
 
               return (
@@ -496,7 +493,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                     {food.servingSize} {food.servingUnit} - {food.calories} cal
                   </div>
                   
-                  {/* Show the last logged amount directly on the card */}
                   {lastLog && (
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.35rem', fontWeight: 500 }}>
                       Last logged: {lastLog.amount} {lastLog.unit}
@@ -508,19 +504,22 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           )}
         </div>
         
-        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '0 0 1rem 0', fontStyle: 'italic' }}>
+        {/* ADDED flexShrink: 0 */}
+        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '0 0 1rem 0', fontStyle: 'italic', flexShrink: 0 }}>
           * Double-tap an item to permanently delete it from this list.
         </p>
 
-        <div className="modal-actions">
+        {/* ADDED flexShrink: 0 */}
+        <div className="modal-actions" style={{ flexShrink: 0 }}>
           <button className="btn btn-secondary" onClick={onBack}>
-            Back
+            Close
           </button>
         </div>
       </div>
     );
   }
 
+  // The rest remains unchanged...
   if (isEditingNutrition) {
     return (
       <div className="previous-food-modal">
@@ -623,7 +622,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     );
   }
 
-  // Helper for rendering Log Details view safely
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = (selectedVolIndex >= 0 && selectedFood.volumes) ? selectedFood.volumes[selectedVolIndex] : null;
@@ -770,7 +768,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           </div>
         )}
 
-        {/* --- Dynamic Nutrient Preview --- */}
         {preview && (
           <div style={{ 
             marginTop: '1.5rem', 
@@ -783,7 +780,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
               Nutrition Preview
             </h4>
             
-<div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {[
                 { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
                 { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
@@ -834,11 +831,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             type="button"
             className="btn btn-secondary"
             onClick={() => {
-              if (initialFood) {
-                onBack(); // If launched directly from scanner, backing out fully escapes
-              } else {
-                setSelectedFood(null); // Just goes back to search list
-              }
+              setSelectedFood(null); 
             }}
           >
             Back

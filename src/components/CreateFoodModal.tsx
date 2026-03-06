@@ -11,14 +11,14 @@ interface Props {
   initialDate?: string; 
   isVitaminMode?: boolean; 
   initialUpc?: string;
-  // --- NEW RECIPE MODE PROPS ---
   isRecipeIngredientMode?: boolean;
   onIngredientCalculated?: (foodObject: Food, consumedNutrition: any, amount: number, unit: string) => void;
+  initialMealType?: string; 
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
-export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated }: Props) {
+export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
@@ -42,7 +42,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
   const [logDetails, setLogDetails] = useState({
     date: initialDate || new Date().toISOString().split('T')[0],
-    mealType: isVitaminMode ? 'Vitamins' : '', 
+    mealType: isVitaminMode ? 'Vitamins' : (initialMealType || ''), 
     consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
@@ -206,7 +206,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       }
 
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
-      // 1. THIS SAVES THE NEW FOOD TO YOUR "PREVIOUS FOODS" DATABASE
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
       const calcConsumed = (val: string) => {
@@ -240,15 +239,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         createdAt: Date.now(),
       };
 
-      // --- 2. RECIPE INGREDIENT MODE INTERCEPT ---
-      // If we are creating an ingredient, we return immediately here!
-      // This sends the data back to CreateRecipeModal and skips step 3.
       if (isRecipeIngredientMode && onIngredientCalculated) {
         onIngredientCalculated(foodObject, consumedNutrition, finalAmount, finalUnit);
         return; 
       }
 
-      // 3. THIS ONLY RUNS IF WE ARE *NOT* IN RECIPE MODE
       const payload = {
         date: logDetails.date, 
         foodId: newFoodId,
@@ -279,7 +274,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     <div className="create-food-modal">
       {step === 'form' ? (
         <>
-          <h3 style={{ marginBottom: '0.25rem' }}>{isRecipeIngredientMode ? 'Create Recipe Ingredient' : 'Step 1: Nutrition Label'}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+            <h3 style={{ margin: 0 }}>{isRecipeIngredientMode ? 'Create Recipe Ingredient' : 'Step 1: Nutrition Label'}</h3>
+            <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0, color: '#64748b' }}>✕</button>
+          </div>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
             Enter the exact values shown on the nutrition label.
           </p>
@@ -355,7 +353,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         </>
       ) : (
         <>
-          <h3 style={{ marginBottom: '0.25rem' }}>{isRecipeIngredientMode ? 'Ingredient Amount' : 'Step 2: Log Details'}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+            <h3 style={{ margin: 0 }}>{isRecipeIngredientMode ? 'Ingredient Amount' : 'Step 2: Log Details'}</h3>
+            <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0, color: '#64748b' }}>✕</button>
+          </div>
           <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
             {isRecipeIngredientMode ? 'How much of this went into the recipe?' : `When did you ${isVitaminMode ? 'take' : 'eat'} this, and how much did you have?`}
           </p>
@@ -364,7 +365,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
           <form onSubmit={handleFinalSubmit}>
             
-            {/* THIS IS WHERE THE DATE AND MEAL CATEGORY ARE HIDDEN */}
             {!isRecipeIngredientMode && (
               <>
                 <div className="form-group">

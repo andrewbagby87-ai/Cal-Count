@@ -5,7 +5,6 @@ import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodL
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
-import BarcodeScanner from './BarcodeScanner';
 import CreateRecipeModal from './CreateRecipeModal';
 import './FoodLogTab.css';
 
@@ -66,14 +65,14 @@ export default function FoodLogTab() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [isVitaminMode, setIsVitaminMode] = useState(false);
+  const [activeAddMealType, setActiveAddMealType] = useState<string>(''); 
   
-  // --- NEW: Separate Edit States for normal foods vs recipes ---
+  // Separate Edit States for normal foods vs recipes
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [editingRecipeLog, setEditingRecipeLog] = useState<FoodLog | null>(null);
   const [editingRecipeFood, setEditingRecipeFood] = useState<Food | null>(null);
   
   const [showEditModal, setShowEditModal] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Navigator State
   const [viewDate, setViewDate] = useState(new Date());
@@ -83,14 +82,26 @@ export default function FoodLogTab() {
   // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
 
-  // --- Double Tap / Drag and Drop State ---
+  // --- NEW: Independent Summary Toggle States ---
+  // We use an object to track which item is showing "remaining" vs "consumed".
+  // By default (undefined), we will assume true (showing remaining).
+  const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
+
+  const isShowingRemaining = (key: string) => {
+    return summaryToggles[key] ?? true;
+  };
+
+  const toggleSummaryMode = (key: string) => {
+    setSummaryToggles(prev => ({
+      ...prev,
+      [key]: !(prev[key] ?? true)
+    }));
+  };
+
+  // Double Tap / Drag and Drop State
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
   const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
-
-  // --- Scanned Item State ---
-  const [scannedFood, setScannedFood] = useState<Food | null>(null);
-  const [scannedUpc, setScannedUpc] = useState<string | null>(null);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -279,29 +290,26 @@ export default function FoodLogTab() {
     }
   };
 
-  // --- Double Tap / Interaction Handler ---
+  // Double Tap / Interaction Handler
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, log: FoodLog) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
     if ((e.target as HTMLElement).classList.contains('drag-handle')) return;
 
     if (tapTimerRef.current) {
-      // Second tap detected - Clear timer and trigger double tap action
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
-      
       if (window.confirm(`Are you sure you want to delete ${log.food.name}?`)) {
         handleDeleteLog(log.id);
       }
     } else {
-      // First tap detected - start timer
       tapTimerRef.current = setTimeout(() => {
         tapTimerRef.current = null;
-        setSelectedLog(log); // Trigger single tap action
+        setSelectedLog(log); 
       }, 250); 
     }
   };
 
-  // --- Drag and Drop Handlers ---
+  // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent, log: FoodLog) => {
     setDraggedLog(log);
     e.dataTransfer.effectAllowed = 'move';
@@ -352,22 +360,12 @@ export default function FoodLogTab() {
     }
 
     const finalMealType = targetMealType === 'Uncategorized' ? '' : targetMealType;
-
-    // --- Vitamin Contamination Restriction Check ---
     const isDraggedVitamin = draggedLog.mealType === 'Vitamins';
     const isTargetVitamin = targetMealType === 'Vitamins';
     
-    if (isDraggedVitamin && !isTargetVitamin) {
-      setDraggedLog(null);
-      return; // Cannot drop a vitamin into a normal category
-    }
-    
-    if (!isDraggedVitamin && isTargetVitamin) {
-      setDraggedLog(null);
-      return; // Cannot drop a normal food into the vitamins category
-    }
+    if (isDraggedVitamin && !isTargetVitamin) { setDraggedLog(null); return; }
+    if (!isDraggedVitamin && isTargetVitamin) { setDraggedLog(null); return; }
 
-    // Get logs of the target category sorted ASCENDING (Oldest first)
     const targetLogs = foodLogs
       .filter(log => {
         if (targetMealType === 'Uncategorized') {
@@ -418,9 +416,9 @@ export default function FoodLogTab() {
 
   if (loading && foodLogs.length === 0) return <div className="loading">Loading foods...</div>;
 
-  // --- Nutrient Calculations ---
   const adjustedBudget = (userProfile?.caloriesBudget || 0) + burnedCalories;
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
+  const calDiff = adjustedBudget - totalCalories;
   
   const fatConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
   const saturatedFatConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
@@ -447,7 +445,6 @@ export default function FoodLogTab() {
   return (
     <div className="food-log-tab">
       
-      {/* --- DATE NAVIGATOR --- */}
       <div className="date-navigator">
         <button className="nav-btn" onClick={handlePrevDay}>←</button>
         <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
@@ -515,41 +512,30 @@ export default function FoodLogTab() {
 
       <div className="tab-header">
         <h2>{isToday ? "Today's Foods" : "Logged Foods"}</h2>
-        <div className="header-actions">
-          <button className="btn btn-secondary btn-sm" onClick={() => setIsScannerOpen(true)}>
-            📷 Scan
-          </button>
-          
-          <button className="btn btn-primary btn-sm" onClick={() => { 
-            setIsVitaminMode(false); 
-            setScannedFood(null); 
-            setScannedUpc(null); 
-            setShowAddModal(true); 
-          }}>
-            + Add Food
-          </button>
-
-          {userProfile?.trackVitamins && (
-            <button className="btn btn-primary btn-sm" style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => { 
-              setIsVitaminMode(true); 
-              setScannedFood(null); 
-              setScannedUpc(null); 
-              setShowAddModal(true); 
-            }}>
-              + Add Vitamins
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* --- NUTRIENT PROGRESS BAR SUMMARY --- */}
       <div className="food-summary">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        {/* CALORIES TOGGLE ROW */}
+        <div 
+          onClick={() => toggleSummaryMode('Calories')} 
+          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}
+          title="Click to toggle between consumed and remaining"
+        >
           <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
-          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2563eb', display: 'flex', alignItems: 'center' }}>
-            {totalCalories} {userProfile?.caloriesBudget ? `/ ${adjustedBudget} cal` : 'cal'}
-            {burnedCalories > 0 && (
-              <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: calDiff < 0 && isShowingRemaining('Calories') ? '#ef4444' : '#2563eb', display: 'flex', alignItems: 'center' }}>
+            {userProfile?.caloriesBudget ? (
+              isShowingRemaining('Calories') ? (
+                `${Math.abs(calDiff)} ${calDiff >= 0 ? 'cal left' : 'cal over'}`
+              ) : (
+                <>
+                  {totalCalories} / {adjustedBudget} cal
+                  {burnedCalories > 0 && (
+                    <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
+                  )}
+                </>
+              )
+            ) : (
+              `${totalCalories} cal`
             )}
           </span>
         </div>
@@ -566,32 +552,50 @@ export default function FoodLogTab() {
           </div>
         )}
 
+        {/* INDIVIDUAL MACRO TOGGLES */}
         {trackedMacros.length > 0 && (
           <div className="macros-grid">
-            {trackedMacros.map(macro => (
-              <div key={macro.label} className="macro-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
-                  <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.85rem' }}>
-                    {macro.total}{macro.unit} {macro.budget ? `/ ${macro.budget}${macro.unit}` : ''}
-                  </span>
+            {trackedMacros.map(macro => {
+              const mDiff = Math.round((macro.budget || 0) - macro.total);
+              
+              return (
+                <div 
+                  key={macro.label} 
+                  className="macro-item" 
+                  onClick={() => toggleSummaryMode(macro.label)} 
+                  style={{ cursor: 'pointer' }}
+                  title={`Click to toggle ${macro.label} text`}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
+                    <span style={{ color: mDiff < 0 && isShowingRemaining(macro.label) ? '#ef4444' : '#64748b', fontWeight: 600, fontSize: '0.85rem' }}>
+                      {macro.budget ? (
+                        isShowingRemaining(macro.label) ? (
+                          `${Math.abs(mDiff)}${macro.unit} ${mDiff >= 0 ? 'left' : 'over'}`
+                        ) : (
+                          `${macro.total}${macro.unit} / ${macro.budget}${macro.unit}`
+                        )
+                      ) : (
+                        `${macro.total}${macro.unit}`
+                      )}
+                    </span>
+                  </div>
+                  <div className="progress-bg">
+                    <div 
+                      className="progress-fill" 
+                      style={{ 
+                        background: macro.color, 
+                        width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
+                      }} 
+                    />
+                  </div>
                 </div>
-                <div className="progress-bg">
-                  <div 
-                    className="progress-fill" 
-                    style={{ 
-                      background: macro.color, 
-                      width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
-                    }} 
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* --- MEAL DIARY SECTIONS --- */}
       <div className="daily-diary">
         {mealCategories.map(mealName => {
           const logsForMeal = foodLogs.filter((log: any) => {
@@ -603,7 +607,6 @@ export default function FoodLogTab() {
 
           if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
 
-          // Calculate Meal-Specific Nutrients
           const mealCalories = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
           const mealFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
           const mealSatFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
@@ -612,7 +615,6 @@ export default function FoodLogTab() {
           const mealSugar = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.sugar ?? (log as any).sugar ?? 0), 0));
           const mealProtein = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
 
-          // Construct tracked badges for this meal
           const mealMacros = [];
           if (userProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
           if (userProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
@@ -632,18 +634,13 @@ export default function FoodLogTab() {
               <div className="meal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <h3 style={{ margin: 0 }}>{mealName}</h3>
-                  
-                  {/* --- NEW: Meal Specific Macros --- */}
+
                   {mealMacros.length > 0 && logsForMeal.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                       {mealMacros.map((macro, idx) => (
                         <span key={idx} style={{ 
-                          fontSize: '0.7rem', 
-                          color: macro.color, 
-                          backgroundColor: macro.bg,
-                          padding: '0.15rem 0.4rem', 
-                          borderRadius: '0.25rem',
-                          fontWeight: 600
+                          fontSize: '0.7rem', color: macro.color, backgroundColor: macro.bg,
+                          padding: '0.15rem 0.4rem', borderRadius: '0.25rem', fontWeight: 600
                         }}>
                           {macro.label}: {macro.value}g
                         </span>
@@ -676,15 +673,11 @@ export default function FoodLogTab() {
                       >
                         <div className="food-log-summary">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div className="drag-handle" title="Drag to reorder">
-                              ⠿
-                            </div>
+                            <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
                               <h4>{log.food.name}</h4>
                               {log.food.brand && <span className="brand">{log.food.brand}</span>}
-                              <span className="amount">
-                                {log.amount} {log.unit}
-                              </span>
+                              <span className="amount">{log.amount} {log.unit}</span>
                             </div>
                           </div>
                           <div className="food-calories">
@@ -696,6 +689,26 @@ export default function FoodLogTab() {
                   })}
                 </div>
               )}
+
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    width: '25%', 
+                    padding: '0.6rem 0', 
+                    fontSize: '1rem',
+                    ...(mealName === 'Vitamins' ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {})
+                  }}
+                  onClick={() => {
+                    setActiveAddMealType(mealName === 'Uncategorized' ? '' : mealName);
+                    setIsVitaminMode(mealName === 'Vitamins');
+                    setShowAddModal(true);
+                  }}
+                >
+                  + Add
+                </button>
+              </div>
+
             </div>
           );
         })}
@@ -705,7 +718,6 @@ export default function FoodLogTab() {
         </p>
       </div>
 
-      {/* --- Selected Log Detail Popup --- */}
       {selectedLog && (
         <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
@@ -723,7 +735,7 @@ export default function FoodLogTab() {
               <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
                 Nutrition Logged
               </h4>
-<div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {[
                   { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
                   { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
@@ -768,7 +780,6 @@ export default function FoodLogTab() {
               <button 
                 className="btn btn-secondary" 
                 onClick={() => {
-                  // --- THE FIX: Routing to the correct Edit Screen ---
                   if ((selectedLog.food as any).isRecipe) {
                     setEditingRecipeLog(selectedLog);
                     setShowRecipeModal(true);
@@ -798,8 +809,6 @@ export default function FoodLogTab() {
           onAdd={handleAddFood} 
           onClose={() => {
             setShowAddModal(false);
-            setScannedFood(null);
-            setScannedUpc(null);
             loadData(); 
           }} 
           onFoodDeleted={() => {
@@ -807,8 +816,7 @@ export default function FoodLogTab() {
           }}
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
-          initialFood={scannedFood}
-          initialUpc={scannedUpc}
+          initialMealType={activeAddMealType}
           
           onOpenRecipe={(foodToEdit?: Food) => {
             setShowAddModal(false);
@@ -817,7 +825,7 @@ export default function FoodLogTab() {
             } else {
               setEditingRecipeFood(null);
             }
-            setEditingRecipeLog(null); // Ensure we are creating a fresh recipe, not editing an old one
+            setEditingRecipeLog(null); 
             setShowRecipeModal(true);
           }}
         />
@@ -826,8 +834,9 @@ export default function FoodLogTab() {
       {showRecipeModal && (
         <CreateRecipeModal 
           foods={foods}
-          editLog={editingRecipeLog} // <-- Passes the log data straight into the recipe builder!
+          editLog={editingRecipeLog} 
           editFood={editingRecipeFood}
+          initialMealType={activeAddMealType}
           onClose={() => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
@@ -845,29 +854,6 @@ export default function FoodLogTab() {
 
       {showEditModal && editingLog && (
         <EditFoodLogModal log={editingLog} onSave={handleEditLog} onClose={() => setShowEditModal(false)} />
-      )}
-
-      {isScannerOpen && (
-        <BarcodeScanner 
-          onClose={() => setIsScannerOpen(false)}
-          onScanSuccess={(code) => {
-            setIsScannerOpen(false);
-            // Check if UPC matches ANY logged item
-            const matchedFood = foods.find(f => f.upc === code);
-            
-            if (matchedFood) {
-              setScannedFood(matchedFood);
-              setScannedUpc(null);
-              setIsVitaminMode(!!matchedFood.isVitamin);
-              setShowAddModal(true);
-            } else {
-              // Not found! We'll pass just the UPC and let AddFoodModal prompt the user.
-              setScannedFood(null);
-              setScannedUpc(code);
-              setShowAddModal(true);
-            }
-          }}
-        />
       )}
     </div>
   );

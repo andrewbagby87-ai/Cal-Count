@@ -1,3 +1,4 @@
+/* src/components/AddFoodModal.css */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -14,11 +15,16 @@
 .modal-content {
   background: white;
   border-radius: 1rem 1rem 0 0;
-  padding: 2rem;
+  padding: 1.5rem; /* Slightly reduced padding to match mobile */
   width: 100%;
-  max-width: 600px;
+  max-width: 700px; 
   max-height: 90vh;
-  overflow-y: auto;
+  
+  /* Make it a flex column and disable scrolling here */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; 
+
   animation: slideUp 0.3s ease;
 }
 

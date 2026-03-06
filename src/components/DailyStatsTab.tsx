@@ -82,7 +82,6 @@ const getMonthDates = (date: Date) => {
   return dates;
 };
 
-// --- THE FIX: Robust Date Matcher ---
 const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   if (!rawDate) return false;
   if (typeof rawDate === 'string') {
@@ -99,13 +98,17 @@ const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
 // --- Sub-Components ---
 
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
+  const [showRemaining, setShowRemaining] = useState(true);
   const percentage = Math.min(Math.round((consumed / (budget || 1)) * 100), 100);
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
+  const diff = Math.round((budget || 0) - consumed);
+  const isOver = diff < 0;
+
   return (
-    <div className="nutrient-circle-container">
+    <div className="nutrient-circle-container" onClick={() => setShowRemaining(!showRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
       <div className="svg-wrapper">
         <svg width="84" height="84" viewBox="0 0 84 84">
           <circle cx="42" cy="42" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="6" />
@@ -122,8 +125,21 @@ const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { 
           />
         </svg>
         <div className="circle-inner-text">
-          <span className="circle-val">{Math.round(consumed)}</span>
-          <span className="circle-unit">/ {budget}{unit}</span>
+          {showRemaining ? (
+             <>
+               <span className="circle-val" style={{ color: isOver ? '#ef4444' : undefined, fontSize: isOver ? '1.1rem' : undefined }}>
+                 {Math.abs(diff)}<span style={{ fontSize: '0.75em', marginLeft: '1px' }}>{unit}</span>
+               </span>
+               <span className="circle-unit">{isOver ? 'over' : 'left'}</span>
+             </>
+          ) : (
+             <>
+               <span className="circle-val">
+                 {Math.round(consumed)}<span style={{ fontSize: '0.75em', marginLeft: '1px' }}>{unit}</span>
+               </span>
+               <span className="circle-unit">/ {budget}{unit}</span>
+             </>
+          )}
         </div>
       </div>
       <span className="circle-name">{label}</span>
@@ -143,6 +159,9 @@ export default function DailyStatsTab() {
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  
+  // Hero Stats Toggle State
+  const [showCalRemaining, setShowCalRemaining] = useState(true);
 
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -189,7 +208,6 @@ export default function DailyStatsTab() {
     }
   };
 
-  // Load Summaries for Weekly/Monthly navigator
   useEffect(() => {
     const loadNavigatorStats = async () => {
       if (!user || viewMode === 'none') return;
@@ -235,7 +253,6 @@ export default function DailyStatsTab() {
     loadNavigatorStats();
   }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
 
-  // Load Detailed Daily Data
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
@@ -243,13 +260,11 @@ export default function DailyStatsTab() {
       try {
         const dateStr = getDateString(viewDate);
         
-        // --- BULLETPROOF DATA FETCHING ---
-        // If one fails, the others still succeed!
         const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts] = await Promise.all([
           getDayFoodLogs(user.uid, dateStr).catch(() => []),
           getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
           getAllWeightLogs(user.uid).catch(() => []),
-          getHealthLogs(user.uid).catch(() => []), // This was likely crashing and cancelling everything!
+          getHealthLogs(user.uid).catch(() => []), 
           getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
           getIgnoredWorkouts(user.uid).catch(() => [] as string[])
         ]);
@@ -272,7 +287,6 @@ export default function DailyStatsTab() {
 
         const todaysHealthWeights: any[] = [];
         
-        // --- SAFELY LOOP HEALTH LOGS ---
         const safeHealthLogsRaw = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
         
         safeHealthLogsRaw.forEach((log: any) => {
@@ -436,25 +450,43 @@ export default function DailyStatsTab() {
       ) : (
         <>
           <div className="stats-card">
-            <div className="stat-item hero-stat">
+            
+            <div className="stat-item hero-stat" onClick={() => setShowCalRemaining(!showCalRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
               <div className="stat-header-row">
                 <span className="stat-label">Calories</span>
                 <span className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}>
-                  {remaining >= 0 ? '+' : ''}{Math.round(remaining)} remaining
+                  {showCalRemaining ? (
+                     `${Math.round(caloriesConsumed)} eaten`
+                  ) : (
+                     `${remaining >= 0 ? '+' : ''}${Math.round(remaining)} remaining`
+                  )}
                 </span>
               </div>
               <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${Math.min(percentage, 100)}%` }}></div>
+                <div className="progress-fill" style={{ width: `${Math.min(percentage, 100)}%`, backgroundColor: remaining < 0 ? '#ef4444' : undefined }}></div>
               </div>
               <div className="stat-value full-width">
-                <span className="consumed">{Math.round(caloriesConsumed)}</span>
-                <span className="separator">/</span>
-                <span className="budget">
-                  {totalBudget} kcal
-                  {caloriesBurned > 0 && (
-                    <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
-                  )}
-                </span>
+                {showCalRemaining ? (
+                   <>
+                     <span className="consumed" style={{ color: remaining < 0 ? '#ef4444' : undefined }}>
+                       {Math.abs(Math.round(remaining))} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                     </span>
+                     <span className="budget"> {remaining < 0 ? 'over' : 'left'}</span>
+                   </>
+                ) : (
+                   <>
+                     <span className="consumed">
+                       {Math.round(caloriesConsumed)} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                     </span>
+                     <span className="separator">/</span>
+                     <span className="budget">
+                       {totalBudget} kcal
+                       {caloriesBurned > 0 && (
+                         <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
+                       )}
+                     </span>
+                   </>
+                )}
               </div>
             </div>
 
