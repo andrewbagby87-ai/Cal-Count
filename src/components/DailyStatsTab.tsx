@@ -98,7 +98,7 @@ const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
 // --- Sub-Components ---
 
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
-  const [showRemaining, setShowRemaining] = useState(true);
+  const [showRemaining, setShowRemaining] = useState(false);
   const percentage = Math.min(Math.round((consumed / (budget || 1)) * 100), 100);
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
@@ -160,8 +160,7 @@ export default function DailyStatsTab() {
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   
-  // Hero Stats Toggle State
-  const [showCalRemaining, setShowCalRemaining] = useState(true);
+  const [showCalRemaining, setShowCalRemaining] = useState(false);
 
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -458,18 +457,24 @@ export default function DailyStatsTab() {
                   {showCalRemaining ? (
                      `${Math.round(caloriesConsumed)} eaten`
                   ) : (
-                     `${remaining >= 0 ? '+' : ''}${Math.round(remaining)} remaining`
+                     `${remaining >= 0 ? '+' : ''}${Math.abs(Math.round(remaining))} ${remaining < 0 ? 'over' : 'remaining'}`
                   )}
                 </span>
               </div>
               <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${Math.min(percentage, 100)}%`, backgroundColor: remaining < 0 ? '#ef4444' : undefined }}></div>
+                <div 
+                  className="progress-fill" 
+                  style={{ 
+                    width: `${Math.min(percentage, 100)}%`, 
+                    background: remaining < 0 ? '#ef4444' : '#16a34a' 
+                  }}
+                ></div>
               </div>
               <div className="stat-value full-width">
                 {showCalRemaining ? (
                    <>
-                     <span className="consumed" style={{ color: remaining < 0 ? '#ef4444' : undefined }}>
-                       {Math.abs(Math.round(remaining))} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                     <span className="consumed" style={{ color: remaining < 0 ? '#2563eb' : undefined }}>
+                       {remaining >= 0 ? '+' : ''}{Math.abs(Math.round(remaining))} <span style={{ fontSize: '1.25rem' }}>kcal</span>
                      </span>
                      <span className="budget"> {remaining < 0 ? 'over' : 'left'}</span>
                    </>

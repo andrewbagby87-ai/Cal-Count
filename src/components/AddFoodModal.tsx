@@ -36,9 +36,7 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
   const handleFoodCreated = (food: Food) => {
-    setNewFood(food);
-    setLocalInitialFood(food);
-    setMode('previous');
+    onClose();
   };
 
   const handleScanSuccess = (code: string) => {
@@ -92,7 +90,8 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
               initialDate={selectedDate} 
               isVitaminMode={activeVitaminMode}
               initialUpc={localInitialUpc || undefined}
-              initialMealType={initialMealType} 
+              initialMealType={initialMealType}
+              foods={foods} 
             />
           )}
 

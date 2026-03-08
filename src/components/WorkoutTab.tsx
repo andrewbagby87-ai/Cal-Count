@@ -39,6 +39,28 @@ export default function WorkoutsTab() {
     return <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Loading Workouts...</div>;
   }
 
+  // --- THE ULTIMATE SAFARI DATE FIX (Extracted for sorting) ---
+  const getWorkoutDate = (workout: any) => {
+    const rawDate = workout.start || workout.date || workout.timestamp;
+    let safeDateStr = rawDate;
+    if (typeof rawDate === 'string') {
+      // Splits "2026-03-03 16:44:36 -0500" into ["2026-03-03", "16:44:36", "-0500"]
+      const parts = rawDate.split(' ');
+      if (parts.length >= 2) {
+        // Glues it back together as "2026-03-03T16:44:36-0500"
+        safeDateStr = `${parts[0]}T${parts[1]}${parts[2] ? parts[2] : ''}`;
+      }
+    }
+    return new Date(safeDateStr);
+  };
+
+  // Sort workouts from newest to oldest
+  const sortedWorkouts = [...workouts].sort((a, b) => {
+    const timeA = getWorkoutDate(a).getTime();
+    const timeB = getWorkoutDate(b).getTime();
+    return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+  });
+
   return (
     <div style={{ padding: '1rem', maxWidth: '600px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -46,13 +68,13 @@ export default function WorkoutsTab() {
       </div>
 
       <div>
-        {workouts.length === 0 ? (
+        {sortedWorkouts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1rem', backgroundColor: '#f8fafc', borderRadius: '1rem', border: '1px dashed #cbd5e1' }}>
             <p style={{ fontSize: '2rem', margin: '0 0 1rem 0' }}>⌚️</p>
             <p style={{ color: '#64748b', margin: 0 }}>No Apple Health workouts synced yet.</p>
           </div>
         ) : (
-          workouts.map((workout, index) => {
+          sortedWorkouts.map((workout, index) => {
             const title = workout.name || 'Unknown Workout';
             const durationMins = workout.duration ? Math.round(workout.duration / 60) : 0;
             
@@ -61,18 +83,7 @@ export default function WorkoutsTab() {
               calories = Math.round(workout.activeEnergyBurned.qty);
             }
 
-            // --- THE ULTIMATE SAFARI DATE FIX ---
-            const rawDate = workout.start || workout.date || workout.timestamp;
-            let safeDateStr = rawDate;
-            if (typeof rawDate === 'string') {
-              // Splits "2026-03-03 16:44:36 -0500" into ["2026-03-03", "16:44:36", "-0500"]
-              const parts = rawDate.split(' ');
-              if (parts.length >= 2) {
-                // Glues it back together as "2026-03-03T16:44:36-0500"
-                safeDateStr = `${parts[0]}T${parts[1]}${parts[2] ? parts[2] : ''}`;
-              }
-            }
-            const workoutDate = new Date(safeDateStr);
+            const workoutDate = getWorkoutDate(workout);
             
             const dateString = isNaN(workoutDate.getTime()) 
               ? 'Unknown Date' 

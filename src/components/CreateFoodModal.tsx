@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createFoodLog, createFood } from '../services/database';
 import { Food } from '../types';
+import BarcodeScanner from './BarcodeScanner';
 import './CreateFoodModal.css';
 
 interface Props {
@@ -14,11 +15,12 @@ interface Props {
   isRecipeIngredientMode?: boolean;
   onIngredientCalculated?: (foodObject: Food, consumedNutrition: any, amount: number, unit: string) => void;
   initialMealType?: string; 
+  foods?: Food[];
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
-export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType }: Props) {
+export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType, foods = [] }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
@@ -50,6 +52,21 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  const handleScanSuccess = (code: string) => {
+    setIsScannerOpen(false);
+    
+    // Check if another food already uses this UPC
+    const isDuplicate = foods.some(f => f.upc === code);
+    
+    if (isDuplicate) {
+      setError(`This UPC (${code}) is already used by another item in your database.`);
+    } else {
+      setError('');
+      setFormData(prev => ({ ...prev, upc: code })); 
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -102,6 +119,13 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
     if (formData.upc.trim() && formData.upc.trim().length !== 12) { setError('UPC must be exactly 12 digits'); return; }
+    
+    // Duplicate UPC check before continuing
+    if (formData.upc.trim() && foods.some(f => f.upc === formData.upc.trim())) { 
+      setError('This UPC is already used by another item in your database.'); 
+      return; 
+    }
+    
     if (!formData.calories) { setError('Calories is required'); return; }
     if (!formData.labelServings) { setError('Number of servings on the label is required'); return; }
     setStep('meal');
@@ -297,7 +321,36 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
             <div className="form-group">
               <label htmlFor="upc">UPC / Barcode (Optional)</label>
-              <input id="upc" type="text" name="upc" value={formData.upc} onChange={handleChange} placeholder="e.g., 012345678901" />
+              {/* Added alignItems: 'stretch' to make children the same height */}
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
+                <input 
+                  id="upc" 
+                  type="text" 
+                  name="upc" 
+                  value={formData.upc} 
+                  onChange={handleChange} 
+                  placeholder="e.g., 012345678901" 
+                  style={{ flex: 1, margin: 0 }} 
+                />
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setIsScannerOpen(true)}
+                  style={{ 
+                    padding: '0', 
+                    width: '46px', /* Kept width for the square shape, removed height */
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '1.4rem', 
+                    flexShrink: 0,
+                    margin: 0 /* Ensures no hidden margins push it out of alignment */
+                  }}
+                  title="Scan Barcode"
+                >
+                  📷
+                </button>
+              </div>
             </div>
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
@@ -473,6 +526,13 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
             </div>
           </form>
         </>
+      )}
+
+      {isScannerOpen && (
+        <BarcodeScanner 
+          onClose={() => setIsScannerOpen(false)}
+          onScanSuccess={handleScanSuccess}
+        />
       )}
     </div>
   );

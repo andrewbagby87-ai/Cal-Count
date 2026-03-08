@@ -151,7 +151,13 @@
   padding: 10px 20px;
   background-color: #fff;
   border-bottom: 1px solid #ddd;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* Hides scrollbar in Chrome/Safari */
+.dashboard-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .dashboard-content {
@@ -186,11 +192,15 @@
     justify-content: center;
   }
 
-  .tab-navigation {
-    overflow-x: auto;
+  .dashboard-tabs {
+    padding: 0;
+    gap: 0; 
   }
 
   .tab-btn {
+    min-width: 0;
+    padding: 0.75rem 0.25rem;
+    font-size: 0.85rem;
     white-space: nowrap;
   }
 }

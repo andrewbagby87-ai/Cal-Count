@@ -82,19 +82,18 @@ export default function FoodLogTab() {
   // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
 
-  // --- NEW: Independent Summary Toggle States ---
-  // We use an object to track which item is showing "remaining" vs "consumed".
-  // By default (undefined), we will assume true (showing remaining).
+  // --- Independent Summary Toggle States ---
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
 
+  // Changed to default to false (show eaten/goal)
   const isShowingRemaining = (key: string) => {
-    return summaryToggles[key] ?? true;
+    return summaryToggles[key] ?? false;
   };
 
   const toggleSummaryMode = (key: string) => {
     setSummaryToggles(prev => ({
       ...prev,
-      [key]: !(prev[key] ?? true)
+      [key]: !(prev[key] ?? false)
     }));
   };
 
@@ -525,7 +524,7 @@ export default function FoodLogTab() {
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: calDiff < 0 && isShowingRemaining('Calories') ? '#ef4444' : '#2563eb', display: 'flex', alignItems: 'center' }}>
             {userProfile?.caloriesBudget ? (
               isShowingRemaining('Calories') ? (
-                `${Math.abs(calDiff)} ${calDiff >= 0 ? 'cal left' : 'cal over'}`
+                `${Math.abs(calDiff)} cal ${calDiff >= 0 ? 'left' : 'over'}`
               ) : (
                 <>
                   {totalCalories} / {adjustedBudget} cal
@@ -542,11 +541,12 @@ export default function FoodLogTab() {
         
         {userProfile?.caloriesBudget && (
           <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
+            {/* CHANGED TO GREEN IF UNDER, RED IF OVER */}
             <div 
               className="progress-fill" 
               style={{ 
                 width: `${Math.min((totalCalories / adjustedBudget) * 100, 100)}%`, 
-                background: totalCalories > adjustedBudget ? '#ef4444' : 'linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%)' 
+                background: totalCalories > adjustedBudget ? '#ef4444' : '#10b981' 
               }} 
             />
           </div>
