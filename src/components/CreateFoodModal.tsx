@@ -1,7 +1,7 @@
 // src/components/CreateFoodModal.tsx
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { createFood, getUserFoods } from '../services/database';
+import { createFood, getUserFoods, createFoodLog } from '../services/database';
 import { Food } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import './CreateFoodModal.css';
@@ -50,7 +50,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     volumeConsumed: '',
   });
   
-const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const topRef = useRef<HTMLDivElement>(null);
@@ -63,7 +63,7 @@ const [loading, setLoading] = useState(false);
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-const handleScanSuccess = async (code: string) => {
+  const handleScanSuccess = async (code: string) => {
     if (!user) return;
 
     try {
@@ -74,20 +74,20 @@ const handleScanSuccess = async (code: string) => {
       if (isDuplicate) {
         // 2. If it exists, block it and show an error
         setError('A food with this barcode already exists in your database!');
-        setStep('form'); 
+        setIsScannerOpen(false); // Close the scanner overlay
         return;
       }
 
       // 3. If it's a new barcode, input it into the form
       setFormData(prev => ({ ...prev, upc: code }));
       setError(''); // Clear any previous errors
-      setStep('form');
+      setIsScannerOpen(false); // Close the scanner overlay
 
     } catch (err) {
       console.error("Failed to verify UPC:", err);
       // Fallback: if the database check fails, just input the code
       setFormData(prev => ({ ...prev, upc: code }));
-      setStep('form');
+      setIsScannerOpen(false); // Close the scanner overlay
     }
   };
 
@@ -141,6 +141,8 @@ const handleScanSuccess = async (code: string) => {
     e.preventDefault();
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
+    
+    // UPC Length validation: 8 or 12 digits
     const upcLength = formData.upc.trim().length;
     if (formData.upc.trim() && upcLength !== 8 && upcLength !== 12) { 
       setError('UPC must be exactly 8 or 12 digits'); 
@@ -321,9 +323,20 @@ const handleScanSuccess = async (code: string) => {
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
 
-return (
-    <div className="create-food-modal">
+  return (
+    // Mobile horizontal scrolling lock
+    <div className="create-food-modal" style={{ overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+      
+      {/* Invisible anchor point for auto-scrolling to the top */}
       <div ref={topRef} />
+      
+      {/* Global CSS injected to force all children to respect modal bounds */}
+      <style>{`
+        .create-food-modal * {
+          box-sizing: border-box !important;
+          max-width: 100%;
+        }
+      `}</style>
       
       {step === 'form' ? (
         <>
@@ -350,7 +363,6 @@ return (
 
             <div className="form-group">
               <label htmlFor="upc">UPC / Barcode (Optional)</label>
-              {/* Added alignItems: 'stretch' to make children the same height */}
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
                 <input 
                   id="upc" 
@@ -367,13 +379,13 @@ return (
                   onClick={() => setIsScannerOpen(true)}
                   style={{ 
                     padding: '0', 
-                    width: '46px', /* Kept width for the square shape, removed height */
+                    width: '46px', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     fontSize: '1.4rem', 
                     flexShrink: 0,
-                    margin: 0 /* Ensures no hidden margins push it out of alignment */
+                    margin: 0
                   }}
                   title="Scan Barcode"
                 >
@@ -394,7 +406,7 @@ return (
               {formData.labelVolumes.map((vol, index) => {
                 const usedUnits = formData.labelVolumes.map(v => v.unit);
                 return (
-                  <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                  <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
                     <input type="text" inputMode="decimal" style={{ flex: 1 }} value={vol.amount} onChange={(e) => handleVolumeChange(index, 'amount', e.target.value)} placeholder="e.g., 100" />
                     <select style={{ width: 'auto', padding: '0.75rem' }} value={vol.unit} onChange={(e) => handleVolumeChange(index, 'unit', e.target.value)}>
                       <option value="g" disabled={usedUnits.includes('g') && vol.unit !== 'g'}>Grams (g)</option>
@@ -495,7 +507,7 @@ return (
             ) : (
               <div className="form-group">
                 <label htmlFor="volumeConsumed">Amount {isRecipeIngredientMode ? 'Added' : (isVitaminMode ? 'Taken' : 'Eaten')} *</label>
-                <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <input id="volumeConsumed" type="text" inputMode="decimal" name="volumeConsumed" style={{ flex: 1 }} value={logDetails.volumeConsumed} onChange={handleLogDetailsChange} placeholder={`e.g., ${selectedVol.amount}`} required />
                   <span style={{ padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '3rem' }}>{selectedVol.unit}</span>
                 </div>
