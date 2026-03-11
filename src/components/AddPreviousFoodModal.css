@@ -147,3 +147,18 @@
 .form-actions .btn {
   flex: 1;
 }
+
+.previous-food-modal {
+  overflow-x: hidden !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.previous-food-modal * {
+  box-sizing: border-box !important;
+  max-width: 100%;
+}
+
+.previous-food-modal .form-row {
+  flex-wrap: wrap;
+}

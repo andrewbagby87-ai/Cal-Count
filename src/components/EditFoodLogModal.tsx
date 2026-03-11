@@ -12,28 +12,30 @@ export default function EditFoodLogModal({ log, onSave, onClose }: Props) {
   // Helper to safely convert existing numbers to strings for the text inputs
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
 
-  // Aliases to bypass TypeScript errors for our newly added nutrition fields
+  // Safely grab existing data, prioritizing the root log values to avoid the broken nested object
   const f = log.food as any;
   const l = log as any;
-const [formData, setFormData] = useState({
-    name: log.food?.name || l.name || '',
-    brand: log.food?.brand || l.brand || '',
-    calories: toStr(log.editedNutrition?.calories ?? log.food?.calories ?? l.calories),
-    fat: toStr(log.food?.fat ?? l.fat),
-    saturatedFat: toStr(f?.saturatedFat ?? l.saturatedFat),
-    transFat: toStr(f?.transFat ?? l.transFat),
-    cholesterol: toStr(f?.cholesterol ?? l.cholesterol),
-    sodium: toStr(f?.sodium ?? l.sodium),
-    carbs: toStr(log.food?.carbs ?? l.carbs),
-    fiber: toStr(f?.fiber ?? l.fiber),
-    sugar: toStr(f?.sugar ?? l.sugar),
-    protein: toStr(log.food?.protein ?? l.protein),
+  const en = (log.editedNutrition || {}) as any; 
+  
+  const [formData, setFormData] = useState({
+    name: en.name || f?.name || l.name || '',
+    brand: en.brand || f?.brand || l.brand || '',
+    calories: toStr(en.calories ?? l.calories ?? f?.calories),
+    fat: toStr(en.fat ?? l.fat ?? f?.fat),
+    saturatedFat: toStr(en.saturatedFat ?? l.saturatedFat ?? f?.saturatedFat),
+    transFat: toStr(en.transFat ?? l.transFat ?? f?.transFat),
+    cholesterol: toStr(en.cholesterol ?? l.cholesterol ?? f?.cholesterol),
+    sodium: toStr(en.sodium ?? l.sodium ?? f?.sodium),
+    carbs: toStr(en.carbs ?? l.carbs ?? f?.carbs),
+    fiber: toStr(en.fiber ?? l.fiber ?? f?.fiber),
+    sugar: toStr(en.sugar ?? l.sugar ?? f?.sugar),
+    protein: toStr(en.protein ?? l.protein ?? f?.protein),
     
-    servingSize: toStr(log.amount ?? '1'),
-    volume: toStr(f?.volume ?? l.volume),
-    volumeUnit: f?.volumeUnit ?? l.volumeUnit ?? 'g',
+    servingSize: toStr(l.amount ?? '1'),
+    volume: toStr(en.volume ?? l.volume ?? f?.volume),
+    volumeUnit: en.volumeUnit ?? l.volumeUnit ?? f?.volumeUnit ?? 'g',
     
-    date: log.date || new Date().toISOString().split('T')[0],
+    date: l.date || new Date().toISOString().split('T')[0],
     mealType: l.mealType && l.mealType !== 'Uncategorized' ? l.mealType : '',
   });
 
@@ -42,24 +44,17 @@ const [formData, setFormData] = useState({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    // Stop letters/symbols from being typed into our text-based number fields
     if (name !== 'name' && name !== 'brand' && name !== 'volumeUnit' && name !== 'date' && name !== 'mealType') {
-      if (value !== '' && !/^\d*\.?\d*$/.test(value)) {
-        return; 
-      }
+      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const safeParse = (val: string) => {
-    if (!val) return undefined;
-    const parsed = parseFloat(val);
-    return isNaN(parsed) ? undefined : Number(parsed.toFixed(2));
+  // Force all empty values to strict numbers so Firebase array operations never fail
+  const safeParseNum = (val: string | number | undefined | null) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const parsed = parseFloat(String(val));
+    return isNaN(parsed) ? 0 : Number(parsed.toFixed(2));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,49 +68,58 @@ const [formData, setFormData] = useState({
       if (!formData.servingSize) throw new Error('Number of servings is required');
       if (!formData.mealType) throw new Error('A meal category is required');
 
-      const rawNutritionData: any = {
-        name: formData.name.trim(),
-        brand: formData.brand.trim() || undefined,
-        calories: safeParse(formData.calories) || 0,
-        fat: safeParse(formData.fat),
-        saturatedFat: safeParse(formData.saturatedFat),
-        transFat: safeParse(formData.transFat),
-        cholesterol: safeParse(formData.cholesterol),
-        sodium: safeParse(formData.sodium),
-        carbs: safeParse(formData.carbs),
-        fiber: safeParse(formData.fiber),
-        sugar: safeParse(formData.sugar),
-        protein: safeParse(formData.protein),
-        
-        // Ensure amount is saved as a numeric value
-        servingSize: safeParse(formData.servingSize) || 1,
+      // 1. Build a strict, flat object for all numeric macros
+      const consumedMacros = {
+        calories: safeParseNum(formData.calories),
+        fat: safeParseNum(formData.fat),
+        saturatedFat: safeParseNum(formData.saturatedFat),
+        transFat: safeParseNum(formData.transFat),
+        cholesterol: safeParseNum(formData.cholesterol),
+        sodium: safeParseNum(formData.sodium),
+        carbs: safeParseNum(formData.carbs),
+        fiber: safeParseNum(formData.fiber),
+        sugar: safeParseNum(formData.sugar),
+        protein: safeParseNum(formData.protein),
       };
 
-      if (formData.volume && formData.volume.trim() !== '') {
-        rawNutritionData.volume = safeParse(formData.volume);
-        rawNutritionData.volumeUnit = formData.volumeUnit;
-      }
-
-      // Strip out all undefined values so Firebase doesn't crash
-      const cleanNutritionData = Object.fromEntries(
-        Object.entries(rawNutritionData).filter(([_, v]) => v !== undefined)
-      ) as any;
-
-      // Make sure we update the nested `food` object so the UI reflects the changes instantly
-      const updatedFood = {
+      // 2. Build the updated base food object
+      const updatedFood: any = {
         ...log.food,
-        ...cleanNutritionData
+        name: formData.name.trim(),
+        brand: formData.brand.trim() || '',
+        ...consumedMacros,
       };
 
-      onSave({
+      // 3. Build the final flat payload for the log
+      const rawPayload: any = {
         date: formData.date,
         mealType: formData.mealType,
-        amount: cleanNutritionData.servingSize,
+        amount: safeParseNum(formData.servingSize),
         unit: 'serving',
         food: updatedFood,
-        ...cleanNutritionData,
-        editedNutrition: { calories: cleanNutritionData.calories } // Fallback for backwards compatibility
-      });
+        ...consumedMacros,
+        // THE NUCLEAR FIX: We are intentionally setting this to null to destroy the broken nested object
+        // This forces your UI to safely fall back to the root macros we just saved above!
+        editedNutrition: null, 
+      };
+
+      // Handle volume
+      if (formData.volume && formData.volume.trim() !== '') {
+        rawPayload.volume = safeParseNum(formData.volume);
+        rawPayload.volumeUnit = formData.volumeUnit || 'g';
+        updatedFood.volume = rawPayload.volume;
+        updatedFood.volumeUnit = rawPayload.volumeUnit;
+      } else {
+        rawPayload.volume = 0;
+        rawPayload.volumeUnit = 'g';
+        updatedFood.volume = 0;
+        updatedFood.volumeUnit = 'g';
+      }
+
+      // JSON parsing guarantees absolutely zero 'undefined' properties sneak into Firebase
+      const cleanFirebasePayload = JSON.parse(JSON.stringify(rawPayload));
+
+      onSave(cleanFirebasePayload);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -133,128 +137,41 @@ const [formData, setFormData] = useState({
           {error && <div className="error">{error}</div>}
           
           <form onSubmit={handleSubmit}>
-            
-            {/* --- CORE INFO --- */}
             <div className="form-group">
               <label htmlFor="name">Food Name *</label>
-              <input
-                id="name"
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="e.g., Grilled Chicken Breast"
-                required
-              />
+              <input id="name" type="text" name="name" value={formData.name} onChange={handleChange} required />
             </div>
 
             <div className="form-group">
               <label htmlFor="brand">Brand (Optional)</label>
-              <input
-                id="brand"
-                type="text"
-                name="brand"
-                value={formData.brand}
-                onChange={handleChange}
-                placeholder="e.g., Tyson"
-              />
+              <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} />
             </div>
 
-            {/* --- NUTRITION --- */}
             <div className="form-group">
               <label htmlFor="calories">Calories *</label>
-              <input
-                id="calories"
-                type="text"
-                inputMode="decimal"
-                name="calories"
-                value={formData.calories}
-                onChange={handleChange}
-                placeholder="0"
-                required
-              />
+              <input id="calories" type="text" inputMode="decimal" name="calories" value={formData.calories} onChange={handleChange} required />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="fat">Fat (g)</label>
-              <input id="fat" type="text" inputMode="decimal" name="fat" value={formData.fat} onChange={handleChange} placeholder="0" />
-            </div>
+            <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={formData.fat} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={formData.saturatedFat} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={formData.transFat} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="cholesterol">Cholesterol (mg)</label><input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={formData.cholesterol} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="sodium">Sodium (mg)</label><input id="sodium" type="text" inputMode="decimal" name="sodium" value={formData.sodium} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="carbs">Carbs (g)</label><input id="carbs" type="text" inputMode="decimal" name="carbs" value={formData.carbs} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="fiber">Fiber (g)</label><input id="fiber" type="text" inputMode="decimal" name="fiber" value={formData.fiber} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="sugar">Sugar (g)</label><input id="sugar" type="text" inputMode="decimal" name="sugar" value={formData.sugar} onChange={handleChange} /></div>
+            <div className="form-group"><label htmlFor="protein">Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={formData.protein} onChange={handleChange} /></div>
 
-            <div className="form-group">
-              <label htmlFor="saturatedFat">Saturated Fat (g)</label>
-              <input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={formData.saturatedFat} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="transFat">Trans Fat (g)</label>
-              <input id="transFat" type="text" inputMode="decimal" name="transFat" value={formData.transFat} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="cholesterol">Cholesterol (mg)</label>
-              <input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={formData.cholesterol} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="sodium">Sodium (mg)</label>
-              <input id="sodium" type="text" inputMode="decimal" name="sodium" value={formData.sodium} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="carbs">Carbs (g)</label>
-              <input id="carbs" type="text" inputMode="decimal" name="carbs" value={formData.carbs} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="fiber">Fiber (g)</label>
-              <input id="fiber" type="text" inputMode="decimal" name="fiber" value={formData.fiber} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="sugar">Sugar (g)</label>
-              <input id="sugar" type="text" inputMode="decimal" name="sugar" value={formData.sugar} onChange={handleChange} placeholder="0" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="protein">Protein (g)</label>
-              <input id="protein" type="text" inputMode="decimal" name="protein" value={formData.protein} onChange={handleChange} placeholder="0" />
-            </div>
-
-            {/* --- SERVINGS AND VOLUME --- */}
             <div className="form-group">
               <label htmlFor="servingSize">Number of Servings *</label>
-              <input
-                id="servingSize"
-                type="text"
-                inputMode="decimal"
-                name="servingSize"
-                value={formData.servingSize}
-                onChange={handleChange}
-                placeholder="1"
-                required
-              />
+              <input id="servingSize" type="text" inputMode="decimal" name="servingSize" value={formData.servingSize} onChange={handleChange} required />
             </div>
 
             <div className="form-group">
               <label htmlFor="volume">Volume per Serving (Optional)</label>
               <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <input
-                  id="volume"
-                  type="text"
-                  inputMode="decimal"
-                  name="volume"
-                  style={{ flex: 1 }}
-                  value={formData.volume}
-                  onChange={handleChange}
-                  placeholder="e.g., 100"
-                />
-                <select
-                  id="volumeUnit"
-                  name="volumeUnit"
-                  style={{ width: 'auto', padding: '0.75rem' }}
-                  value={formData.volumeUnit}
-                  onChange={handleChange}
-                >
+                <input id="volume" type="text" inputMode="decimal" name="volume" style={{ flex: 1 }} value={formData.volume} onChange={handleChange} />
+                <select id="volumeUnit" name="volumeUnit" style={{ width: 'auto', padding: '0.75rem' }} value={formData.volumeUnit} onChange={handleChange}>
                   <option value="g">Grams (g)</option>
                   <option value="oz">Ounces (oz)</option>
                   <option value="cup">Cup(s)</option>
@@ -263,32 +180,16 @@ const [formData, setFormData] = useState({
               </div>
             </div>
 
-            {/* --- LOGISTICS (DATE AND MEAL TYPE) --- */}
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
             <div className="form-group">
               <label htmlFor="date">Log Date *</label>
-              <input 
-                type="date" 
-                id="date"
-                name="date"
-                value={formData.date} 
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
-                required
-              />
+              <input type="date" id="date" name="date" value={formData.date} onChange={handleChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }} required />
             </div>
 
             <div className="form-group" style={{ marginBottom: '2rem' }}>
               <label htmlFor="mealType">Meal Type *</label>
-              <select
-                id="mealType"
-                name="mealType"
-                value={formData.mealType}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-                required
-              >
+              <select id="mealType" name="mealType" value={formData.mealType} onChange={handleChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }} required>
                 <option value="" disabled>Select a Category...</option>
                 <option value="Breakfast">🌅 Breakfast</option>
                 <option value="Lunch">☀️ Lunch</option>
@@ -298,14 +199,9 @@ const [formData, setFormData] = useState({
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={onClose}>
-                Cancel
-              </button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</button>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             </div>
-            
           </form>
         </div>
       </div>

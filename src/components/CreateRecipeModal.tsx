@@ -190,7 +190,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   if (step === 'create-ingredient') {
     return (
       <div className="add-food-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
-        <div className="add-food-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="add-food-modal create-recipe-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box' }}>
            <CreateFoodModal 
              isRecipeIngredientMode={true} 
              initialUpc={scannedUpc || ''} 
@@ -216,10 +216,14 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
+        .create-recipe-modal * {
+          box-sizing: border-box !important;
+          max-width: 100%;
+        }
       `}</style>
       
-      {/* Outer container is now a strict flex column that hides overflowing content */}
-      <div className="add-food-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Outer container is now a strict flex column that hides overflowing content using overflowX and border-box */}
+      <div className="add-food-modal create-recipe-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', overflowX: 'hidden', boxSizing: 'border-box' }}>
         
         {step === 'builder' && (
           <>
@@ -243,7 +247,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
             </div>
 
             {/* SCROLLABLE INGREDIENTS LIST AND NUTRITION PREVIEW */}
-            <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
+            <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem', overflowX: 'hidden' }}>
               <h4 style={{ margin: '0 0 0.5rem 0', color: '#475569' }}>Ingredients</h4>
               {ingredients.length === 0 ? (
                 <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px dashed #cbd5e1', marginBottom: '1.5rem', color: '#64748b' }}>
@@ -342,7 +346,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
               <h3 style={{ margin: 0 }}>Select Ingredient</h3>
               <button onClick={() => setStep('builder')} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
             </div>
-            <div className="recipe-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <div className="recipe-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
               {foods.filter(f => !f.isVitamin).map(f => (
                 <div key={f.id} onClick={() => { setActiveFood(f); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: '#f8fafc' }}>
                   <div style={{ fontWeight: 600 }}>{f.name}</div>
@@ -359,7 +363,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                <h3 style={{ marginBottom: '1.5rem' }}>How much {activeFood.name}?</h3>
              </div>
              
-             <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+             <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                     <input type="radio" checked={consumptionMethod === 'serving'} onChange={() => setConsumptionMethod('serving')} style={{ margin: 0 }} /> By Servings
@@ -395,7 +399,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
           <form onSubmit={handleFinalLog} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <h3 style={{ marginBottom: '1.5rem', flexShrink: 0 }}>{isEditLogMode ? 'Update Recipe Details' : 'Log Your Recipe'}</h3>
             
-            <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
+            <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, paddingRight: '0.25rem' }}>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
                 <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />

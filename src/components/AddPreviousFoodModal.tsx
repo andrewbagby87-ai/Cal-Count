@@ -1,7 +1,7 @@
 // src/components/AddPreviousFoodModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import { Food, FoodLog } from '../types';
-import { deleteFood, getAllFoodLogs } from '../services/database';
+import { deleteFood, getAllFoodLogs, updateFood, createFoodLog } from '../services/database';
 import { useAuth } from '../contexts/AuthContext';
 import './AddPreviousFoodModal.css';
 
@@ -38,6 +38,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [searchTerm, setSearchTerm] = useState('');
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- NEW MULTI-SELECT STATE ---
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => { setLocalFoods(foods); }, [foods]);
 
@@ -118,6 +122,17 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   };
 
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, food: Food) => {
+    // If in multi-select mode, immediately toggle the item and skip everything else
+    if (isMultiSelectMode) {
+      setMultiSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(food.id)) next.delete(food.id);
+        else next.add(food.id);
+        return next;
+      });
+      return;
+    }
+
     if (tapTimerRef.current) {
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
@@ -232,7 +247,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
   };
 
-  const handleSaveNutrition = (e: React.FormEvent) => {
+  const handleSaveNutrition = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFood) return;
 
@@ -267,6 +282,22 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       volumes: validVolumes.length > 0 ? validVolumes : undefined,
     };
 
+    try {
+      setLoading(true);
+      const cleanFirebasePayload = Object.fromEntries(
+        Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
+      );
+      await updateFood(selectedFood.id, cleanFirebasePayload);
+      setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
+    } catch (err) {
+      console.error("Failed to update food label:", err);
+      setError("Failed to save changes to database.");
+      setLoading(false);
+      return;
+    } finally {
+      setLoading(false);
+    }
+
     setSelectedFood(updatedFood);
     setIsEditingNutrition(false);
     setError('');
@@ -279,9 +310,103 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }));
   };
 
+  // --- NEW BATCH ADD FUNCTION ---
+  const handleBatchAdd = async () => {
+    if (!user) return;
+    if (multiSelectedIds.size === 0) {
+      setIsMultiSelectMode(false);
+      return;
+    }
+    if (!isVitaminMode && !logDetails.mealType) {
+      setError('Please ensure a meal category is selected to add items.');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      for (const foodId of multiSelectedIds) {
+        const food = localFoods.find(f => f.id === foodId);
+        if (!food) continue;
+        
+        const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+        
+        let finalAmount = 1;
+        let finalUnit = 'serving';
+        let multiplier = 1;
+
+        if (lastLog) {
+          finalAmount = lastLog.amount;
+          finalUnit = lastLog.unit;
+          
+          if (finalUnit === 'serving') {
+             multiplier = finalAmount / (food.servingSize || 1);
+          } else {
+             const vol = food.volumes?.find(v => v.unit === finalUnit);
+             if (vol && vol.amount) {
+                multiplier = finalAmount / vol.amount;
+             } else {
+                multiplier = 0;
+             }
+          }
+        } else {
+          multiplier = 1 / (food.servingSize || 1); 
+        }
+
+        const calcConsumed = (val: number | undefined) => {
+          if (val === undefined || isNaN(val)) return undefined;
+          return Number((val * multiplier).toFixed(2));
+        };
+
+        const consumedNutrition: any = {
+          calories: calcConsumed(food.calories) || 0,
+          fat: calcConsumed(food.fat),
+          saturatedFat: calcConsumed(food.saturatedFat),
+          transFat: calcConsumed((food as any).transFat),
+          cholesterol: calcConsumed((food as any).cholesterol),
+          sodium: calcConsumed((food as any).sodium),
+          carbs: calcConsumed(food.carbs),
+          fiber: calcConsumed(food.fiber),
+          sugar: calcConsumed(food.sugar),
+          protein: calcConsumed(food.protein),
+        };
+
+        const cleanConsumedNutrition = Object.fromEntries(
+          Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
+        ) as any;
+
+        if (finalUnit !== 'serving') {
+          cleanConsumedNutrition.volume = finalAmount;
+          cleanConsumedNutrition.volumeUnit = finalUnit;
+        }
+
+        const payload = {
+          date: logDetails.date,
+          foodId: food.id,
+          food: food,
+          amount: finalAmount,
+          unit: finalUnit,
+          mealType: logDetails.mealType,
+          ...cleanConsumedNutrition,
+        };
+
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        // Use createFoodLog directly so it doesn't try to close the modal early
+        await createFoodLog(user.uid, cleanPayload);
+      }
+      
+      onClose(); // Triggers refresh in FoodLogTab
+    } catch (err) {
+      console.error("Batch add failed:", err);
+      setError(err instanceof Error ? err.message : 'Failed to add selected foods.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculatePreview = () => {
     if (!selectedFood) return null;
-    
     let multiplier = 1;
     const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
 
@@ -307,16 +432,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     };
 
     return {
-      calories: calc(selectedFood.calories),
-      protein: calc(selectedFood.protein),
-      carbs: calc(selectedFood.carbs),
-      fat: calc(selectedFood.fat),
-      saturatedFat: calc(selectedFood.saturatedFat),
-      transFat: calc((selectedFood as any).transFat),
-      cholesterol: calc((selectedFood as any).cholesterol),
-      sodium: calc((selectedFood as any).sodium),
-      fiber: calc(selectedFood.fiber),
-      sugar: calc(selectedFood.sugar),
+      calories: calc(selectedFood.calories), protein: calc(selectedFood.protein), carbs: calc(selectedFood.carbs),
+      fat: calc(selectedFood.fat), saturatedFat: calc(selectedFood.saturatedFat), transFat: calc((selectedFood as any).transFat),
+      cholesterol: calc((selectedFood as any).cholesterol), sodium: calc((selectedFood as any).sodium),
+      fiber: calc(selectedFood.fiber), sugar: calc(selectedFood.sugar),
     };
   };
 
@@ -341,23 +460,17 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         if (!logDetails.servingsConsumed) throw new Error('Please enter how many servings you ate');
         const labelServings = selectedFood.servingSize || 1;
         const consumedServings = parseFloat(logDetails.servingsConsumed) || 1;
-        
         multiplier = consumedServings / labelServings;
         finalAmount = consumedServings;
         finalUnit = 'serving';
       } else if (isVolumeSelected && selectedFood.volumes) {
         if (!logDetails.volumeConsumed) throw new Error('Please enter the volume/amount you ate');
-        
         const volIndex = parseInt(logDetails.consumptionMethod.split('-')[1]);
         const selectedVol = selectedFood.volumes[volIndex];
-
         if (!selectedVol || !selectedVol.amount) throw new Error('Cannot calculate based on an invalid volume');
-        
         const labelVol = selectedVol.amount;
         const consumedVol = parseFloat(logDetails.volumeConsumed) || 0;
-        
         if (labelVol === 0) throw new Error('Label volume cannot be zero');
-        
         multiplier = consumedVol / labelVol;
         finalAmount = consumedVol;
         finalUnit = selectedVol.unit; 
@@ -369,21 +482,14 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       };
 
       const consumedNutrition: any = {
-        calories: calcConsumed(selectedFood.calories) || 0,
-        fat: calcConsumed(selectedFood.fat),
-        saturatedFat: calcConsumed(selectedFood.saturatedFat),
-        transFat: calcConsumed((selectedFood as any).transFat),
-        cholesterol: calcConsumed((selectedFood as any).cholesterol),
-        sodium: calcConsumed((selectedFood as any).sodium),
-        carbs: calcConsumed(selectedFood.carbs),
-        fiber: calcConsumed(selectedFood.fiber),
-        sugar: calcConsumed(selectedFood.sugar),
-        protein: calcConsumed(selectedFood.protein),
+        calories: calcConsumed(selectedFood.calories) || 0, fat: calcConsumed(selectedFood.fat),
+        saturatedFat: calcConsumed(selectedFood.saturatedFat), transFat: calcConsumed((selectedFood as any).transFat),
+        cholesterol: calcConsumed((selectedFood as any).cholesterol), sodium: calcConsumed((selectedFood as any).sodium),
+        carbs: calcConsumed(selectedFood.carbs), fiber: calcConsumed(selectedFood.fiber),
+        sugar: calcConsumed(selectedFood.sugar), protein: calcConsumed(selectedFood.protein),
       };
 
-      const cleanConsumedNutrition = Object.fromEntries(
-        Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
-      ) as any;
+      const cleanConsumedNutrition = Object.fromEntries(Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)) as any;
 
       if (isVolumeSelected) {
         cleanConsumedNutrition.volume = finalAmount;
@@ -393,17 +499,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       setLoading(true);
 
       const payload = {
-        date: logDetails.date,
-        foodId: selectedFood.id,
-        food: selectedFood,
-        amount: finalAmount,
-        unit: finalUnit,
-        mealType: logDetails.mealType,
-        ...cleanConsumedNutrition,
+        date: logDetails.date, foodId: selectedFood.id, food: selectedFood,
+        amount: finalAmount, unit: finalUnit, mealType: logDetails.mealType, ...cleanConsumedNutrition,
       };
 
-      const cleanPayload = JSON.parse(JSON.stringify(payload));
-      await onAdd(cleanPayload);
+      await onAdd(JSON.parse(JSON.stringify(payload)));
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add food');
@@ -422,8 +522,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
 
     return (
-      // --- CHANGED TO list-view ---
-      <div className="previous-food-modal list-view">
+      <div className="previous-food-modal list-view" style={{ display: 'flex', flexDirection: 'column', maxHeight: '80dvh' }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexShrink: 0 }}>
@@ -439,7 +538,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           )}
         </div>
 
-        <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
+        <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', flexShrink: 0 }}>
           <input
             type="text"
             className="search-input"
@@ -453,15 +552,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
               type="button"
               onClick={onOpenScanner}
               style={{
-                background: '#f1f5f9',
-                border: '1px solid #cbd5e1',
-                borderRadius: '0.5rem',
-                padding: '0.65rem 0.75rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem'
+                background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem',
+                padding: '0.65rem 0.75rem', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem'
               }}
               title="Scan Barcode"
             >
@@ -470,9 +563,68 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           )}
         </div>
 
+{/* MULTI SELECT TOGGLE BAR */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0, padding: '0 0.25rem', minHeight: '38px' }}>
+          {isMultiSelectMode ? (
+            <>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#3b82f6' }}>{multiSelectedIds.size} selected</span>
+              
+              {/* Changed alignItems from 'stretch' to 'center' */}
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  style={{ 
+                    margin: 0, /* Forces removal of any hidden CSS margins */
+                    padding: '0 1rem', 
+                    fontSize: '0.85rem', 
+                    height: '38px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    boxSizing: 'border-box'
+                  }} 
+                  onClick={() => { setIsMultiSelectMode(false); setMultiSelectedIds(new Set()); }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  style={{ 
+                    margin: 0, /* Forces removal of any hidden CSS margins */
+                    padding: '0 1rem', 
+                    fontSize: '0.85rem', 
+                    height: '38px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    boxSizing: 'border-box'
+                  }} 
+                  onClick={handleBatchAdd} 
+                  disabled={loading || multiSelectedIds.size === 0}
+                >
+                  {loading ? 'Adding...' : 'Done'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <button 
+              className="btn btn-secondary btn-sm" 
+              onClick={() => setIsMultiSelectMode(true)}
+              style={{ 
+                width: '100%', height: '38px', fontSize: '0.9rem', margin: 0,
+                backgroundColor: '#f8fafc', borderColor: '#cbd5e1', color: '#475569',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                boxSizing: 'border-box'
+              }}
+            >
+              📋 Select Multiple
+            </button>
+          )}
+        </div>
+
         {error && <div className="error" style={{ flexShrink: 0 }}>{error}</div>}
 
-        <div className="food-list">
+        <div className="food-list" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
           {filteredFoods.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
               {isVitaminMode ? 'No vitamins found.' : 'No foods found.'}
@@ -480,37 +632,57 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           ) : (
             filteredFoods.map((food) => {
               const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+              const isSelected = multiSelectedIds.has(food.id);
 
               return (
                 <button
                   key={food.id}
                   className="food-option"
                   onClick={(e) => handleItemInteraction(e, food)}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', textAlign: 'left',
+                    ...(isMultiSelectMode && isSelected ? { borderColor: '#2563eb', backgroundColor: '#eff6ff', borderWidth: '2px' } : {})
+                  }}
                 >
-                  <div className="food-name">{food.name}</div>
-                  {food.brand && <div className="food-brand">{food.brand}</div>}
-                  <div className="food-serving">
-                    {food.servingSize} {food.servingUnit} - {food.calories} cal
-                  </div>
-                  
-                  {lastLog && (
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.35rem', fontWeight: 500 }}>
-                      Last logged: {lastLog.amount} {lastLog.unit}
+                  {isMultiSelectMode && (
+                    <div style={{ marginRight: '1rem', display: 'flex', alignItems: 'center' }}>
+                      <div style={{ 
+                        width: '24px', height: '24px', borderRadius: '6px', 
+                        border: `2px solid ${isSelected ? '#2563eb' : '#cbd5e1'}`, 
+                        backgroundColor: isSelected ? '#2563eb' : 'transparent',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s'
+                      }}>
+                        {isSelected && <span style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                      </div>
                     </div>
                   )}
+                  
+                  <div style={{ flex: 1 }}>
+                    <div className="food-name" style={{ marginBottom: '0.15rem' }}>{food.name}</div>
+                    {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem' }}>{food.brand}</div>}
+                    <div className="food-serving">
+                      {food.servingSize} {food.servingUnit} - {food.calories} cal
+                    </div>
+                    
+                    {lastLog && (
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.35rem', fontWeight: 500 }}>
+                        Last logged: {lastLog.amount} {lastLog.unit}
+                      </div>
+                    )}
+                  </div>
                 </button>
               );
             })
           )}
         </div>
         
-        {/* ADDED flexShrink: 0 */}
-        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '0 0 1rem 0', fontStyle: 'italic', flexShrink: 0 }}>
-          * Double-tap an item to permanently delete it from this list.
-        </p>
+        {!isMultiSelectMode && (
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', margin: '1rem 0', fontStyle: 'italic', flexShrink: 0 }}>
+            * Double-tap an item to permanently delete it from this list.
+          </p>
+        )}
 
-        {/* ADDED flexShrink: 0 */}
-        <div className="modal-actions" style={{ flexShrink: 0 }}>
+        <div className="modal-actions" style={{ flexShrink: 0, marginTop: isMultiSelectMode ? '1rem' : 0 }}>
           <button className="btn btn-secondary" onClick={onBack}>
             Close
           </button>
@@ -519,7 +691,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     );
   }
 
-  // The rest remains unchanged...
+  // Edit Label View
   if (isEditingNutrition) {
     return (
       <div className="previous-food-modal">
@@ -622,6 +794,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     );
   }
 
+  // Singular Detail View
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = (selectedVolIndex >= 0 && selectedFood.volumes) ? selectedFood.volumes[selectedVolIndex] : null;

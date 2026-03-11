@@ -1,7 +1,7 @@
 // src/components/CreateFoodModal.tsx
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { createFoodLog, createFood } from '../services/database';
+import { createFood, getUserFoods } from '../services/database';
 import { Food } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import './CreateFoodModal.css';
@@ -50,21 +50,44 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     volumeConsumed: '',
   });
   
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (error && topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [error]);
+
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  const handleScanSuccess = (code: string) => {
-    setIsScannerOpen(false);
-    
-    // Check if another food already uses this UPC
-    const isDuplicate = foods.some(f => f.upc === code);
-    
-    if (isDuplicate) {
-      setError(`This UPC (${code}) is already used by another item in your database.`);
-    } else {
-      setError('');
-      setFormData(prev => ({ ...prev, upc: code })); 
+const handleScanSuccess = async (code: string) => {
+    if (!user) return;
+
+    try {
+      // 1. Check the database to see if this UPC is already in use
+      const existingFoods = await getUserFoods(user.uid);
+      const isDuplicate = existingFoods.some(f => f.upc === code);
+
+      if (isDuplicate) {
+        // 2. If it exists, block it and show an error
+        setError('A food with this barcode already exists in your database!');
+        setStep('form'); 
+        return;
+      }
+
+      // 3. If it's a new barcode, input it into the form
+      setFormData(prev => ({ ...prev, upc: code }));
+      setError(''); // Clear any previous errors
+      setStep('form');
+
+    } catch (err) {
+      console.error("Failed to verify UPC:", err);
+      // Fallback: if the database check fails, just input the code
+      setFormData(prev => ({ ...prev, upc: code }));
+      setStep('form');
     }
   };
 
@@ -118,7 +141,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     e.preventDefault();
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
-    if (formData.upc.trim() && formData.upc.trim().length !== 12) { setError('UPC must be exactly 12 digits'); return; }
+    const upcLength = formData.upc.trim().length;
+    if (formData.upc.trim() && upcLength !== 8 && upcLength !== 12) { 
+      setError('UPC must be exactly 8 or 12 digits'); 
+      return; 
+    }
     
     // Duplicate UPC check before continuing
     if (formData.upc.trim() && foods.some(f => f.upc === formData.upc.trim())) { 
@@ -294,8 +321,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
 
-  return (
+return (
     <div className="create-food-modal">
+      <div ref={topRef} />
+      
       {step === 'form' ? (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>

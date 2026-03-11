@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts } from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood } from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -82,18 +82,17 @@ export default function FoodLogTab() {
   // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
 
-  // --- Independent Summary Toggle States ---
+// --- NEW: Independent Summary Toggle States ---
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
 
-  // Changed to default to false (show eaten/goal)
   const isShowingRemaining = (key: string) => {
-    return summaryToggles[key] ?? false;
+    return summaryToggles[key] ?? true; // <-- Make sure this is true
   };
 
   const toggleSummaryMode = (key: string) => {
     setSummaryToggles(prev => ({
       ...prev,
-      [key]: !(prev[key] ?? false)
+      [key]: !(prev[key] ?? true) // <-- Make sure this is true
     }));
   };
 
@@ -280,7 +279,31 @@ export default function FoodLogTab() {
   const handleEditLog = async (updates: any) => {
     if (!editingLog || !user) return;
     try {
+      // 1. Update the daily diary entry
       await updateFoodLog(user.uid, editingLog.id, updates);
+
+      // 2. NEW: Update the Master Food Database so your edits save for future use!
+      if (updates.food && updates.food.id) {
+        const baseFoodUpdates = {
+          name: updates.food.name,
+          brand: updates.food.brand,
+          calories: updates.food.calories,
+          fat: updates.food.fat,
+          saturatedFat: updates.food.saturatedFat,
+          transFat: updates.food.transFat,
+          cholesterol: updates.food.cholesterol,
+          sodium: updates.food.sodium,
+          carbs: updates.food.carbs,
+          fiber: updates.food.fiber,
+          sugar: updates.food.sugar,
+          protein: updates.food.protein,
+          volume: updates.food.volume,
+          volumeUnit: updates.food.volumeUnit
+        };
+        
+        await updateFood(updates.food.id, baseFoodUpdates);
+      }
+
       setShowEditModal(false);
       setEditingLog(null);
       await loadData();
