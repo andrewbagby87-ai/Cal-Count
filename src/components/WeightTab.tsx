@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllWeightLogs, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
 import './WeightTab.css';
@@ -68,6 +68,16 @@ export default function WeightTab() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // 1. Create the reference point for scrolling to the top
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // 2. Scroll to the reference point instantly when the tab loads
+  useEffect(() => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, []);
+
   const loadWeightLogs = async () => {
     if (!user) return;
     try {
@@ -131,16 +141,15 @@ export default function WeightTab() {
       const validHealthLogs = healthWeightLogs.filter(log => log.weight > 0);
       const combinedLogs = [...dbLogs, ...validHealthLogs].sort((a, b) => b.timestamp - a.timestamp);
       
-      // NEW: Deduplicate the combined logs
+      // Deduplicate the combined logs
       const seen = new Set();
       const uniqueLogs = combinedLogs.filter(log => {
-        // Create a unique identifier for this specific weight entry
         const uniqueKey = `${log.date}_${log.time}_${log.weight}`;
         if (seen.has(uniqueKey)) {
-          return false; // Skip it, we already added this exact entry
+          return false; 
         }
-        seen.add(uniqueKey); // Mark it as seen
-        return true; // Keep it
+        seen.add(uniqueKey); 
+        return true; 
       });
 
       setWeightLogs(uniqueLogs);
@@ -205,10 +214,21 @@ export default function WeightTab() {
     }
   };
 
-  if (loading) return <div className="loading">Loading weight history...</div>;
+  // Render the anchor even while loading so the scroll effect works instantly
+  if (loading) {
+    return (
+      <div className="weight-tab">
+        <div ref={topRef} />
+        <div className="loading" style={{ marginTop: '2rem' }}>Loading weight history...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="weight-tab">
+      {/* Invisible anchor point for auto-scrolling to the top */}
+      <div ref={topRef} />
+      
       <div className="tab-header">
         <h2>Weight Tracker</h2>
         <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>

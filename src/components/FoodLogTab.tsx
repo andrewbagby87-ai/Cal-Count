@@ -61,6 +61,16 @@ export default function FoodLogTab() {
   const [burnedCalories, setBurnedCalories] = useState(0);
   const [loading, setLoading] = useState(true);
   
+  // 1. Create the reference point for scrolling to the top
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // 2. Scroll to the reference point instantly when the tab loads
+  useEffect(() => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, []);
+  
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
@@ -82,17 +92,17 @@ export default function FoodLogTab() {
   // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
 
-// --- NEW: Independent Summary Toggle States ---
+  // --- Independent Summary Toggle States ---
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
 
   const isShowingRemaining = (key: string) => {
-    return summaryToggles[key] ?? true; // <-- Make sure this is true
+    return summaryToggles[key] ?? true; 
   };
 
   const toggleSummaryMode = (key: string) => {
     setSummaryToggles(prev => ({
       ...prev,
-      [key]: !(prev[key] ?? true) // <-- Make sure this is true
+      [key]: !(prev[key] ?? true) 
     }));
   };
 
@@ -118,6 +128,26 @@ export default function FoodLogTab() {
   const viewStr = getDateString(viewDate);
   const todayStr = getDateString(new Date());
   const isToday = todayStr === viewStr;
+
+  // --- Done Logging Toggle State (Saved to LocalStorage) ---
+  const [doneLoggingDates, setDoneLoggingDates] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('calCount_doneLoggingDates');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const isDoneLogging = doneLoggingDates[viewStr] || false;
+  
+  const toggleDoneLogging = () => {
+    setDoneLoggingDates(prev => {
+      const nextState = { ...prev, [viewStr]: !prev[viewStr] };
+      localStorage.setItem('calCount_doneLoggingDates', JSON.stringify(nextState));
+      return nextState;
+    });
+  };
 
   const handlePrevDay = () => {
     const prev = new Date(viewDate);
@@ -282,7 +312,7 @@ export default function FoodLogTab() {
       // 1. Update the daily diary entry
       await updateFoodLog(user.uid, editingLog.id, updates);
 
-      // 2. NEW: Update the Master Food Database so your edits save for future use!
+      // 2. Update the Master Food Database so your edits save for future use!
       if (updates.food && updates.food.id) {
         const baseFoodUpdates = {
           name: updates.food.name,
@@ -436,7 +466,15 @@ export default function FoodLogTab() {
     }
   };
 
-  if (loading && foodLogs.length === 0) return <div className="loading">Loading foods...</div>;
+  if (loading && foodLogs.length === 0) {
+    return (
+      <div className="food-log-tab">
+        {/* Render the anchor even while loading so the scroll effect works instantly! */}
+        <div ref={topRef} />
+        <div className="loading" style={{ marginTop: '2rem' }}>Loading foods...</div>
+      </div>
+    );
+  }
 
   const adjustedBudget = (userProfile?.caloriesBudget || 0) + burnedCalories;
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
@@ -466,6 +504,9 @@ export default function FoodLogTab() {
 
   return (
     <div className="food-log-tab">
+      
+      {/* Invisible anchor point for auto-scrolling to the top */}
+      <div ref={topRef} />
       
       <div className="date-navigator">
         <button className="nav-btn" onClick={handlePrevDay}>←</button>
@@ -619,6 +660,24 @@ export default function FoodLogTab() {
         )}
       </div>
 
+      {/* DONE LOGGING TOGGLE */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+        <button
+          onClick={toggleDoneLogging}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            padding: '0.6rem 1.25rem', borderRadius: '2rem', border: 'none',
+            backgroundColor: isDoneLogging ? '#10b981' : '#f1f5f9',
+            color: isDoneLogging ? '#fff' : '#64748b',
+            fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer',
+            boxShadow: isDoneLogging ? '0 4px 6px -1px rgba(16, 185, 129, 0.3)' : 'none',
+            transition: 'all 0.2s ease-in-out'
+          }}
+        >
+          {isDoneLogging ? '✅ Done Logging' : 'Mark Day as Done'}
+        </button>
+      </div>
+
       <div className="daily-diary">
         {mealCategories.map(mealName => {
           const logsForMeal = foodLogs.filter((log: any) => {
@@ -713,24 +772,27 @@ export default function FoodLogTab() {
                 </div>
               )}
 
-              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
-                <button
-                  className="btn btn-primary"
-                  style={{
-                    width: '25%', 
-                    padding: '0.6rem 0', 
-                    fontSize: '1rem',
-                    ...(mealName === 'Vitamins' ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {})
-                  }}
-                  onClick={() => {
-                    setActiveAddMealType(mealName === 'Uncategorized' ? '' : mealName);
-                    setIsVitaminMode(mealName === 'Vitamins');
-                    setShowAddModal(true);
-                  }}
-                >
-                  + Add
-                </button>
-              </div>
+              {/* ONLY SHOW ADD BUTTON IF NOT DONE LOGGING */}
+              {!isDoneLogging && (
+                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{
+                      width: '25%', 
+                      padding: '0.6rem 0', 
+                      fontSize: '1rem',
+                      ...(mealName === 'Vitamins' ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {})
+                    }}
+                    onClick={() => {
+                      setActiveAddMealType(mealName === 'Uncategorized' ? '' : mealName);
+                      setIsVitaminMode(mealName === 'Vitamins');
+                      setShowAddModal(true);
+                    }}
+                  >
+                    + Add
+                  </button>
+                </div>
+              )}
 
             </div>
           );

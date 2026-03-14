@@ -310,8 +310,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       const cleanPayload = JSON.parse(JSON.stringify(payload));
       await createFoodLog(user.uid, cleanPayload);
 
-      if (onCreated) onCreated(foodObject);
-      onClose();
+      if (onCreated) {
+        onCreated(foodObject);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

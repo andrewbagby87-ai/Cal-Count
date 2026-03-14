@@ -122,7 +122,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   };
 
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, food: Food) => {
-    // If in multi-select mode, immediately toggle the item and skip everything else
     if (isMultiSelectMode) {
       setMultiSelectedIds(prev => {
         const next = new Set(prev);
@@ -310,7 +309,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }));
   };
 
-  // --- NEW BATCH ADD FUNCTION ---
   const handleBatchAdd = async () => {
     if (!user) return;
     if (multiSelectedIds.size === 0) {
@@ -392,11 +390,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         };
 
         const cleanPayload = JSON.parse(JSON.stringify(payload));
-        // Use createFoodLog directly so it doesn't try to close the modal early
         await createFoodLog(user.uid, cleanPayload);
       }
       
-      onClose(); // Triggers refresh in FoodLogTab
+      onClose(); 
     } catch (err) {
       console.error("Batch add failed:", err);
       setError(err instanceof Error ? err.message : 'Failed to add selected foods.');
@@ -522,7 +519,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
 
     return (
-      <div className="previous-food-modal list-view" style={{ display: 'flex', flexDirection: 'column', maxHeight: '80dvh' }}>
+      <div className="previous-food-modal list-view" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexShrink: 0 }}>
@@ -563,18 +560,16 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           )}
         </div>
 
-{/* MULTI SELECT TOGGLE BAR */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0, padding: '0 0.25rem', minHeight: '38px' }}>
           {isMultiSelectMode ? (
             <>
               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#3b82f6' }}>{multiSelectedIds.size} selected</span>
               
-              {/* Changed alignItems from 'stretch' to 'center' */}
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button 
                   className="btn btn-secondary btn-sm" 
                   style={{ 
-                    margin: 0, /* Forces removal of any hidden CSS margins */
+                    margin: 0, 
                     padding: '0 1rem', 
                     fontSize: '0.85rem', 
                     height: '38px', 
@@ -590,7 +585,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 <button 
                   className="btn btn-primary btn-sm" 
                   style={{ 
-                    margin: 0, /* Forces removal of any hidden CSS margins */
+                    margin: 0, 
                     padding: '0 1rem', 
                     fontSize: '0.85rem', 
                     height: '38px', 
@@ -691,10 +686,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     );
   }
 
-  // Edit Label View
   if (isEditingNutrition) {
     return (
-      <div className="previous-food-modal">
+      <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Edit Nutrition Label</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
           Update the base nutrition for this entry.
@@ -794,14 +788,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     );
   }
 
-  // Singular Detail View
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = (selectedVolIndex >= 0 && selectedFood.volumes) ? selectedFood.volumes[selectedVolIndex] : null;
   const hasVolumes = selectedFood.volumes && selectedFood.volumes.length > 0;
 
   return (
-    <div className="previous-food-modal">
+    <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Log Details</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>

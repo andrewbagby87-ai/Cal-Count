@@ -1,5 +1,5 @@
 // src/components/DailyStatsTab.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
@@ -161,6 +161,17 @@ export default function DailyStatsTab() {
   const [loading, setLoading] = useState(true);
   
   const [showCalRemaining, setShowCalRemaining] = useState(false);
+  const [streak, setStreak] = useState(0);
+
+  // 1. Create the reference point for scrolling to the top
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // 2. Scroll to the reference point instantly when the tab loads
+  useEffect(() => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, []);
 
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -206,6 +217,41 @@ export default function DailyStatsTab() {
       setViewDate(targetDate);
     }
   };
+
+  // --- Calculate Streak ---
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('calCount_doneLoggingDates');
+      if (saved) {
+        const doneDates = JSON.parse(saved);
+        let currentStreak = 0;
+        const today = new Date();
+        const todayStr = getDateString(today);
+        
+        // 1. Check if today is marked done
+        if (doneDates[todayStr]) {
+           currentStreak++;
+        }
+        
+        // 2. Count backward from yesterday
+        let checkDate = new Date(today);
+        checkDate.setDate(checkDate.getDate() - 1);
+        
+        while (true) {
+          const checkStr = getDateString(checkDate);
+          if (doneDates[checkStr]) {
+            currentStreak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break; // Streak broken!
+          }
+        }
+        setStreak(currentStreak);
+      }
+    } catch (e) {
+      console.error("Failed to parse streak", e);
+    }
+  }, [viewDate]); 
 
   useEffect(() => {
     const loadNavigatorStats = async () => {
@@ -379,6 +425,10 @@ export default function DailyStatsTab() {
 
   return (
     <div className="daily-stats">
+      
+      {/* Invisible anchor point for auto-scrolling to the top */}
+      <div ref={topRef} />
+      
       <div className="date-navigator">
         <button className="nav-btn" onClick={handlePrevDay}>←</button>
         <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
@@ -448,8 +498,26 @@ export default function DailyStatsTab() {
         <div className="loading">Loading stats...</div>
       ) : (
         <>
+          {/* Streak Banner */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', marginTop: viewMode === 'none' ? '1rem' : '0' }}>
+            <div style={{ 
+              background: streak > 0 ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' : '#f1f5f9', 
+              color: streak > 0 ? 'white' : '#64748b', 
+              padding: '0.6rem 1.5rem', 
+              borderRadius: '2rem',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              boxShadow: streak > 0 ? '0 4px 6px -1px rgba(234, 88, 12, 0.3)' : 'none',
+              transition: 'all 0.3s ease'
+            }}>
+              {streak > 0 ? '🔥' : '⏳'} {streak} Day Streak
+            </div>
+          </div>
+
           <div className="stats-card">
-            
             <div className="stat-item hero-stat" onClick={() => setShowCalRemaining(!showCalRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
               <div className="stat-header-row">
                 <span className="stat-label">Calories</span>
