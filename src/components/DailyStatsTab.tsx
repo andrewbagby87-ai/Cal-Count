@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts } from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -218,12 +218,12 @@ export default function DailyStatsTab() {
     }
   };
 
-  // --- Calculate Streak ---
+  // --- Calculate Streak from Firebase ---
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('calCount_doneLoggingDates');
-      if (saved) {
-        const doneDates = JSON.parse(saved);
+    const fetchStreak = async () => {
+      if (!user) return;
+      try {
+        const doneDates = await getDoneLoggingDates(user.uid);
         let currentStreak = 0;
         const today = new Date();
         const todayStr = getDateString(today);
@@ -247,11 +247,13 @@ export default function DailyStatsTab() {
           }
         }
         setStreak(currentStreak);
+      } catch (e) {
+        console.error("Failed to fetch streak", e);
       }
-    } catch (e) {
-      console.error("Failed to parse streak", e);
-    }
-  }, [viewDate]); 
+    };
+
+    fetchStreak();
+  }, [user, viewDate]); 
 
   useEffect(() => {
     const loadNavigatorStats = async () => {

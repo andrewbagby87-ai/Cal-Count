@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood } from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate } from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -129,24 +129,32 @@ export default function FoodLogTab() {
   const todayStr = getDateString(new Date());
   const isToday = todayStr === viewStr;
 
-  // --- Done Logging Toggle State (Saved to LocalStorage) ---
-  const [doneLoggingDates, setDoneLoggingDates] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem('calCount_doneLoggingDates');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  // --- Firebase Synced Done Logging State ---
+  const [doneLoggingDates, setDoneLoggingDates] = useState<Record<string, boolean>>({});
 
   const isDoneLogging = doneLoggingDates[viewStr] || false;
   
-  const toggleDoneLogging = () => {
-    setDoneLoggingDates(prev => {
-      const nextState = { ...prev, [viewStr]: !prev[viewStr] };
-      localStorage.setItem('calCount_doneLoggingDates', JSON.stringify(nextState));
-      return nextState;
-    });
+  const toggleDoneLogging = async () => {
+    if (!user) return;
+    const nextState = !isDoneLogging;
+
+    // Optimistic update for instant UI feedback
+    setDoneLoggingDates(prev => ({
+      ...prev,
+      [viewStr]: nextState
+    }));
+
+    // Save to Firebase
+    try {
+      await toggleDoneLoggingDate(user.uid, viewStr, nextState);
+    } catch (error) {
+      console.error("Failed to sync done state to Firebase", error);
+      // Optional: revert state if it fails
+      setDoneLoggingDates(prev => ({
+        ...prev,
+        [viewStr]: !nextState
+      }));
+    }
   };
 
   const handlePrevDay = () => {
@@ -192,16 +200,20 @@ export default function FoodLogTab() {
     setLoading(true);
     try {
       const dateStr = getDateString(viewDate);
-      const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts] = await Promise.all([
+      
+      // Fetch foods, workouts, and the done dates from Firebase simultaneously
+      const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
         getUserFoods(user.uid),
         getDayFoodLogs(user.uid, dateStr),
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
+        getDoneLoggingDates(user.uid).catch(() => ({}))
       ]);
       
       setFoods(userFoods);
       setFoodLogs(logs);
+      setDoneLoggingDates(firebaseDoneDates);
 
       const todaysSyncedWorkouts = syncedWorkouts.filter((w: any) => {
         const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
@@ -469,7 +481,6 @@ export default function FoodLogTab() {
   if (loading && foodLogs.length === 0) {
     return (
       <div className="food-log-tab">
-        {/* Render the anchor even while loading so the scroll effect works instantly! */}
         <div ref={topRef} />
         <div className="loading" style={{ marginTop: '2rem' }}>Loading foods...</div>
       </div>
@@ -605,7 +616,6 @@ export default function FoodLogTab() {
         
         {userProfile?.caloriesBudget && (
           <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
-            {/* CHANGED TO GREEN IF UNDER, RED IF OVER */}
             <div 
               className="progress-fill" 
               style={{ 
@@ -674,7 +684,7 @@ export default function FoodLogTab() {
             transition: 'all 0.2s ease-in-out'
           }}
         >
-          {isDoneLogging ? '✅ Done Logging' : 'Mark Day as Done'}
+          {isDoneLogging ? '✅ Done Logging' : '🔲 Mark Day as Done'}
         </button>
       </div>
 

@@ -543,3 +543,33 @@ export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ig
     throw error;
   }
 };
+
+// --- Done Logging & Streak Operations ---
+export async function getDoneLoggingDates(userId: string): Promise<Record<string, boolean>> {
+  try {
+    const docRef = doc(db, 'users', userId);
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data().doneLoggingDates) {
+      return snap.data().doneLoggingDates;
+    }
+    return {};
+  } catch (e) {
+    console.error("Error fetching done logging dates:", e);
+    return {};
+  }
+}
+
+export async function toggleDoneLoggingDate(userId: string, dateStr: string, isDone: boolean) {
+  try {
+    const docRef = doc(db, 'users', userId);
+    // Use merge: true to update just this specific date without erasing the user's other profile data
+    await setDoc(docRef, {
+      doneLoggingDates: {
+        [dateStr]: isDone
+      }
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error toggling done logging date:", error);
+    throw error;
+  }
+}
