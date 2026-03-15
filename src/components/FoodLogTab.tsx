@@ -329,6 +329,7 @@ export default function FoodLogTab() {
         const baseFoodUpdates = {
           name: updates.food.name,
           brand: updates.food.brand,
+          icon: updates.food.icon, 
           calories: updates.food.calories,
           fat: updates.food.fat,
           saturatedFat: updates.food.saturatedFat,
@@ -343,7 +344,12 @@ export default function FoodLogTab() {
           volumeUnit: updates.food.volumeUnit
         };
         
-        await updateFood(updates.food.id, baseFoodUpdates);
+        // FIX: Strip out 'undefined' values before sending to Firebase
+        const cleanBaseFoodUpdates = Object.fromEntries(
+          Object.entries(baseFoodUpdates).filter(([_, v]) => v !== undefined)
+        );
+        
+        await updateFood(updates.food.id, cleanBaseFoodUpdates);
       }
 
       setShowEditModal(false);
@@ -684,7 +690,11 @@ export default function FoodLogTab() {
             transition: 'all 0.2s ease-in-out'
           }}
         >
-          {isDoneLogging ? '✅ Done Logging' : '🔲 Mark Day as Done'}
+          {isDoneLogging ? (
+            <>🔥 Done Logging</>
+          ) : (
+            <><span style={{ filter: 'grayscale(100%)', opacity: 0.6 }}>🔥</span> Mark Day as Done</>
+          )}
         </button>
       </div>
 
@@ -767,8 +777,13 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              <h4>{log.food.name}</h4>
-                              {log.food.brand && <span className="brand">{log.food.brand}</span>}
+                              {/* ADD textTransform: 'capitalize' HERE */}
+                              <h4 style={{ textTransform: 'capitalize' }}>
+                                {log.food.icon && <span style={{ marginRight: '0.3rem' }}>{log.food.icon}</span>}
+                                {log.food.name}
+                              </h4>
+                              {/* AND HERE */}
+                              {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
                               <span className="amount">{log.amount} {log.unit}</span>
                             </div>
                           </div>
@@ -818,8 +833,13 @@ export default function FoodLogTab() {
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
             <div className="selected-log-header">
               <div>
-                <h3 style={{ margin: 0, color: '#1e293b' }}>{selectedLog.food.name}</h3>
-                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{selectedLog.food.brand}</span>}
+                {/* ADD textTransform: 'capitalize' HERE */}
+                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize' }}>
+                  {selectedLog.food.icon && <span style={{ marginRight: '0.4rem' }}>{selectedLog.food.icon}</span>}
+                  {selectedLog.food.name}
+                </h3>
+                {/* AND HERE */}
+                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{selectedLog.food.brand}</span>}
               </div>
               <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>
                 {selectedLog.amount} {selectedLog.unit}
@@ -871,9 +891,19 @@ export default function FoodLogTab() {
               </div>
             </div>
 
-            <div className="selected-log-actions">
+            <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
               <button 
-                className="btn btn-secondary" 
+                className="btn btn-primary" 
+                style={{ 
+                  flex: '1 1 0', 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  fontSize: '1rem', 
+                  padding: '0.75rem',
+                  margin: 0,
+                  boxSizing: 'border-box'
+                }}
                 onClick={() => {
                   if ((selectedLog.food as any).isRecipe) {
                     setEditingRecipeLog(selectedLog);
@@ -888,10 +918,20 @@ export default function FoodLogTab() {
                 ✏️ Edit
               </button>
               <button 
-                className="btn btn-danger" 
-                onClick={() => handleDeleteLog(selectedLog.id)}
+                className="btn btn-secondary" 
+                style={{ 
+                  flex: '1 1 0', 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  fontSize: '1rem', 
+                  padding: '0.75rem',
+                  margin: 0,
+                  boxSizing: 'border-box'
+                }}
+                onClick={() => setSelectedLog(null)}
               >
-                🗑️ Delete
+                Cancel
               </button>
             </div>
           </div>

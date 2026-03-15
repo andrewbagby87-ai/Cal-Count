@@ -48,6 +48,7 @@ export interface Food {
   userId: string;
   name: string;
   brand?: string;
+  icon?: string;
   upc?: string;
   calories: number;
   protein?: number;

@@ -1,8 +1,9 @@
 // src/components/AddPreviousFoodModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import { Food, FoodLog } from '../types';
-import { deleteFood, getAllFoodLogs, updateFood, createFoodLog } from '../services/database';
+import { deleteFood, getAllFoodLogs, updateFood, createFoodLog, updateAllPastLogsForFood } from '../services/database';
 import { useAuth } from '../contexts/AuthContext';
+import BarcodeScanner from './BarcodeScanner';
 import './AddPreviousFoodModal.css';
 
 interface Props {
@@ -23,6 +24,29 @@ interface Props {
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
+const FOOD_ICONS = [
+  { icon: '🍎', title: 'Apple' }, { icon: '🥑', title: 'Avocado' }, { icon: '🥓', title: 'Bacon' },
+  { icon: '🥯', title: 'Bagel' }, { icon: '🍌', title: 'Banana' }, { icon: '🫐', title: 'Blueberries' },
+  { icon: '🍞', title: 'Bread' }, { icon: '🥦', title: 'Broccoli' }, { icon: '🍔', title: 'Burger' },
+  { icon: '🌯', title: 'Burrito' }, { icon: '🍰', title: 'Cake' }, { icon: '🍬', title: 'Candy' },
+  { icon: '🥕', title: 'Carrot' }, { icon: '🧀', title: 'Cheese' }, { icon: '🍒', title: 'Cherries' },
+  { icon: '🍗', title: 'Chicken' }, { icon: '🍫', title: 'Chocolate' }, { icon: '☕', title: 'Coffee' },
+  { icon: '🍪', title: 'Cookie' }, { icon: '🌽', title: 'Corn' }, { icon: '🥐', title: 'Croissant' },
+  { icon: '🥒', title: 'Cucumber' }, { icon: '🍩', title: 'Donut' }, { icon: '🥚', title: 'Egg' },
+  { icon: '🍆', title: 'Eggplant' }, { icon: '🍟', title: 'Fries' }, { icon: '🍇', title: 'Grapes' },
+  { icon: '🌭', title: 'Hot Dog' }, { icon: '🍦', title: 'Ice Cream' }, { icon: '🥝', title: 'Kiwi' },
+  { icon: '🍋', title: 'Lemon' }, { icon: '🥛', title: 'Milk' }, { icon: '🍄', title: 'Mushroom' },
+  { icon: '🧅', title: 'Onion' }, { icon: '🍊', title: 'Orange' }, { icon: '🥞', title: 'Pancakes' },
+  { icon: '🍝', title: 'Pasta' }, { icon: '🍑', title: 'Peach' }, { icon: '🥜', title: 'Peanuts' },
+  { icon: '🍐', title: 'Pear' }, { icon: '🥧', title: 'Pie' }, { icon: '🍍', title: 'Pineapple' },
+  { icon: '🍕', title: 'Pizza' }, { icon: '🍿', title: 'Popcorn' }, { icon: '🥔', title: 'Potato' },
+  { icon: '🥨', title: 'Pretzel' }, { icon: '🍚', title: 'Rice' }, { icon: '🥗', title: 'Salad' },
+  { icon: '🥪', title: 'Sandwich' }, { icon: '🥤', title: 'Soda / Drink' }, { icon: '🥣', title: 'Soup' },
+  { icon: '🥩', title: 'Steak / Meat' }, { icon: '🍓', title: 'Strawberry' }, { icon: '🍣', title: 'Sushi' },
+  { icon: '🌮', title: 'Taco' }, { icon: '🍅', title: 'Tomato' }, { icon: '💊', title: 'Vitamin / Supplement' },
+  { icon: '🧇', title: 'Waffle' }, { icon: '🍉', title: 'Watermelon' }, { icon: '🍷', title: 'Wine / Alcohol' }
+].sort((a, b) => a.title.localeCompare(b.title));
+
 const getLocalTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -39,7 +63,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- NEW MULTI-SELECT STATE ---
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
@@ -100,14 +123,30 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   });
 
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
+  const [pendingFoodUpdate, setPendingFoodUpdate] = useState<Food | null>(null); 
   const [editFormData, setEditFormData] = useState({
-    name: '', brand: '', calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
+    name: '', brand: '', icon: '', upc: '', calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
     carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
     labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [iconSearch, setIconSearch] = useState('');
+  const iconPickerRef = useRef<HTMLDivElement>(null);
+  const [isEditScannerOpen, setIsEditScannerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (iconPickerRef.current && !iconPickerRef.current.contains(event.target as Node)) {
+        setShowIconPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (initialDate) setLogDetails(prev => ({ ...prev, date: initialDate }));
@@ -191,6 +230,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setEditFormData({
       name: selectedFood.name || '',
       brand: selectedFood.brand || '',
+      icon: selectedFood.icon || '',
+      upc: (selectedFood as any).upc || '',
       calories: selectedFood.calories?.toString() || '',
       fat: selectedFood.fat?.toString() || '',
       saturatedFat: selectedFood.saturatedFat?.toString() || '',
@@ -202,7 +243,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       sugar: selectedFood.sugar?.toString() || '',
       protein: selectedFood.protein?.toString() || '',
       labelServings: selectedFood.servingSize?.toString() || '1',
-      labelVolumes: selectedFood.volumes?.length 
+      labelVolumes: (selectedFood.volumes && selectedFood.volumes.length > 0)
         ? selectedFood.volumes.map(v => ({ amount: v.amount?.toString() || '', unit: v.unit })) 
         : [{ amount: '', unit: 'g' }]
     });
@@ -211,7 +252,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name !== 'name' && name !== 'brand') {
+    if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
+    if (name === 'upc' && value.length > 12) return; 
+    if (name !== 'name' && name !== 'brand' && name !== 'upc' && name !== 'icon') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setEditFormData(prev => ({ ...prev, [name]: value }));
@@ -246,7 +289,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
   };
 
-  const handleSaveNutrition = async (e: React.FormEvent) => {
+  const handleSaveNutrition = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFood) return;
 
@@ -267,6 +310,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       ...selectedFood,
       name: editFormData.name.trim() || selectedFood.name,
       brand: editFormData.brand.trim() || selectedFood.brand,
+      icon: editFormData.icon.trim() || undefined,
+      upc: editFormData.upc.trim() || undefined,
       calories: safeParse(editFormData.calories) || 0,
       fat: safeParse(editFormData.fat),
       saturatedFat: safeParse(editFormData.saturatedFat),
@@ -281,32 +326,44 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       volumes: validVolumes.length > 0 ? validVolumes : undefined,
     };
 
+    setPendingFoodUpdate(updatedFood);
+  };
+
+  const finalizeSaveNutrition = async (updatePast: boolean) => {
+    if (!selectedFood || !pendingFoodUpdate) return;
+
     try {
       setLoading(true);
       const cleanFirebasePayload = Object.fromEntries(
-        Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
+        Object.entries(pendingFoodUpdate).filter(([_, v]) => v !== undefined)
       );
+      
       await updateFood(selectedFood.id, cleanFirebasePayload);
-      setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
+      
+      if (updatePast && user) {
+        await updateAllPastLogsForFood(user.uid, selectedFood.id, pendingFoodUpdate);
+        const newLogs = await getAllFoodLogs(user.uid);
+        setAllLogs(newLogs);
+      }
+
+      setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? pendingFoodUpdate : f));
+      setSelectedFood(pendingFoodUpdate);
+      setIsEditingNutrition(false);
+      setError('');
+      
+      setLogDetails(prev => ({
+        ...prev,
+        consumptionMethod: 'serving',
+        servingsConsumed: '1',
+        volumeConsumed: ''
+      }));
     } catch (err) {
       console.error("Failed to update food label:", err);
       setError("Failed to save changes to database.");
-      setLoading(false);
-      return;
     } finally {
       setLoading(false);
+      setPendingFoodUpdate(null);
     }
-
-    setSelectedFood(updatedFood);
-    setIsEditingNutrition(false);
-    setError('');
-    
-    setLogDetails(prev => ({
-      ...prev,
-      consumptionMethod: 'serving',
-      servingsConsumed: '1',
-      volumeConsumed: ''
-    }));
   };
 
   const handleBatchAdd = async () => {
@@ -509,6 +566,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }
   };
 
+  const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
+
   if (!selectedFood) {
     const filteredFoods = localFoods.filter(food => {
       const searchLower = searchTerm.toLowerCase();
@@ -569,14 +628,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 <button 
                   className="btn btn-secondary btn-sm" 
                   style={{ 
-                    margin: 0, 
-                    padding: '0 1rem', 
-                    fontSize: '0.85rem', 
-                    height: '38px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    boxSizing: 'border-box'
+                    margin: 0, padding: '0 1rem', fontSize: '0.85rem', height: '38px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box'
                   }} 
                   onClick={() => { setIsMultiSelectMode(false); setMultiSelectedIds(new Set()); }}
                 >
@@ -585,14 +638,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 <button 
                   className="btn btn-primary btn-sm" 
                   style={{ 
-                    margin: 0, 
-                    padding: '0 1rem', 
-                    fontSize: '0.85rem', 
-                    height: '38px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    boxSizing: 'border-box'
+                    margin: 0, padding: '0 1rem', fontSize: '0.85rem', height: '38px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box'
                   }} 
                   onClick={handleBatchAdd} 
                   disabled={loading || multiSelectedIds.size === 0}
@@ -608,8 +655,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
               style={{ 
                 width: '100%', height: '38px', fontSize: '0.9rem', margin: 0,
                 backgroundColor: '#f8fafc', borderColor: '#cbd5e1', color: '#475569',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                boxSizing: 'border-box'
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxSizing: 'border-box'
               }}
             >
               📋 Select Multiple
@@ -653,8 +699,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                   )}
                   
                   <div style={{ flex: 1 }}>
-                    <div className="food-name" style={{ marginBottom: '0.15rem' }}>{food.name}</div>
-                    {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem' }}>{food.brand}</div>}
+                    <div className="food-name" style={{ marginBottom: '0.15rem', textTransform: 'capitalize' }}>
+                      {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
+                      {food.name}
+                    </div>
+                    {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', textTransform: 'capitalize' }}>{food.brand}</div>}
                     <div className="food-serving">
                       {food.servingSize} {food.servingUnit} - {food.calories} cal
                     </div>
@@ -688,7 +737,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   if (isEditingNutrition) {
     return (
-      <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Edit Nutrition Label</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
           Update the base nutrition for this entry.
@@ -699,19 +748,65 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         <form onSubmit={handleSaveNutrition}>
           <div className="form-group">
             <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
-            <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} placeholder={isVitaminMode ? "e.g., Vitamin C" : "e.g., Grilled Chicken Breast"} required />
+            <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} required />
           </div>
 
           <div className="form-group">
             <label htmlFor="brand">Brand (Optional)</label>
-            <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} placeholder="e.g., Nature Made" />
+            <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} />
+          </div>
+
+          <div className="form-group" style={{ position: 'relative' }} ref={iconPickerRef}>
+            <label htmlFor="icon">Icon / Emoji (Optional)</label>
+            <div 
+              onClick={() => setShowIconPicker(!showIconPicker)}
+              style={{ 
+                padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', color: editFormData.icon ? '#000' : '#94a3b8'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {editFormData.icon ? (
+                  <><span style={{ fontSize: '1.2rem' }}>{editFormData.icon}</span><span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span></>
+                ) : "Select an Icon..."}
+              </div>
+              <span>▼</span>
+            </div>
+
+            {showIconPicker && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff',
+                border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                maxHeight: '250px', display: 'flex', flexDirection: 'column'
+              }}>
+                <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
+                  <input type="text" placeholder="Search icons..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ width: '100%', padding: '0.5rem', margin: 0, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  <div onClick={() => { setEditFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
+                  {filteredIcons.map(item => (
+                    <div key={item.title} onClick={() => { setEditFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: editFormData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
+                      <span style={{ fontSize: '1.4rem' }}>{item.icon}</span><span>{item.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="upc">UPC / Barcode (Optional)</label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
+              <input id="upc" type="text" name="upc" value={editFormData.upc} onChange={handleEditChange} style={{ flex: 1, margin: 0 }} />
+              <button type="button" className="btn btn-secondary" onClick={() => setIsEditScannerOpen(true)} style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}>📷</button>
+            </div>
           </div>
 
           <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
           <div className="form-group">
             <label htmlFor="labelServings">Number of Servings on Label *</label>
-            <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} placeholder="1" required />
+            <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} required />
           </div>
 
           <div className="form-group">
@@ -719,14 +814,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             {editFormData.labelVolumes.map((vol, index) => {
               const usedUnits = editFormData.labelVolumes.map(v => v.unit);
               return (
-                <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     inputMode="decimal"
                     style={{ flex: 1 }}
                     value={vol.amount}
                     onChange={(e) => handleEditVolumeChange(index, 'amount', e.target.value)}
-                    placeholder="e.g., 100"
                   />
                   <select
                     style={{ width: 'auto', padding: '0.75rem' }}
@@ -740,50 +834,89 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                     <option value="each" disabled={usedUnits.includes('each') && vol.unit !== 'each'}>Each</option>
                   </select>
                   {editFormData.labelVolumes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeEditVolume(index)}
-                      style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}
-                    >
-                      X
-                    </button>
+                    <button type="button" onClick={() => removeEditVolume(index)} style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}>X</button>
                   )}
                 </div>
               );
             })}
             {editFormData.labelVolumes.length < ALL_UNITS.length && (
-              <button 
-                type="button" 
-                onClick={addEditVolume}
-                style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}
-              >
-                + Add Another Option
-              </button>
+              <button type="button" onClick={addEditVolume} style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}>+ Add Another Option</button>
             )}
           </div>
 
           <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
-          <div className="form-group">
-            <label htmlFor="calories">Calories (from label) *</label>
-            <input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} placeholder="0" required />
-          </div>
-
-          <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="cholesterol">Cholesterol (mg)</label><input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={editFormData.cholesterol} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="sodium">Sodium (mg)</label><input id="sodium" type="text" inputMode="decimal" name="sodium" value={editFormData.sodium} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="carbs">Carbs (g)</label><input id="carbs" type="text" inputMode="decimal" name="carbs" value={editFormData.carbs} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="fiber">Fiber (g)</label><input id="fiber" type="text" inputMode="decimal" name="fiber" value={editFormData.fiber} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="sugar">Sugar (g)</label><input id="sugar" type="text" inputMode="decimal" name="sugar" value={editFormData.sugar} onChange={handleEditChange} placeholder="0" /></div>
-          <div className="form-group"><label htmlFor="protein">Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={editFormData.protein} onChange={handleEditChange} placeholder="0" /></div>
+          <div className="form-group"><label htmlFor="calories">Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} required /></div>
+          <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="cholesterol">Cholesterol (mg)</label><input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={editFormData.cholesterol} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="sodium">Sodium (mg)</label><input id="sodium" type="text" inputMode="decimal" name="sodium" value={editFormData.sodium} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="carbs">Carbs (g)</label><input id="carbs" type="text" inputMode="decimal" name="carbs" value={editFormData.carbs} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="fiber">Fiber (g)</label><input id="fiber" type="text" inputMode="decimal" name="fiber" value={editFormData.fiber} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="sugar">Sugar (g)</label><input id="sugar" type="text" inputMode="decimal" name="sugar" value={editFormData.sugar} onChange={handleEditChange} /></div>
+          <div className="form-group"><label htmlFor="protein">Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={editFormData.protein} onChange={handleEditChange} /></div>
 
           <div className="form-actions" style={{ marginTop: '2rem' }}>
             <button type="submit" className="btn btn-primary">Save Changes</button>
             <button type="button" className="btn btn-secondary" onClick={() => setIsEditingNutrition(false)}>Cancel</button>
           </div>
         </form>
+
+{/* CUSTOM UPDATE PAST LOGS POPUP */}
+        {pendingFoodUpdate && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 9999, 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            padding: '1rem'
+          }}>
+            <div style={{ 
+              backgroundColor: '#fff', padding: '1.5rem', borderRadius: '0.75rem', 
+              maxWidth: '400px', width: '100%', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1e293b' }}>Update Past Logs?</h3>
+              <p style={{ color: '#475569', marginBottom: '1.5rem', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                Do you want to update all past logs of this food with the new nutrition information? <br/><br/>
+                If you click <strong>No</strong>, only future logs will use this new information.
+              </p>
+              
+              {/* BUTTONS CONTAINER */}
+              <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => finalizeSaveNutrition(false)} 
+                  disabled={loading} 
+                  style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
+                >
+                  No
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  onClick={() => finalizeSaveNutrition(true)} 
+                  disabled={loading} 
+                  style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
+                >
+                  {loading ? 'Saving...' : 'Yes'}
+                </button>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={() => setPendingFoodUpdate(null)} 
+                disabled={loading} 
+                style={{ width: '100%', marginTop: '0.75rem', padding: '0.5rem', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Cancel Edit
+              </button>
+            </div>
+          </div>
+        )}
+        {isEditScannerOpen && (
+          <BarcodeScanner onClose={() => setIsEditScannerOpen(false)} onScanSuccess={(code) => { setEditFormData(prev => ({ ...prev, upc: code })); setIsEditScannerOpen(false); }} />
+        )}
       </div>
     );
   }
@@ -798,9 +931,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       <div style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Log Details</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
-          When did you {isVitaminMode ? 'take' : 'eat'} <strong>{selectedFood.name}</strong>, and how much?
+          When did you {isVitaminMode ? 'take' : 'eat'} <strong style={{ textTransform: 'capitalize' }}>{selectedFood.name}</strong>, and how much?
         </p>
-        <button 
+        <button
           type="button" 
           className="btn btn-secondary btn-sm" 
           onClick={handleEditClick}
@@ -904,7 +1037,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         ) : (
           <div className="form-group">
             <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
-            <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 id="volumeConsumed"
                 type="text"
@@ -917,16 +1050,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 required
               />
               <span style={{ 
-                padding: '0.75rem 1rem', 
-                backgroundColor: '#f1f5f9', 
-                borderRadius: '0.5rem', 
-                border: '1px solid #cbd5e1', 
-                color: '#475569', 
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '3rem'
+                padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', 
+                border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', minWidth: '3rem'
               }}>
                 {selectedVol.unit}
               </span>
@@ -936,11 +1062,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
         {preview && (
           <div style={{ 
-            marginTop: '1.5rem', 
-            padding: '1.25rem', 
-            backgroundColor: '#f8fafc', 
-            borderRadius: '0.75rem', 
-            border: '1px solid #e2e8f0'
+            marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', 
+            borderRadius: '0.75rem', border: '1px solid #e2e8f0'
           }}>
             <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
               Nutrition Preview
@@ -960,24 +1083,18 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
               ].map((nutrient, idx) => (
                 <div key={idx} style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
-                  paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                  borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 9 ? '0.2rem' : '0'
                 }}>
                   <span style={{ 
-                     fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
-                     textTransform: 'uppercase', 
-                     color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                     fontWeight: nutrient.isHighlight ? 700 : 400,
+                     fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', 
+                     color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400,
                      paddingLeft: nutrient.indent ? '0.75rem' : '0'
                   }}>
                     {nutrient.label}
                   </span>
                   <span style={{ 
-                    fontWeight: 700, 
-                    color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                    fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
                     fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
                   }}>
                     {nutrient.value}
@@ -993,13 +1110,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Adding...' : 'Add to Log'}
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setSelectedFood(null); 
-            }}
-          >
+          <button type="button" className="btn btn-secondary" onClick={() => setSelectedFood(null)}>
             Back
           </button>
         </div>

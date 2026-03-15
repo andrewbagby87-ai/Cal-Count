@@ -287,6 +287,83 @@ export async function deleteFoodLog(userId: string, id: string) {
   }
 }
 
+// NEW FUNCTION: Batch update past logs for a specific food
+export async function updateAllPastLogsForFood(userId: string, foodId: string, updatedFood: Food) {
+  const docRef = doc(db, 'foodLogs', userId);
+  const docSnap = await getDoc(docRef);
+
+  if (!docSnap.exists()) return;
+
+  const data = docSnap.data();
+  let updated = false;
+
+  // FIX: Strip out 'undefined' values from the food object before saving to Firebase arrays
+  const cleanUpdatedFood = Object.fromEntries(
+    Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
+  ) as Food;
+
+  const recalculateLog = (log: any) => {
+    // Skip if it's not the food we are editing
+    if (log.foodId !== foodId && log.food?.id !== foodId) return log;
+    
+    updated = true;
+    let multiplier = 1;
+
+    // Recalculate multiplier based on the amounts eaten
+    if (log.unit === 'serving') {
+      multiplier = log.amount / (cleanUpdatedFood.servingSize || 1);
+    } else {
+      const vol = cleanUpdatedFood.volumes?.find(v => v.unit === log.unit);
+      if (vol && vol.amount) {
+        multiplier = log.amount / vol.amount;
+      } else {
+        multiplier = 0; // Fallback if the unit was deleted
+      }
+    }
+
+    const calcConsumed = (val: number | undefined) => {
+      if (val === undefined || isNaN(val)) return undefined;
+      return Number((val * multiplier).toFixed(2));
+    };
+
+    const consumedNutrition = {
+      calories: calcConsumed(cleanUpdatedFood.calories) || 0,
+      fat: calcConsumed(cleanUpdatedFood.fat),
+      saturatedFat: calcConsumed(cleanUpdatedFood.saturatedFat),
+      transFat: calcConsumed((cleanUpdatedFood as any).transFat),
+      cholesterol: calcConsumed((cleanUpdatedFood as any).cholesterol),
+      sodium: calcConsumed((cleanUpdatedFood as any).sodium),
+      carbs: calcConsumed(cleanUpdatedFood.carbs),
+      fiber: calcConsumed(cleanUpdatedFood.fiber),
+      sugar: calcConsumed(cleanUpdatedFood.sugar),
+      protein: calcConsumed(cleanUpdatedFood.protein),
+    };
+
+    const cleanConsumedNutrition = Object.fromEntries(
+      Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
+    ) as any;
+
+    return {
+      ...log,
+      food: cleanUpdatedFood, // USE THE CLEANED OBJECT HERE
+      ...cleanConsumedNutrition // Update calculated log macros
+    };
+  };
+
+  if (data.foodData) {
+    const newFoodData = data.foodData.map(recalculateLog);
+    if (updated) {
+      await updateDoc(docRef, { foodData: newFoodData });
+    }
+  } else if (data.logs) {
+    const newLogs = data.logs.map(recalculateLog);
+    if (updated) {
+      await updateDoc(docRef, { logs: newLogs });
+    }
+  }
+}
+
+
 // Workout Log Operations
 export async function createWorkoutLog(userId: string, workout: Omit<WorkoutLog, 'id' | 'userId' | 'timestamp'>) {
   const docRef = await addDoc(collection(db, 'workoutLogs'), {

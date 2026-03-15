@@ -20,6 +20,70 @@ interface Props {
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
+// Predefined list of food icons, sorted alphabetically
+const FOOD_ICONS = [
+  { icon: '🍎', title: 'Apple' },
+  { icon: '🥑', title: 'Avocado' },
+  { icon: '🥓', title: 'Bacon' },
+  { icon: '🥯', title: 'Bagel' },
+  { icon: '🍌', title: 'Banana' },
+  { icon: '🫐', title: 'Blueberries' },
+  { icon: '🍞', title: 'Bread' },
+  { icon: '🥦', title: 'Broccoli' },
+  { icon: '🍔', title: 'Burger' },
+  { icon: '🌯', title: 'Burrito' },
+  { icon: '🍰', title: 'Cake' },
+  { icon: '🍬', title: 'Candy' },
+  { icon: '🥕', title: 'Carrot' },
+  { icon: '🧀', title: 'Cheese' },
+  { icon: '🍒', title: 'Cherries' },
+  { icon: '🍗', title: 'Chicken' },
+  { icon: '🍫', title: 'Chocolate' },
+  { icon: '☕', title: 'Coffee' },
+  { icon: '🍪', title: 'Cookie' },
+  { icon: '🌽', title: 'Corn' },
+  { icon: '🥐', title: 'Croissant' },
+  { icon: '🥒', title: 'Cucumber' },
+  { icon: '🍩', title: 'Donut' },
+  { icon: '🥚', title: 'Egg' },
+  { icon: '🍆', title: 'Eggplant' },
+  { icon: '🍟', title: 'Fries' },
+  { icon: '🍇', title: 'Grapes' },
+  { icon: '🌭', title: 'Hot Dog' },
+  { icon: '🍦', title: 'Ice Cream' },
+  { icon: '🥝', title: 'Kiwi' },
+  { icon: '🍋', title: 'Lemon' },
+  { icon: '🥛', title: 'Milk' },
+  { icon: '🍄', title: 'Mushroom' },
+  { icon: '🧅', title: 'Onion' },
+  { icon: '🍊', title: 'Orange' },
+  { icon: '🥞', title: 'Pancakes' },
+  { icon: '🍝', title: 'Pasta' },
+  { icon: '🍑', title: 'Peach' },
+  { icon: '🥜', title: 'Peanuts' },
+  { icon: '🍐', title: 'Pear' },
+  { icon: '🥧', title: 'Pie' },
+  { icon: '🍍', title: 'Pineapple' },
+  { icon: '🍕', title: 'Pizza' },
+  { icon: '🍿', title: 'Popcorn' },
+  { icon: '🥔', title: 'Potato' },
+  { icon: '🥨', title: 'Pretzel' },
+  { icon: '🍚', title: 'Rice' },
+  { icon: '🥗', title: 'Salad' },
+  { icon: '🥪', title: 'Sandwich' },
+  { icon: '🥤', title: 'Soda / Drink' },
+  { icon: '🥣', title: 'Soup' },
+  { icon: '🥩', title: 'Steak / Meat' },
+  { icon: '🍓', title: 'Strawberry' },
+  { icon: '🍣', title: 'Sushi' },
+  { icon: '🌮', title: 'Taco' },
+  { icon: '🍅', title: 'Tomato' },
+  { icon: '💊', title: 'Vitamin / Supplement' },
+  { icon: '🧇', title: 'Waffle' },
+  { icon: '🍉', title: 'Watermelon' },
+  { icon: '🍷', title: 'Wine / Alcohol' }
+].sort((a, b) => a.title.localeCompare(b.title));
+
 export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType, foods = [] }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
@@ -27,6 +91,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
+    icon: '', 
     upc: initialUpc || '', 
     calories: '',
     fat: '',
@@ -54,6 +119,22 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [error, setError] = useState('');
   
   const topRef = useRef<HTMLDivElement>(null);
+  
+  // Custom Icon Picker State
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [iconSearch, setIconSearch] = useState('');
+  const iconPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close icon picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (iconPickerRef.current && !iconPickerRef.current.contains(event.target as Node)) {
+        setShowIconPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (error && topRef.current) {
@@ -67,27 +148,23 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     if (!user) return;
 
     try {
-      // 1. Check the database to see if this UPC is already in use
       const existingFoods = await getUserFoods(user.uid);
       const isDuplicate = existingFoods.some(f => f.upc === code);
 
       if (isDuplicate) {
-        // 2. If it exists, block it and show an error
         setError('A food with this barcode already exists in your database!');
-        setIsScannerOpen(false); // Close the scanner overlay
+        setIsScannerOpen(false); 
         return;
       }
 
-      // 3. If it's a new barcode, input it into the form
       setFormData(prev => ({ ...prev, upc: code }));
-      setError(''); // Clear any previous errors
-      setIsScannerOpen(false); // Close the scanner overlay
+      setError(''); 
+      setIsScannerOpen(false); 
 
     } catch (err) {
       console.error("Failed to verify UPC:", err);
-      // Fallback: if the database check fails, just input the code
       setFormData(prev => ({ ...prev, upc: code }));
-      setIsScannerOpen(false); // Close the scanner overlay
+      setIsScannerOpen(false); 
     }
   };
 
@@ -95,7 +172,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     const { name, value } = e.target;
     if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
     if (name === 'upc' && value.length > 12) return; 
-    if (name !== 'name' && name !== 'brand' && name !== 'upc' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
+    if (name !== 'name' && name !== 'brand' && name !== 'upc' && name !== 'icon' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -142,14 +219,12 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
     
-    // UPC Length validation: 8 or 12 digits
     const upcLength = formData.upc.trim().length;
     if (formData.upc.trim() && upcLength !== 8 && upcLength !== 12) { 
       setError('UPC must be exactly 8 or 12 digits'); 
       return; 
     }
     
-    // Duplicate UPC check before continuing
     if (formData.upc.trim() && foods.some(f => f.upc === formData.upc.trim())) { 
       setError('This UPC is already used by another item in your database.'); 
       return; 
@@ -236,6 +311,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       const baseNutrition: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
+        icon: formData.icon.trim() || undefined, 
         upc: formData.upc.trim() || undefined,
         calories: safeParse(formData.calories) || 0,
         fat: safeParse(formData.fat),
@@ -325,15 +401,16 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
+  
+  const filteredIcons = FOOD_ICONS.filter(item => 
+    item.title.toLowerCase().includes(iconSearch.toLowerCase())
+  );
 
   return (
-    // Mobile horizontal scrolling lock
     <div className="create-food-modal" style={{ overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
       
-      {/* Invisible anchor point for auto-scrolling to the top */}
       <div ref={topRef} />
       
-      {/* Global CSS injected to force all children to respect modal bounds */}
       <style>{`
         .create-food-modal * {
           box-sizing: border-box !important;
@@ -362,6 +439,96 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
             <div className="form-group">
               <label htmlFor="brand">Brand (Optional)</label>
               <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Nature Made" />
+            </div>
+
+            {/* CUSTOM ICON DROPDOWN */}
+            <div className="form-group" style={{ position: 'relative' }} ref={iconPickerRef}>
+              <label htmlFor="icon">Icon / Emoji (Optional)</label>
+              <div 
+                onClick={() => setShowIconPicker(!showIconPicker)}
+                style={{ 
+                  padding: '0.75rem', 
+                  border: '1px solid #cbd5e1', 
+                  borderRadius: '0.5rem', 
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#fff',
+                  color: formData.icon ? '#000' : '#94a3b8'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {formData.icon ? (
+                    <>
+                      <span style={{ fontSize: '1.2rem' }}>{formData.icon}</span>
+                      <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === formData.icon)?.title || 'Custom Icon'}</span>
+                    </>
+                  ) : (
+                    "Select an Icon..."
+                  )}
+                </div>
+                <span>▼</span>
+              </div>
+
+              {showIconPicker && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 10,
+                  backgroundColor: '#fff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '0.5rem',
+                  marginTop: '4px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  maxHeight: '250px',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Search icons..." 
+                      value={iconSearch}
+                      onChange={(e) => setIconSearch(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: '100%', padding: '0.5rem', margin: 0, boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ overflowY: 'auto', flex: 1 }}>
+                    <div 
+                      onClick={() => { setFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                    >
+                      ❌ None
+                    </div>
+                    {filteredIcons.map(item => (
+                      <div 
+                        key={item.title}
+                        onClick={() => { setFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }}
+                        style={{ 
+                          padding: '8px 12px', 
+                          cursor: 'pointer', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '12px',
+                          backgroundColor: formData.icon === item.icon ? '#f1f5f9' : 'transparent'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = formData.icon === item.icon ? '#f1f5f9' : 'transparent'}
+                      >
+                        <span style={{ fontSize: '1.4rem' }}>{item.icon}</span>
+                        <span>{item.title}</span>
+                      </div>
+                    ))}
+                    {filteredIcons.length === 0 && (
+                      <div style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>No icons found</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
