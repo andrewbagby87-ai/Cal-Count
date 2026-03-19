@@ -648,7 +648,14 @@ export default function FoodLogTab() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
-                    <span style={{ color: mDiff < 0 && isShowingRemaining(macro.label) ? '#ef4444' : '#64748b', fontWeight: 600, fontSize: '0.85rem' }}>
+                    
+                    <span style={{ 
+                      color: mDiff < 0 && isShowingRemaining(macro.label) 
+                        ? (macro.label === 'Protein' || macro.label === 'Fiber' ? '#10b981' : '#ef4444') 
+                        : '#64748b', 
+                      fontWeight: 600, 
+                      fontSize: '0.85rem' 
+                    }}>
                       {macro.budget ? (
                         isShowingRemaining(macro.label) ? (
                           `${Math.abs(mDiff)}${macro.unit} ${mDiff >= 0 ? 'left' : 'over'}`

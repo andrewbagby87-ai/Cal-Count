@@ -127,7 +127,7 @@ const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { 
         <div className="circle-inner-text">
           {showRemaining ? (
              <>
-               <span className="circle-val" style={{ color: isOver ? '#ef4444' : undefined, fontSize: isOver ? '1.1rem' : undefined }}>
+               <span className="circle-val" style={{ color: isOver ? (label === 'Protein' || label === 'Fiber' ? '#10b981' : '#ef4444') : undefined, fontSize: isOver ? '1.1rem' : undefined }}>
                  {Math.abs(diff)}<span style={{ fontSize: '0.75em', marginLeft: '1px' }}>{unit}</span>
                </span>
                <span className="circle-unit">{isOver ? 'over' : 'left'}</span>

@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Food, FoodLog } from '../types';
-import { createFood, updateFood, createFoodLog, updateFoodLog, updateAllPastLogsForFood } from '../services/database';
+import { createFood, updateFood, createFoodLog, updateFoodLog } from '../services/database';
 import CreateFoodModal from './CreateFoodModal';
 import BarcodeScanner from './BarcodeScanner';
 
@@ -84,6 +84,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   
   const [activeFood, setActiveFood] = useState<Food | null>(null);
   const [scannedUpc, setScannedUpc] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const [consumptionMethod, setConsumptionMethod] = useState('serving');
   const [servingsConsumed, setServingsConsumed] = useState('1');
@@ -94,12 +95,6 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   const [logServingsConsumed, setLogServingsConsumed] = useState(editLog?.amount?.toString() || '1');
   
   const [isLogging, setIsLogging] = useState(false);
-  
-  const [pendingRecipeUpdate, setPendingRecipeUpdate] = useState<{
-    type: 'recipe-only' | 'recipe-and-log-edit' | 'recipe-and-log-new';
-    baseNutrition: any;
-    logPayload?: any;
-  } | null>(null);
 
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
@@ -152,6 +147,24 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       recipeServings: totalRecipeServings,
       recipeIngredients: ingredients
     }));
+  };
+
+  const saveRecipeToDb = async (baseNutrition: any): Promise<string> => {
+    let targetFoodId = sourceFood?.id || '';
+    if (targetFoodId) {
+      try {
+        await updateFood(targetFoodId, baseNutrition);
+      } catch (updateErr: any) {
+        if (updateErr.code === 'not-found') {
+          targetFoodId = await createFood(user!.uid, baseNutrition);
+        } else {
+          throw updateErr;
+        }
+      }
+    } else {
+      targetFoodId = await createFood(user!.uid, baseNutrition);
+    }
+    return targetFoodId;
   };
 
   const getLogPayload = (targetFoodId: string, baseNutrition: any) => {
@@ -241,101 +254,67 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
-  // The submit action on the final log step
-  const handleFinalLog = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // ------------------------------------------ //
+  //  BUTTON ACTIONS: Save Updates vs Final Log //
+  // ------------------------------------------ //
+
+  // Used when clicking "Save Updates" from Previous Foods edit
+  const handleSaveUpdatesOnly = async () => {
     if (!user) return;
-    
-    const baseNutrition = getBaseNutrition();
-
-    if (isEditLogMode && sourceFood) {
-      // PATH A: Editing a log -> Show popup to save both the recipe & log changes
-      const payload = getLogPayload(sourceFood.id, baseNutrition);
-      setPendingRecipeUpdate({ type: 'recipe-and-log-edit', baseNutrition, logPayload: payload });
-    } 
-    else if (sourceFood && sourceFood.id) {
-      // PATH B: Editing from Previous Foods -> Recipe was already saved! Just log it.
-      setIsLogging(true);
-      try {
-        const payload = getLogPayload(sourceFood.id, baseNutrition);
-        await createFoodLog(user.uid, payload);
-        onCreated();
-        onClose();
-      } catch(err) {
-        console.error(err);
-        alert("Failed to log recipe.");
-      } finally {
-        setIsLogging(false);
-      }
-    } 
-    else {
-      // PATH C: Brand New Recipe -> Save everything immediately without popup
-      setIsLogging(true);
-      try {
-        const newFoodId = await createFood(user.uid, baseNutrition);
-        const payload = getLogPayload(newFoodId, baseNutrition);
-        await createFoodLog(user.uid, payload);
-        onCreated();
-        onClose();
-      } catch(err) {
-        console.error(err);
-        alert("Failed to save and log recipe.");
-      } finally {
-        setIsLogging(false);
-      }
-    }
-  };
-
-  // Executes after Yes/No is clicked
-  const executeRecipeUpdate = async (updatePast: boolean) => {
-    if (!pendingRecipeUpdate || !user || !sourceFood) return;
     setIsLogging(true);
-
     try {
-      const { type, baseNutrition, logPayload } = pendingRecipeUpdate;
-      let targetFoodId = sourceFood.id;
-
-      try {
-        await updateFood(targetFoodId, baseNutrition);
-      } catch (updateErr: any) {
-        if (updateErr.code === 'not-found') {
-          targetFoodId = await createFood(user.uid, baseNutrition);
-        } else {
-          throw updateErr;
-        }
-      }
-
-      const foodObject: Food = {
-        id: targetFoodId,
-        ...baseNutrition,
-        createdAt: (sourceFood as any)?.createdAt || Date.now()
-      };
-
-      if (updatePast) {
-        await updateAllPastLogsForFood(user.uid, targetFoodId, foodObject);
-      }
-
-      if (type === 'recipe-only') {
-        // Just save and close!
-        onCreated();
-        onClose();
-      } else if (type === 'recipe-and-log-new') {
-        // Transition to logging screen
-        setStep('final-log');
-      } else if (type === 'recipe-and-log-edit' && logPayload) {
-        // Update the log and close!
-        logPayload.foodId = targetFoodId;
-        logPayload.food.id = targetFoodId;
-        await updateFoodLog(user.uid, editLog!.id, logPayload);
-        onCreated();
-        onClose();
-      }
+      await saveRecipeToDb(getBaseNutrition());
+      onCreated();
+      onClose();
     } catch (err) {
       console.error(err);
       alert("Failed to save recipe updates.");
     } finally {
       setIsLogging(false);
-      setPendingRecipeUpdate(null);
+    }
+  };
+
+  // Used when clicking "Save & Log" from Previous Foods edit
+  const handleSaveAndAdvanceToLog = async () => {
+    if (!user) return;
+    setIsLogging(true);
+    try {
+      await saveRecipeToDb(getBaseNutrition());
+      setStep('final-log');
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save recipe.");
+    } finally {
+      setIsLogging(false);
+    }
+  };
+
+  // Used for ALL final logging actions
+  const handleFinalLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsLogging(true);
+    
+    try {
+      const baseNutrition = getBaseNutrition();
+      const targetFoodId = await saveRecipeToDb(baseNutrition);
+      const payload = getLogPayload(targetFoodId, baseNutrition);
+
+      if (isEditLogMode && editLog) {
+        payload.foodId = targetFoodId;
+        payload.food.id = targetFoodId;
+        await updateFoodLog(user.uid, editLog.id, payload);
+      } else {
+        await createFoodLog(user.uid, payload);
+      }
+      
+      onCreated();
+      onClose();
+    } catch(err) {
+      console.error(err);
+      alert("Failed to save and log recipe.");
+    } finally {
+      setIsLogging(false);
     }
   };
 
@@ -527,31 +506,25 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button 
                     type="button"
-                    disabled={ingredients.length === 0 || !recipeName.trim()} 
-                    onClick={() => {
-                      const base = getBaseNutrition();
-                      setPendingRecipeUpdate({ type: 'recipe-only', baseNutrition: base });
-                    }}
+                    disabled={ingredients.length === 0 || !recipeName.trim() || isLogging} 
+                    onClick={handleSaveUpdatesOnly}
                     style={{ flex: '1 1 0', padding: '1rem', backgroundColor: '#f8fafc', color: '#2563eb', border: '2px solid #2563eb', borderRadius: '0.5rem', fontWeight: 'bold', fontSize: '1rem', cursor: (ingredients.length === 0 || !recipeName.trim()) ? 'not-allowed' : 'pointer', opacity: (ingredients.length === 0 || !recipeName.trim()) ? 0.5 : 1 }}
                   >
-                    Save Updates
+                    {isLogging ? 'Saving...' : 'Save Updates'}
                   </button>
                   <button 
                     type="button"
-                    disabled={ingredients.length === 0 || !recipeName.trim()} 
-                    onClick={() => {
-                      const base = getBaseNutrition();
-                      setPendingRecipeUpdate({ type: 'recipe-and-log-new', baseNutrition: base });
-                    }}
+                    disabled={ingredients.length === 0 || !recipeName.trim() || isLogging} 
+                    onClick={handleSaveAndAdvanceToLog}
                     style={{ flex: '1 1 0', padding: '1rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', fontSize: '1rem', cursor: (ingredients.length === 0 || !recipeName.trim()) ? 'not-allowed' : 'pointer', opacity: (ingredients.length === 0 || !recipeName.trim()) ? 0.5 : 1 }}
                   >
-                    Save & Log
+                    {isLogging ? 'Saving...' : 'Save & Log'}
                   </button>
                 </div>
               ) : (
                 <button 
                   type="button"
-                  disabled={ingredients.length === 0 || !recipeName.trim()} 
+                  disabled={ingredients.length === 0 || !recipeName.trim() || isLogging} 
                   onClick={() => setStep('final-log')}
                   style={{ width: '100%', padding: '1rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', fontSize: '1.1rem', cursor: (ingredients.length === 0 || !recipeName.trim()) ? 'not-allowed' : 'pointer', opacity: (ingredients.length === 0 || !recipeName.trim()) ? 0.5 : 1 }}
                 >
@@ -563,23 +536,76 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         )}
 
         {step === 'select-previous' && (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
               <h3 style={{ margin: 0 }}>Select Ingredient</h3>
               <button onClick={() => setStep('builder')} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
             </div>
-            <div className="recipe-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
-              {foods.filter(f => !f.isVitamin).map(f => (
-                <div key={f.id} onClick={() => { setActiveFood(f); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: '#f8fafc' }}>
-                  <div style={{ fontWeight: 600 }}>
-                    {f.icon && <span style={{ marginRight: '0.3rem' }}>{f.icon}</span>}
-                    {f.name}
-                  </div>
-                  {f.brand && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{f.brand}</div>}
-                </div>
-              ))}
+            
+            <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search previous foods..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ flex: 1, margin: 0, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+              />
+              <button 
+                type="button"
+                onClick={() => setStep('scan')}
+                style={{
+                  background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem',
+                  padding: '0.65rem 0.75rem', cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', margin: 0
+                }}
+                title="Scan Barcode"
+              >
+                📷
+              </button>
             </div>
-          </>
+
+            <div className="recipe-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+              {foods
+                .filter(f => !f.isVitamin)
+                .filter(food => {
+                  const searchLower = searchTerm.toLowerCase();
+                  const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
+                  const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
+                  const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
+                  return matchesName || matchesBrand || matchesUPC;
+                })
+                .map(food => (
+                  <button
+                    key={food.id}
+                    className="food-option"
+                    onClick={() => { setActiveFood(food); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', textAlign: 'left',
+                      padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', 
+                      cursor: 'pointer', backgroundColor: '#fff', width: '100%', margin: 0
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem' }}>
+                        {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
+                        {food.name}
+                      </div>
+                      {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>}
+                      <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
+                        {food.servingSize} {food.servingUnit} - {food.calories} cal
+                      </div>
+                    </div>
+                  </button>
+              ))}
+              
+              {foods.filter(f => !f.isVitamin && (f.name?.toLowerCase().includes(searchTerm.toLowerCase()) || f.brand?.toLowerCase().includes(searchTerm.toLowerCase()) || (f as any).upc?.toLowerCase().includes(searchTerm.toLowerCase()))).length === 0 && (
+                <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
+                  No foods found.
+                </p>
+              )}
+            </div>
+          </div>
         )}
 
         {step === 'size-ingredient' && activeFood && (
@@ -615,7 +641,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
 
               <div style={{ display: 'flex', gap: '1rem', flexShrink: 0, marginTop: '1rem' }}>
                 <button onClick={handleSizeExistingFood} style={{ flex: 1, padding: '0.75rem', backgroundColor: '#2563eb', color: 'white', borderRadius: '0.5rem', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Add to Recipe</button>
-                <button onClick={() => setStep('builder')} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={() => setStep('select-previous')} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}>Cancel</button>
               </div>
           </>
         )}
@@ -654,68 +680,16 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => setStep('builder')} 
+                  onClick={() => (sourceFood && sourceFood.id && !isEditLogMode) ? onClose() : setStep('builder')} 
                   style={{ padding: '1rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}
                 >
-                  Back
+                  {(sourceFood && sourceFood.id && !isEditLogMode) ? 'Close' : 'Back'}
                 </button>
             </div>
           </form>
         )}
 
       </div>
-
-      {/* CUSTOM UPDATE PAST LOGS POPUP */}
-      {pendingRecipeUpdate && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 9999, 
-          display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          padding: '1rem'
-        }}>
-          <div style={{ 
-            backgroundColor: '#fff', padding: '1.5rem', borderRadius: '0.75rem', 
-            maxWidth: '400px', width: '100%', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
-          }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1e293b' }}>Update Past Logs?</h3>
-            <p style={{ color: '#475569', marginBottom: '1.5rem', fontSize: '0.95rem', lineHeight: 1.5 }}>
-              Do you want to update all past logs of this recipe with the new ingredients and nutrition information? <br/><br/>
-              If you click <strong>No</strong>, only future logs will use this new information.
-            </p>
-            
-            <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => executeRecipeUpdate(false)} 
-                disabled={isLogging} 
-                style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
-              >
-                No
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-primary" 
-                onClick={() => executeRecipeUpdate(true)} 
-                disabled={isLogging} 
-                style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
-              >
-                {isLogging ? 'Saving...' : 'Yes'}
-              </button>
-            </div>
-
-            <button 
-              type="button" 
-              onClick={() => setPendingRecipeUpdate(null)} 
-              disabled={isLogging} 
-              style={{ width: '100%', marginTop: '0.75rem', padding: '0.5rem', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem' }}
-            >
-              Cancel Edit
-            </button>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
