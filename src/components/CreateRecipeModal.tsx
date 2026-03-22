@@ -21,6 +21,7 @@ interface Props {
   editLog?: FoodLog | null; 
   editFood?: Food | null;
   initialMealType?: string;
+  isDoneDay?: boolean;
 }
 
 const FOOD_ICONS = [
@@ -77,7 +78,7 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood, initialMealType }: Props) {
+export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood, initialMealType, isDoneDay }: Props) {
   const { user } = useAuth();
   const isEditLogMode = !!editLog;
   const isEditFoodMode = !!editFood;
@@ -723,10 +724,11 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                   id="recipeIsPlanned"
                   checked={isPlanned}
                   onChange={(e) => setIsPlanned(e.target.checked)}
-                  style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                  disabled={isDoneDay}
+                  style={{ width: '1.25rem', height: '1.25rem', cursor: isDoneDay ? 'not-allowed' : 'pointer', margin: 0 }}
                 />
-                <label htmlFor="recipeIsPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
-                  Plan for later
+                <label htmlFor="recipeIsPlanned" style={{ cursor: isDoneDay ? 'not-allowed' : 'pointer', margin: 0, fontWeight: 600, color: isDoneDay ? '#94a3b8' : '#475569' }}>
+                  Plan for later {isDoneDay && '(Disabled on completed days)'}
                 </label>
               </div>
             </div>

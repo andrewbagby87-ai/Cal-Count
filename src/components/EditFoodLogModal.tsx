@@ -10,6 +10,7 @@ interface Props {
   log: FoodLog;
   onSave: (updates: Partial<FoodLog>) => void;
   onClose: () => void;
+  isDoneDay?: boolean;
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -68,7 +69,7 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function EditFoodLogModal({ log, onSave, onClose }: Props) {
+export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay }: Props) {
   const { user } = useAuth();
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
 
@@ -524,6 +525,7 @@ export default function EditFoodLogModal({ log, onSave, onClose }: Props) {
                   name="isPlanned"
                   checked={logDetails.isPlanned}
                   onChange={handleLogDetailsChange}
+                  disabled={isDoneDay}
                   style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
                 />
                 <label htmlFor="editIsPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>

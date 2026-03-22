@@ -910,7 +910,7 @@ export default function FoodLogTab() {
               </div>
             </div>
 
-<div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
+            <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
               
               {/* QUICK PLAN / CONFIRM BUTTON */}
               {selectedLog.isPlanned ? (
@@ -929,9 +929,19 @@ export default function FoodLogTab() {
               ) : (
                 <button 
                   className="btn btn-secondary" 
-                  style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
+                  disabled={isDoneLogging}
+                  title={isDoneLogging ? "Cannot plan foods on a completed day" : ""}
+                  style={{ 
+                    width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', 
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', 
+                    backgroundColor: isDoneLogging ? '#f1f5f9' : '#f8fafc', 
+                    border: '1px dashed #cbd5e1', 
+                    color: isDoneLogging ? '#94a3b8' : '#64748b', 
+                    fontWeight: 600, borderRadius: '0.5rem', 
+                    cursor: isDoneLogging ? 'not-allowed' : 'pointer' 
+                  }}
                   onClick={async () => {
-                    if (!user) return;
+                    if (!user || isDoneLogging) return;
                     await updateFoodLog(user.uid, selectedLog.id, { isPlanned: true });
                     setSelectedLog(null);
                     loadData();
@@ -1017,12 +1027,13 @@ export default function FoodLogTab() {
         />
       )}
       
-      {showRecipeModal && (
+{showRecipeModal && (
         <CreateRecipeModal 
           foods={foods}
           editLog={editingRecipeLog} 
           editFood={editingRecipeFood}
           initialMealType={activeAddMealType}
+          isDoneDay={isDoneLogging} // NEW
           onClose={() => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
@@ -1039,7 +1050,12 @@ export default function FoodLogTab() {
       )}
 
       {showEditModal && editingLog && (
-        <EditFoodLogModal log={editingLog} onSave={handleEditLog} onClose={() => setShowEditModal(false)} />
+        <EditFoodLogModal 
+          log={editingLog} 
+          onSave={handleEditLog} 
+          onClose={() => setShowEditModal(false)} 
+          isDoneDay={isDoneLogging}
+        />
       )}
     </div>
   );
