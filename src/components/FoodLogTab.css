@@ -406,3 +406,17 @@
   text-align: center;
   padding: 1rem 0 0.5rem;
 }
+
+.food-log-item.is-planned {
+  opacity: 0.65;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+}
+
+.food-log-item.is-planned .food-info h4 {
+  color: #475569;
+}
+
+.food-log-item.is-planned .food-calories .calories {
+  color: #64748b;
+}

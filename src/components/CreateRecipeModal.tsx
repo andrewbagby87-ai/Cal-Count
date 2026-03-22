@@ -69,6 +69,14 @@ const FOOD_ICONS = [
   { icon: '🥃', title: 'Whiskey / Liquor' }, { icon: '🍷', title: 'Wine' }
 ].sort((a, b) => a.title.localeCompare(b.title));
 
+const getLocalTodayString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood, initialMealType }: Props) {
   const { user } = useAuth();
   const isEditLogMode = !!editLog;
@@ -93,6 +101,8 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   const [logDate, setLogDate] = useState(editLog?.date || selectedDate);
   const [logMealType, setLogMealType] = useState(editLog?.mealType || initialMealType || ''); 
   const [logServingsConsumed, setLogServingsConsumed] = useState(editLog?.amount?.toString() || '1');
+  
+  const [isPlanned, setIsPlanned] = useState((editLog as any)?.isPlanned || (logDate > getLocalTodayString())); 
   
   const [isLogging, setIsLogging] = useState(false);
 
@@ -195,6 +205,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       amount: consumedMultiplier,
       unit: 'serving',
       mealType: logMealType,
+      isPlanned: isPlanned, // PLANNED STATUS
       ...consumedNutrition
     }));
   };
@@ -254,11 +265,6 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ------------------------------------------ //
-  //  BUTTON ACTIONS: Save Updates vs Final Log //
-  // ------------------------------------------ //
-
-  // Used when clicking "Save Updates" from Previous Foods edit
   const handleSaveUpdatesOnly = async () => {
     if (!user) return;
     setIsLogging(true);
@@ -274,7 +280,6 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     }
   };
 
-  // Used when clicking "Save & Log" from Previous Foods edit
   const handleSaveAndAdvanceToLog = async () => {
     if (!user) return;
     setIsLogging(true);
@@ -289,7 +294,6 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     }
   };
 
-  // Used for ALL final logging actions
   const handleFinalLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -428,18 +432,33 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                  {ingredients.map((ing, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem' }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{ing.food.name}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{ing.amount} {ing.unit}</div>
+                  {ingredients.map((ing, i) => {
+                    const hasHighProtein = (ing.macros.protein > 0 && ing.macros.calories > 0) ? ing.macros.protein >= (ing.macros.calories / 10) : false;
+                    const hasHighFiber = (ing.macros.fiber >= 4);
+
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ textTransform: 'capitalize' }}>{ing.food.name}</span>
+                            
+                            {/* BADGES */}
+                            {(hasHighProtein || hasHighFiber) && (
+                              <div style={{ display: 'flex', gap: '0.35rem', marginLeft: '0.5rem' }}>
+                                {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
+                                {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber consumed">F</span>}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{ing.amount} {ing.unit}</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ fontWeight: 600, color: '#2563eb' }}>{Math.round(ing.macros.calories)} cal</div>
+                          <button onClick={() => removeIngredient(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer', padding: 0 }}>✕</button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ fontWeight: 600, color: '#2563eb' }}>{Math.round(ing.macros.calories)} cal</div>
-                        <button onClick={() => removeIngredient(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer', padding: 0 }}>✕</button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -575,29 +594,43 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                   const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
                   return matchesName || matchesBrand || matchesUPC;
                 })
-                .map(food => (
-                  <button
-                    key={food.id}
-                    className="food-option"
-                    onClick={() => { setActiveFood(food); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }}
-                    style={{ 
-                      display: 'flex', alignItems: 'center', textAlign: 'left',
-                      padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', 
-                      cursor: 'pointer', backgroundColor: '#fff', width: '100%', margin: 0
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem' }}>
-                        {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
-                        {food.name}
+                .map(food => {
+                  const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
+                  const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
+
+                  return (
+                    <button
+                      key={food.id}
+                      className="food-option"
+                      onClick={() => { setActiveFood(food); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }}
+                      style={{ 
+                        display: 'flex', alignItems: 'center', textAlign: 'left',
+                        padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', 
+                        cursor: 'pointer', backgroundColor: '#fff', width: '100%', margin: 0,
+                        position: 'relative' 
+                      }}
+                    >
+                      {/* BADGES */}
+                      {(hasHighProtein || hasHighFiber) && (
+                        <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
+                          {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
+                          {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber per serving">F</span>}
+                        </div>
+                      )}
+
+                      <div style={{ flex: 1, paddingRight: '2rem' }}>
+                        <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem' }}>
+                          {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
+                          {food.name}
+                        </div>
+                        {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>}
+                        <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
+                          {food.servingSize} {food.servingUnit} - {food.calories} cal
+                        </div>
                       </div>
-                      {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>}
-                      <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
-                        {food.servingSize} {food.servingUnit} - {food.calories} cal
-                      </div>
-                    </div>
-                  </button>
-              ))}
+                    </button>
+                  );
+                })}
               
               {foods.filter(f => !f.isVitamin && (f.name?.toLowerCase().includes(searchTerm.toLowerCase()) || f.brand?.toLowerCase().includes(searchTerm.toLowerCase()) || (f as any).upc?.toLowerCase().includes(searchTerm.toLowerCase()))).length === 0 && (
                 <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
@@ -653,7 +686,17 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
             <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, paddingRight: '0.25rem' }}>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
-                <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                <input 
+                  type="date" 
+                  value={logDate} 
+                  onChange={e => {
+                    const newDate = e.target.value;
+                    setLogDate(newDate);
+                    setIsPlanned(newDate > getLocalTodayString());
+                  }} 
+                  required 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} 
+                />
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
@@ -671,6 +714,20 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>How many servings did you eat? *</label>
                 <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#64748b' }}>This recipe makes {recipeServings} total servings.</p>
                 <input type="text" inputMode="decimal" value={logServingsConsumed} onChange={e => setLogServingsConsumed(e.target.value)} placeholder="1" required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+              </div>
+              
+              {/* PLANNED TOGGLE */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}>
+                <input 
+                  type="checkbox" 
+                  id="recipeIsPlanned"
+                  checked={isPlanned}
+                  onChange={(e) => setIsPlanned(e.target.checked)}
+                  style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                />
+                <label htmlFor="recipeIsPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+                  Plan for later
+                </label>
               </div>
             </div>
 

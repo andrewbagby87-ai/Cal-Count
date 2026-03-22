@@ -90,6 +90,7 @@
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .food-option:hover {
@@ -175,4 +176,34 @@
 
 .previous-food-modal .form-row {
   flex-wrap: wrap;
+}
+
+.food-badges {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-protein {
+  background-color: #dbeafe; /* Light blue bg */
+  color: #1d4ed8;            /* Blue text */
+  border: 1px solid #bfdbfe;
+}
+
+.badge-fiber {
+  background-color: #f3e8ff; /* Light purple bg */
+  color: #7e22ce;            /* Purple text */
+  border: 1px solid #e9d5ff;
 }

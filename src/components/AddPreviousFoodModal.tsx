@@ -25,134 +25,49 @@ interface Props {
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
 
 const FOOD_ICONS = [
-  { icon: '🍎', title: 'Apple (Red)' },
-  { icon: '🍏', title: 'Apple (Green)' },
-  { icon: '🥑', title: 'Avocado' },
-  { icon: '🍼', title: 'Baby Bottle / Formula' },
-  { icon: '🥓', title: 'Bacon' },
-  { icon: '🥯', title: 'Bagel' },
-  { icon: '🥖', title: 'Baguette' },
-  { icon: '🍌', title: 'Banana' },
-  { icon: '🫘', title: 'Beans' },
-  { icon: '🍺', title: 'Beer' },
-  { icon: '🍻', title: 'Beers (Cheers)' },
-  { icon: '🫑', title: 'Bell Pepper' },
-  { icon: '🍱', title: 'Bento / Lunchbox' },
-  { icon: '🎂', title: 'Birthday Cake' },
-  { icon: '🫐', title: 'Blueberries' },
-  { icon: '🍖', title: 'Bone-In Meat / Ribs' },
-  { icon: '🥣', title: 'Bowl with Spoon / Cereal' },
-  { icon: '🍞', title: 'Bread' },
-  { icon: '🥦', title: 'Broccoli' },
-  { icon: '🧋', title: 'Bubble Tea / Boba' },
-  { icon: '🍔', title: 'Burger' },
-  { icon: '🌯', title: 'Burrito' },
-  { icon: '🧈', title: 'Butter' },
-  { icon: '🍰', title: 'Cake / Shortcake' },
-  { icon: '🍬', title: 'Candy' },
-  { icon: '🥫', title: 'Canned Food / Soup' },
-  { icon: '🥕', title: 'Carrot' },
-  { icon: '🍾', title: 'Champagne / Sparkling Wine' },
-  { icon: '🧀', title: 'Cheese' },
-  { icon: '🍒', title: 'Cherries' },
-  { icon: '🌰', title: 'Chestnut / Nut' },
-  { icon: '🍗', title: 'Chicken / Poultry' },
-  { icon: '🍫', title: 'Chocolate' },
-  { icon: '🥂', title: 'Clinking Glasses' },
-  { icon: '🍸', title: 'Cocktail / Martini' },
-  { icon: '🥥', title: 'Coconut' },
-  { icon: '☕', title: 'Coffee / Hot Drink' },
-  { icon: '🍪', title: 'Cookie' },
-  { icon: '🌽', title: 'Corn' },
-  { icon: '🦀', title: 'Crab' },
-  { icon: '🥐', title: 'Croissant' },
-  { icon: '🥒', title: 'Cucumber' },
-  { icon: '🧁', title: 'Cupcake / Muffin' },
-  { icon: '🍛', title: 'Curry' },
-  { icon: '🍡', title: 'Dango / Sweet Skewer' },
-  { icon: '🍩', title: 'Donut' },
-  { icon: '🥟', title: 'Dumplings' },
-  { icon: '🥚', title: 'Egg (Boiled/Raw)' },
-  { icon: '🍳', title: 'Egg (Fried)' },
-  { icon: '🍆', title: 'Eggplant' },
-  { icon: '🧆', title: 'Falafel / Meatball' },
-  { icon: '🍥', title: 'Fish Cake' },
-  { icon: '🫓', title: 'Flatbread / Arepa' },
-  { icon: '🫕', title: 'Fondue / Cheese Dip' },
-  { icon: '🥠', title: 'Fortune Cookie' },
-  { icon: '🍟', title: 'Fries' },
-  { icon: '🧄', title: 'Garlic' },
-  { icon: '🫚', title: 'Ginger' },
-  { icon: '🍇', title: 'Grapes' },
-  { icon: '🍯', title: 'Honey / Syrup' },
-  { icon: '🌭', title: 'Hot Dog' },
-  { icon: '🌶️', title: 'Hot Pepper / Spicy' },
-  { icon: '🧊', title: 'Ice / Water' },
-  { icon: '🍨', title: 'Ice Cream (Scoop)' },
-  { icon: '🍦', title: 'Ice Cream (Soft Serve)' },
-  { icon: '🧃', title: 'Juice Box' },
-  { icon: '🥝', title: 'Kiwi' },
-  { icon: '🍋', title: 'Lemon' },
-  { icon: '🥬', title: 'Lettuce / Greens' },
-  { icon: '🦞', title: 'Lobster' },
-  { icon: '🍭', title: 'Lollipop' },
-  { icon: '🥭', title: 'Mango' },
-  { icon: '🧉', title: 'Mate / Herbal Tea' },
-  { icon: '🍈', title: 'Melon' },
-  { icon: '🥛', title: 'Milk' },
-  { icon: '🥮', title: 'Mooncake' },
-  { icon: '🍄', title: 'Mushroom' },
-  { icon: '🍜', title: 'Noodles / Ramen' },
-  { icon: '🐙', title: 'Octopus' },
-  { icon: '🍢', title: 'Oden / Skewer' },
-  { icon: '🫒', title: 'Olive' },
-  { icon: '🧅', title: 'Onion' },
-  { icon: '🍊', title: 'Orange' },
-  { icon: '🦪', title: 'Oyster / Clam' },
-  { icon: '🥞', title: 'Pancakes' },
-  { icon: '🍝', title: 'Pasta' },
-  { icon: '🍑', title: 'Peach' },
-  { icon: '🥜', title: 'Peanuts' },
-  { icon: '🍐', title: 'Pear' },
-  { icon: '🫛', title: 'Peas / Pea Pod' },
-  { icon: '🥧', title: 'Pie' },
-  { icon: '🍍', title: 'Pineapple' },
-  { icon: '🥙', title: 'Pita / Gyro / Falafel Wrap' },
-  { icon: '🍕', title: 'Pizza' },
-  { icon: '🍿', title: 'Popcorn' },
-  { icon: '🍲', title: 'Pot of Food / Soup' },
-  { icon: '🥔', title: 'Potato' },
-  { icon: '🥨', title: 'Pretzel' },
-  { icon: '🍮', title: 'Pudding / Flan' },
-  { icon: '🍚', title: 'Rice' },
-  { icon: '🍙', title: 'Rice Ball' },
-  { icon: '🍘', title: 'Rice Cracker' },
-  { icon: '🍶', title: 'Sake' },
-  { icon: '🥗', title: 'Salad' },
-  { icon: '🧂', title: 'Salt / Spices' },
-  { icon: '🥪', title: 'Sandwich' },
-  { icon: '🍧', title: 'Shaved Ice' },
-  { icon: '🦐', title: 'Shrimp' },
-  { icon: '🍤', title: 'Shrimp (Fried)' },
-  { icon: '🥤', title: 'Soda / Fast Food Drink' },
-  { icon: '🦑', title: 'Squid' },
-  { icon: '🥩', title: 'Steak / Meat' },
-  { icon: '🥘', title: 'Stew / Casserole / Paella' },
-  { icon: '🍓', title: 'Strawberry' },
-  { icon: '🍣', title: 'Sushi' },
-  { icon: '🍠', title: 'Sweet Potato / Yam' },
-  { icon: '🌮', title: 'Taco' },
-  { icon: '🥡', title: 'Takeout Box' },
-  { icon: '🫔', title: 'Tamale / Wrap' },
-  { icon: '🍵', title: 'Tea / Matcha' },
-  { icon: '🫖', title: 'Teapot' },
-  { icon: '🍅', title: 'Tomato' },
-  { icon: '🍹', title: 'Tropical Drink' },
-  { icon: '💊', title: 'Vitamin / Supplement' },
-  { icon: '🧇', title: 'Waffle' },
-  { icon: '🍉', title: 'Watermelon' },
-  { icon: '🥃', title: 'Whiskey / Liquor' },
-  { icon: '🍷', title: 'Wine' }
+  { icon: '🍎', title: 'Apple (Red)' }, { icon: '🍏', title: 'Apple (Green)' }, { icon: '🥑', title: 'Avocado' },
+  { icon: '🍼', title: 'Baby Bottle / Formula' }, { icon: '🥓', title: 'Bacon' }, { icon: '🥯', title: 'Bagel' },
+  { icon: '🥖', title: 'Baguette' }, { icon: '🍌', title: 'Banana' }, { icon: '🫘', title: 'Beans' },
+  { icon: '🍺', title: 'Beer' }, { icon: '🍻', title: 'Beers (Cheers)' }, { icon: '🫑', title: 'Bell Pepper' },
+  { icon: '🍱', title: 'Bento / Lunchbox' }, { icon: '🎂', title: 'Birthday Cake' }, { icon: '🫐', title: 'Blueberries' },
+  { icon: '🍖', title: 'Bone-In Meat / Ribs' }, { icon: '🥣', title: 'Bowl with Spoon / Cereal' }, { icon: '🍞', title: 'Bread' },
+  { icon: '🥦', title: 'Broccoli' }, { icon: '🧋', title: 'Bubble Tea / Boba' }, { icon: '🍔', title: 'Burger' },
+  { icon: '🌯', title: 'Burrito' }, { icon: '🧈', title: 'Butter' }, { icon: '🍰', title: 'Cake / Shortcake' },
+  { icon: '🍬', title: 'Candy' }, { icon: '🥫', title: 'Canned Food / Soup' }, { icon: '🥕', title: 'Carrot' },
+  { icon: '🍾', title: 'Champagne / Sparkling Wine' }, { icon: '🧀', title: 'Cheese' }, { icon: '🍒', title: 'Cherries' },
+  { icon: '🌰', title: 'Chestnut / Nut' }, { icon: '🍗', title: 'Chicken / Poultry' }, { icon: '🍫', title: 'Chocolate' },
+  { icon: '🥂', title: 'Clinking Glasses' }, { icon: '🍸', title: 'Cocktail / Martini' }, { icon: '🥥', title: 'Coconut' },
+  { icon: '☕', title: 'Coffee / Hot Drink' }, { icon: '🍪', title: 'Cookie' }, { icon: '🌽', title: 'Corn' },
+  { icon: '🦀', title: 'Crab' }, { icon: '🥐', title: 'Croissant' }, { icon: '🥒', title: 'Cucumber' },
+  { icon: '🧁', title: 'Cupcake / Muffin' }, { icon: '🍛', title: 'Curry' }, { icon: '🍡', title: 'Dango / Sweet Skewer' },
+  { icon: '🍩', title: 'Donut' }, { icon: '🥟', title: 'Dumplings' }, { icon: '🥚', title: 'Egg (Boiled/Raw)' },
+  { icon: '🍳', title: 'Egg (Fried)' }, { icon: '🍆', title: 'Eggplant' }, { icon: '🧆', title: 'Falafel / Meatball' },
+  { icon: '🍥', title: 'Fish Cake' }, { icon: '🫓', title: 'Flatbread / Arepa' }, { icon: '🫕', title: 'Fondue / Cheese Dip' },
+  { icon: '🥠', title: 'Fortune Cookie' }, { icon: '🍟', title: 'Fries' }, { icon: '🧄', title: 'Garlic' },
+  { icon: '🫚', title: 'Ginger' }, { icon: '🍇', title: 'Grapes' }, { icon: '🍯', title: 'Honey / Syrup' },
+  { icon: '🌭', title: 'Hot Dog' }, { icon: '🌶️', title: 'Hot Pepper / Spicy' }, { icon: '🧊', title: 'Ice / Water' },
+  { icon: '🍨', title: 'Ice Cream (Scoop)' }, { icon: '🍦', title: 'Ice Cream (Soft Serve)' }, { icon: '🧃', title: 'Juice Box' },
+  { icon: '🥝', title: 'Kiwi' }, { icon: '🍋', title: 'Lemon' }, { icon: '🥬', title: 'Lettuce / Greens' },
+  { icon: '🦞', title: 'Lobster' }, { icon: '🍭', title: 'Lollipop' }, { icon: '🥭', title: 'Mango' },
+  { icon: '🧉', title: 'Mate / Herbal Tea' }, { icon: '🍈', title: 'Melon' }, { icon: '🥛', title: 'Milk' },
+  { icon: '🥮', title: 'Mooncake' }, { icon: '🍄', title: 'Mushroom' }, { icon: '🍜', title: 'Noodles / Ramen' },
+  { icon: '🐙', title: 'Octopus' }, { icon: '🍢', title: 'Oden / Skewer' }, { icon: '🫒', title: 'Olive' },
+  { icon: '🧅', title: 'Onion' }, { icon: '🍊', title: 'Orange' }, { icon: '🦪', title: 'Oyster / Clam' },
+  { icon: '🥞', title: 'Pancakes' }, { icon: '🍝', title: 'Pasta' }, { icon: '🍑', title: 'Peach' },
+  { icon: '🥜', title: 'Peanuts' }, { icon: '🍐', title: 'Pear' }, { icon: '🫛', title: 'Peas / Pea Pod' },
+  { icon: '🥧', title: 'Pie' }, { icon: '🍍', title: 'Pineapple' }, { icon: '🥙', title: 'Pita / Gyro / Falafel Wrap' },
+  { icon: '🍕', title: 'Pizza' }, { icon: '🍿', title: 'Popcorn' }, { icon: '🍲', title: 'Pot of Food / Soup' },
+  { icon: '🥔', title: 'Potato' }, { icon: '🥨', title: 'Pretzel' }, { icon: '🍮', title: 'Pudding / Flan' },
+  { icon: '🍚', title: 'Rice' }, { icon: '🍙', title: 'Rice Ball' }, { icon: '🍘', title: 'Rice Cracker' },
+  { icon: '🍶', title: 'Sake' }, { icon: '🥗', title: 'Salad' }, { icon: '🧂', title: 'Salt / Spices' },
+  { icon: '🥪', title: 'Sandwich' }, { icon: '🍧', title: 'Shaved Ice' }, { icon: '🦐', title: 'Shrimp' },
+  { icon: '🍤', title: 'Shrimp (Fried)' }, { icon: '🥤', title: 'Soda / Fast Food Drink' }, { icon: '🦑', title: 'Squid' },
+  { icon: '🥩', title: 'Steak / Meat' }, { icon: '🥘', title: 'Stew / Casserole / Paella' }, { icon: '🍓', title: 'Strawberry' },
+  { icon: '🍣', title: 'Sushi' }, { icon: '🍠', title: 'Sweet Potato / Yam' }, { icon: '🌮', title: 'Taco' },
+  { icon: '🥡', title: 'Takeout Box' }, { icon: '🫔', title: 'Tamale / Wrap' }, { icon: '🍵', title: 'Tea / Matcha' },
+  { icon: '🫖', title: 'Teapot' }, { icon: '🍅', title: 'Tomato' }, { icon: '🍹', title: 'Tropical Drink' },
+  { icon: '💊', title: 'Vitamin / Supplement' }, { icon: '🧇', title: 'Waffle' }, { icon: '🍉', title: 'Watermelon' },
+  { icon: '🥃', title: 'Whiskey / Liquor' }, { icon: '🍷', title: 'Wine' }
 ].sort((a, b) => a.title.localeCompare(b.title));
 
 const getLocalTodayString = () => {
@@ -228,6 +143,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     consumptionMethod: 'serving', 
     servingsConsumed: '1',
     volumeConsumed: '',
+    isPlanned: (initialDate && initialDate > getLocalTodayString()) ? true : false,
   });
 
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
@@ -261,11 +177,24 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   }, [initialDate]);
 
   const handleLogDetailsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name === 'servingsConsumed' || name === 'volumeConsumed') {
-      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
+    const target = e.target as HTMLInputElement;
+    const name = target.name;
+    
+    if (target.type === 'checkbox') {
+      setLogDetails(prev => ({ ...prev, [name]: target.checked }));
+      return;
     }
-    setLogDetails(prev => ({ ...prev, [name]: value }));
+
+    const value = target.value;
+    if ((name === 'servingsConsumed' || name === 'volumeConsumed') && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
+    
+    setLogDetails(prev => {
+      const updates: any = { [name]: value };
+      if (name === 'date') {
+        updates.isPlanned = value > getLocalTodayString();
+      }
+      return { ...prev, ...updates };
+    });
   };
 
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, food: Food) => {
@@ -551,6 +480,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           amount: finalAmount,
           unit: finalUnit,
           mealType: logDetails.mealType,
+          isPlanned: logDetails.isPlanned, 
           ...cleanConsumedNutrition,
         };
 
@@ -662,7 +592,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
       const payload = {
         date: logDetails.date, foodId: selectedFood.id, food: selectedFood,
-        amount: finalAmount, unit: finalUnit, mealType: logDetails.mealType, ...cleanConsumedNutrition,
+        amount: finalAmount, unit: finalUnit, mealType: logDetails.mealType,
+        isPlanned: logDetails.isPlanned, 
+        ...cleanConsumedNutrition,
       };
 
       await onAdd(JSON.parse(JSON.stringify(payload)));
@@ -783,6 +715,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
               const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
               const isSelected = multiSelectedIds.has(food.id);
 
+              const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
+              const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
+
               return (
                 <button
                   key={food.id}
@@ -790,9 +725,17 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                   onClick={(e) => handleItemInteraction(e, food)}
                   style={{ 
                     display: 'flex', alignItems: 'center', textAlign: 'left',
+                    position: 'relative', 
                     ...(isMultiSelectMode && isSelected ? { borderColor: '#2563eb', backgroundColor: '#eff6ff', borderWidth: '2px' } : {})
                   }}
                 >
+                  {(hasHighProtein || hasHighFiber) && (
+                    <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
+                      {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
+                      {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber per serving">F</span>}
+                    </div>
+                  )}
+
                   {isMultiSelectMode && (
                     <div style={{ marginRight: '1rem', display: 'flex', alignItems: 'center' }}>
                       <div style={{ 
@@ -806,7 +749,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                     </div>
                   )}
                   
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, paddingRight: '2rem' }}>
                     <div className="food-name" style={{ marginBottom: '0.15rem', textTransform: 'capitalize' }}>
                       {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
                       {food.name}
@@ -971,7 +914,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           </div>
         </form>
 
-{/* CUSTOM UPDATE PAST LOGS POPUP */}
         {pendingFoodUpdate && (
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
@@ -989,7 +931,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                 If you click <strong>No</strong>, only future logs will use this new information.
               </p>
               
-              {/* BUTTONS CONTAINER */}
               <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
                 <button 
                   type="button" 
@@ -1214,7 +1155,21 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           </div>
         )}
 
-        <div className="form-actions" style={{ marginTop: '2.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+          <input 
+            type="checkbox" 
+            id="isPlanned"
+            name="isPlanned"
+            checked={logDetails.isPlanned}
+            onChange={handleLogDetailsChange}
+            style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+          />
+          <label htmlFor="isPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+            Plan for later
+          </label>
+        </div>
+
+        <div className="form-actions" style={{ marginTop: '1.5rem' }}>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Adding...' : 'Add to Log'}
           </button>

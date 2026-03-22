@@ -684,15 +684,23 @@ export default function FoodLogTab() {
       </div>
 
       {/* DONE LOGGING TOGGLE */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
         <button
-          onClick={toggleDoneLogging}
+          onClick={() => {
+            const hasPlannedFoods = foodLogs.some(log => log.isPlanned);
+            if (!isDoneLogging && hasPlannedFoods) {
+              alert("You cannot mark the day as done while you still have planned foods. Please edit them to mark them as eaten, or delete them.");
+              return;
+            }
+            toggleDoneLogging();
+          }}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.5rem',
             padding: '0.6rem 1.25rem', borderRadius: '2rem', border: 'none',
-            backgroundColor: isDoneLogging ? '#10b981' : '#f1f5f9',
-            color: isDoneLogging ? '#fff' : '#64748b',
-            fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer',
+            backgroundColor: isDoneLogging ? '#10b981' : (foodLogs.some(log => log.isPlanned) ? '#e2e8f0' : '#f1f5f9'),
+            color: isDoneLogging ? '#fff' : (foodLogs.some(log => log.isPlanned) ? '#94a3b8' : '#64748b'),
+            fontWeight: 700, fontSize: '0.95rem', 
+            cursor: (!isDoneLogging && foodLogs.some(log => log.isPlanned)) ? 'not-allowed' : 'pointer',
             boxShadow: isDoneLogging ? '0 4px 6px -1px rgba(16, 185, 129, 0.3)' : 'none',
             transition: 'all 0.2s ease-in-out'
           }}
@@ -703,6 +711,11 @@ export default function FoodLogTab() {
             <><span style={{ filter: 'grayscale(100%)', opacity: 0.6 }}>🔥</span> Mark Day as Done</>
           )}
         </button>
+        {!isDoneLogging && foodLogs.some(log => log.isPlanned) && (
+          <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>
+            * Unmark planned foods to finish day
+          </span>
+        )}
       </div>
 
       <div className="daily-diary">
@@ -772,7 +785,7 @@ export default function FoodLogTab() {
                     return (
                       <div 
                         key={log.id} 
-                        className={`food-log-item ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                        className={`food-log-item ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'drag-over' : ''} ${log.isPlanned ? 'is-planned' : ''}`}
                         onClick={(e) => handleItemInteraction(e, log)}
                         draggable
                         onDragStart={(e) => handleDragStart(e, log)}
@@ -784,14 +797,15 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              {/* ADD textTransform: 'capitalize' HERE */}
-                              <h4 style={{ textTransform: 'capitalize' }}>
+                              <h4 style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                                 {log.food.icon && <span style={{ marginRight: '0.3rem' }}>{log.food.icon}</span>}
-                                {log.food.name}
+                                <span>{log.food.name}</span>
                               </h4>
-                              {/* AND HERE */}
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
-                              <span className="amount">{log.amount} {log.unit}</span>
+                              <span className="amount">
+                                {log.amount} {log.unit}
+                                {log.isPlanned && <span style={{ marginLeft: '0.5rem', color: '#8b5cf6', fontWeight: 700, fontSize: '0.7rem', backgroundColor: '#f3e8ff', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', border: '1px solid #e9d5ff' }}>PLANNED</span>}
+                              </span>
                             </div>
                           </div>
                           <div className="food-calories">
@@ -840,12 +854,10 @@ export default function FoodLogTab() {
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
             <div className="selected-log-header">
               <div>
-                {/* ADD textTransform: 'capitalize' HERE */}
                 <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize' }}>
                   {selectedLog.food.icon && <span style={{ marginRight: '0.4rem' }}>{selectedLog.food.icon}</span>}
                   {selectedLog.food.name}
                 </h3>
-                {/* AND HERE */}
                 {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{selectedLog.food.brand}</span>}
               </div>
               <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>
@@ -898,48 +910,80 @@ export default function FoodLogTab() {
               </div>
             </div>
 
-            <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-              <button 
-                className="btn btn-primary" 
-                style={{ 
-                  flex: '1 1 0', 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  alignItems: 'center', 
-                  fontSize: '1rem', 
-                  padding: '0.75rem',
-                  margin: 0,
-                  boxSizing: 'border-box'
-                }}
-                onClick={() => {
-                  if ((selectedLog.food as any).isRecipe) {
-                    setEditingRecipeLog(selectedLog);
-                    setShowRecipeModal(true);
-                  } else {
-                    setEditingLog(selectedLog);
-                    setShowEditModal(true);
-                  }
-                  setSelectedLog(null);
-                }}
-              >
-                ✏️ Edit
-              </button>
-              <button 
-                className="btn btn-secondary" 
-                style={{ 
-                  flex: '1 1 0', 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  alignItems: 'center', 
-                  fontSize: '1rem', 
-                  padding: '0.75rem',
-                  margin: 0,
-                  boxSizing: 'border-box'
-                }}
-                onClick={() => setSelectedLog(null)}
-              >
-                Cancel
-              </button>
+<div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
+              
+              {/* QUICK PLAN / CONFIRM BUTTON */}
+              {selectedLog.isPlanned ? (
+                <button 
+                  className="btn btn-primary" 
+                  style={{ backgroundColor: '#10b981', borderColor: '#10b981', width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', borderRadius: '0.5rem', color: '#fff', fontWeight: 'bold' }}
+                  onClick={async () => {
+                    if (!user) return;
+                    await updateFoodLog(user.uid, selectedLog.id, { isPlanned: false });
+                    setSelectedLog(null);
+                    loadData();
+                  }}
+                >
+                  ✅ Confirm as Eaten
+                </button>
+              ) : (
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
+                  onClick={async () => {
+                    if (!user) return;
+                    await updateFoodLog(user.uid, selectedLog.id, { isPlanned: true });
+                    setSelectedLog(null);
+                    loadData();
+                  }}
+                >
+                  🗓️ Mark as Planned
+                </button>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ 
+                    flex: '1 1 0', 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    fontSize: '1rem', 
+                    padding: '0.75rem',
+                    margin: 0,
+                    boxSizing: 'border-box'
+                  }}
+                  onClick={() => {
+                    if ((selectedLog.food as any).isRecipe) {
+                      setEditingRecipeLog(selectedLog);
+                      setShowRecipeModal(true);
+                    } else {
+                      setEditingLog(selectedLog);
+                      setShowEditModal(true);
+                    }
+                    setSelectedLog(null);
+                  }}
+                >
+                  ✏️ Edit
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ 
+                    flex: '1 1 0', 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    fontSize: '1rem', 
+                    padding: '0.75rem',
+                    margin: 0,
+                    boxSizing: 'border-box'
+                  }}
+                  onClick={() => setSelectedLog(null)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
