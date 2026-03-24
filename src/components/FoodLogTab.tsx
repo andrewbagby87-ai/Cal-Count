@@ -797,9 +797,27 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              <h4 style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {log.food.icon && <span style={{ marginRight: '0.3rem' }}>{log.food.icon}</span>}
-                                <span>{log.food.name}</span>
+                              {/* FORCE SINGLE LINE WITH ELLIPSIS TRUNCATION ON MOBILE */}
+                              <h4 style={{ 
+                                textTransform: 'capitalize', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                flexWrap: 'nowrap', /* Prevents wrapping to next line */
+                                overflow: 'hidden',
+                                width: '100%'
+                              }}>
+                                {log.food.icon && (
+                                  <span style={{ marginRight: '0.3rem', flexShrink: 0 }}>
+                                    {log.food.icon}
+                                  </span>
+                                )}
+                                <span style={{ 
+                                  whiteSpace: 'nowrap', 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis' 
+                                }}>
+                                  {log.food.name}
+                                </span>
                               </h4>
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
                               <span className="amount">
@@ -852,23 +870,29 @@ export default function FoodLogTab() {
       {selectedLog && (
         <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
+            {/* UPDATED HEADER: Removed the amount from the right side */}
             <div className="selected-log-header">
               <div>
                 <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize' }}>
                   {selectedLog.food.icon && <span style={{ marginRight: '0.4rem' }}>{selectedLog.food.icon}</span>}
                   {selectedLog.food.name}
                 </h3>
-                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{selectedLog.food.brand}</span>}
+                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.15rem' }}>{selectedLog.food.brand}</span>}
               </div>
-              <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>
-                {selectedLog.amount} {selectedLog.unit}
-              </span>
             </div>
 
             <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
-                Nutrition Logged
-              </h4>
+              
+              {/* UPDATED NUTRITION TITLE: Amount is now across from the title */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.65rem', marginBottom: '1rem' }}>
+                <h4 style={{ margin: 0, color: '#1e293b' }}>
+                  Nutrition Logged
+                </h4>
+                <span style={{ fontSize: '0.85rem', color: '#2563eb', fontWeight: 700, backgroundColor: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #bfdbfe' }}>
+                  {selectedLog.amount} {selectedLog.unit}
+                </span>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {[
                   { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
@@ -927,28 +951,21 @@ export default function FoodLogTab() {
                   ✅ Confirm as Eaten
                 </button>
               ) : (
-                <button 
-                  className="btn btn-secondary" 
-                  disabled={isDoneLogging}
-                  title={isDoneLogging ? "Cannot plan foods on a completed day" : ""}
-                  style={{ 
-                    width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', 
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', 
-                    backgroundColor: isDoneLogging ? '#f1f5f9' : '#f8fafc', 
-                    border: '1px dashed #cbd5e1', 
-                    color: isDoneLogging ? '#94a3b8' : '#64748b', 
-                    fontWeight: 600, borderRadius: '0.5rem', 
-                    cursor: isDoneLogging ? 'not-allowed' : 'pointer' 
-                  }}
-                  onClick={async () => {
-                    if (!user || isDoneLogging) return;
-                    await updateFoodLog(user.uid, selectedLog.id, { isPlanned: true });
-                    setSelectedLog(null);
-                    loadData();
-                  }}
-                >
-                  🗓️ Mark as Planned
-                </button>
+                /* ONLY RENDER THE BUTTON IF THE DAY IS NOT DONE */
+                !isDoneLogging && (
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
+                    onClick={async () => {
+                      if (!user) return;
+                      await updateFoodLog(user.uid, selectedLog.id, { isPlanned: true });
+                      setSelectedLog(null);
+                      loadData();
+                    }}
+                  >
+                    🗓️ Mark as Planned
+                  </button>
+                )
               )}
 
               <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>

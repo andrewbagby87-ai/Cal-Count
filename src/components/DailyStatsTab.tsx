@@ -523,38 +523,49 @@ export default function DailyStatsTab() {
             <div className="stat-item hero-stat" onClick={() => setShowCalRemaining(!showCalRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
               <div className="stat-header-row">
                 <span className="stat-label">Calories</span>
-                <span className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}>
+                <span 
+                  className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}
+                  style={Math.round(remaining) === 0 ? { color: '#94a3b8' } : {}}
+                >
                   {showCalRemaining ? (
                      `${Math.round(caloriesConsumed)} eaten`
                   ) : (
-                     `${remaining >= 0 ? '+' : ''}${Math.abs(Math.round(remaining))} ${remaining < 0 ? 'over' : 'remaining'}`
+                     Math.round(remaining) === 0 
+                       ? '0 left' 
+                       : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))} ${remaining < 0 ? 'over' : 'remaining'}`
                   )}
                 </span>
               </div>
+              
+              {/* ALWAYS GREEN PROGRESS BAR */}
               <div className="progress-bar">
                 <div 
                   className="progress-fill" 
                   style={{ 
                     width: `${Math.min(percentage, 100)}%`, 
-                    background: remaining < 0 ? '#ef4444' : '#16a34a' 
+                    background: '#16a34a' 
                   }}
                 ></div>
               </div>
+              
+              {/* TEXT ADAPTS TO EXACTLY 0 (GRAY) OR OVER (RED) */}
               <div className="stat-value full-width">
                 {showCalRemaining ? (
                    <>
-                     <span className="consumed" style={{ color: remaining < 0 ? '#2563eb' : undefined }}>
-                       {remaining >= 0 ? '+' : ''}{Math.abs(Math.round(remaining))} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                     <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
+                       {Math.round(remaining) === 0 ? '0' : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))}`} <span style={{ fontSize: '1.25rem' }}>kcal</span>
                      </span>
-                     <span className="budget"> {remaining < 0 ? 'over' : 'left'}</span>
+                     {Math.round(remaining) !== 0 && (
+                       <span className="budget" style={{ color: remaining < 0 ? '#ef4444' : undefined }}> {remaining < 0 ? 'over' : 'left'}</span>
+                     )}
                    </>
                 ) : (
                    <>
-                     <span className="consumed">
+                     <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
                        {Math.round(caloriesConsumed)} <span style={{ fontSize: '1.25rem' }}>kcal</span>
                      </span>
-                     <span className="separator">/</span>
-                     <span className="budget">
+                     <span className="separator" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>/</span>
+                     <span className="budget" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>
                        {totalBudget} kcal
                        {caloriesBurned > 0 && (
                          <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
