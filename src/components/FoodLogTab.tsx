@@ -797,27 +797,9 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              {/* FORCE SINGLE LINE WITH ELLIPSIS TRUNCATION ON MOBILE */}
-                              <h4 style={{ 
-                                textTransform: 'capitalize', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                flexWrap: 'nowrap', /* Prevents wrapping to next line */
-                                overflow: 'hidden',
-                                width: '100%'
-                              }}>
-                                {log.food.icon && (
-                                  <span style={{ marginRight: '0.3rem', flexShrink: 0 }}>
-                                    {log.food.icon}
-                                  </span>
-                                )}
-                                <span style={{ 
-                                  whiteSpace: 'nowrap', 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
-                                }}>
-                                  {log.food.name}
-                                </span>
+                              <h4 style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {log.food.icon && <span style={{ marginRight: '0.3rem' }}>{log.food.icon}</span>}
+                                <span>{log.food.name}</span>
                               </h4>
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
                               <span className="amount">
