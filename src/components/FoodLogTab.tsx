@@ -6,6 +6,7 @@ import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
 import CreateRecipeModal from './CreateRecipeModal';
+import Icon from './Icon';
 import './FoodLogTab.css';
 
 // --- Helper Functions for Navigator ---
@@ -798,7 +799,7 @@ export default function FoodLogTab() {
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
                               <h4 style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {log.food.icon && <span style={{ marginRight: '0.3rem' }}>{log.food.icon}</span>}
+                                {log.food.icon && <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />}
                                 <span>{log.food.name}</span>
                               </h4>
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
@@ -852,12 +853,11 @@ export default function FoodLogTab() {
       {selectedLog && (
         <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
-            {/* UPDATED HEADER: Removed the amount from the right side */}
             <div className="selected-log-header">
               <div>
-                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize' }}>
-                  {selectedLog.food.icon && <span style={{ marginRight: '0.4rem' }}>{selectedLog.food.icon}</span>}
-                  {selectedLog.food.name}
+                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
+                  {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
+                  <span>{selectedLog.food.name}</span>
                 </h3>
                 {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.15rem' }}>{selectedLog.food.brand}</span>}
               </div>
@@ -865,7 +865,6 @@ export default function FoodLogTab() {
 
             <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
               
-              {/* UPDATED NUTRITION TITLE: Amount is now across from the title */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.65rem', marginBottom: '1rem' }}>
                 <h4 style={{ margin: 0, color: '#1e293b' }}>
                   Nutrition Logged
@@ -1026,13 +1025,13 @@ export default function FoodLogTab() {
         />
       )}
       
-{showRecipeModal && (
+      {showRecipeModal && (
         <CreateRecipeModal 
           foods={foods}
           editLog={editingRecipeLog} 
           editFood={editingRecipeFood}
           initialMealType={activeAddMealType}
-          isDoneDay={isDoneLogging} // NEW
+          isDoneDay={isDoneLogging}
           onClose={() => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
@@ -1054,6 +1053,7 @@ export default function FoodLogTab() {
           onSave={handleEditLog} 
           onClose={() => setShowEditModal(false)} 
           isDoneDay={isDoneLogging}
+          onLabelSaved={() => loadData()} 
         />
       )}
     </div>

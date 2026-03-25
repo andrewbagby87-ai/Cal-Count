@@ -91,7 +91,6 @@ export async function getUserFoods(userId: string): Promise<Food[]> {
     return {
       id: doc.id,
       ...data as Omit<Food, 'id'>,
-      // Safely parse createdAt to prevent crashes on older foods
       createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt || 0),
     };
   });
@@ -147,7 +146,6 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     console.warn("Could not fetch all foodLogs array:", e);
   }
 
-  // Backup fetch for old legacy multi-doc logs
   try {
     const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId));
     const snapExact = await getDocs(qExact);
@@ -287,67 +285,196 @@ export async function deleteFoodLog(userId: string, id: string) {
   }
 }
 
-// NEW FUNCTION: Batch update past logs for a specific food
+// BATCH UPDATE: Cascades food label edits to past logs and recipes
 export async function updateAllPastLogsForFood(userId: string, foodId: string, updatedFood: Food) {
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
 
-  if (!docSnap.exists()) return;
-
-  const data = docSnap.data();
-  let updated = false;
-
-  // FIX: Strip out 'undefined' values from the food object before saving to Firebase arrays
   const cleanUpdatedFood = Object.fromEntries(
     Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
   ) as Food;
 
-  const recalculateLog = (log: any) => {
-    // Skip if it's not the food we are editing
-    if (log.foodId !== foodId && log.food?.id !== foodId) return log;
-    
-    updated = true;
-    let multiplier = 1;
+  // 1. HELPER to recalculate a recipe's macros based on the newly updated ingredient
+  const recalculateRecipeNutrition = (recipe: any) => {
+    let updatedIngredients = recipe.recipeIngredients.map((ing: any) => {
+      if (ing.food.id === foodId || ing.food?.id === foodId) {
+        let multiplier = 1;
+        if (ing.unit === 'serving') {
+          multiplier = ing.amount / (cleanUpdatedFood.servingSize || 1);
+        } else {
+          const vol = cleanUpdatedFood.volumes?.find((v: any) => v.unit === ing.unit);
+          multiplier = (vol && vol.amount) ? ing.amount / vol.amount : 0;
+        }
+        
+        const calc = (val: number | undefined) => val ? Number((val * multiplier).toFixed(2)) : 0;
+        
+        return {
+          ...ing,
+          food: cleanUpdatedFood,
+          macros: {
+            calories: calc(cleanUpdatedFood.calories),
+            protein: calc(cleanUpdatedFood.protein),
+            carbs: calc(cleanUpdatedFood.carbs),
+            fat: calc(cleanUpdatedFood.fat),
+            saturatedFat: calc(cleanUpdatedFood.saturatedFat),
+            transFat: calc((cleanUpdatedFood as any).transFat),
+            cholesterol: calc((cleanUpdatedFood as any).cholesterol),
+            sodium: calc((cleanUpdatedFood as any).sodium),
+            fiber: calc(cleanUpdatedFood.fiber),
+            sugar: calc(cleanUpdatedFood.sugar),
+          }
+        };
+      }
+      return ing;
+    });
 
-    // Recalculate multiplier based on the amounts eaten
-    if (log.unit === 'serving') {
-      multiplier = log.amount / (cleanUpdatedFood.servingSize || 1);
-    } else {
-      const vol = cleanUpdatedFood.volumes?.find(v => v.unit === log.unit);
-      if (vol && vol.amount) {
-        multiplier = log.amount / vol.amount;
+    const totalMacros = updatedIngredients.reduce((acc: any, curr: any) => {
+      acc.calories += curr.macros.calories || 0;
+      acc.protein += curr.macros.protein || 0;
+      acc.carbs += curr.macros.carbs || 0;
+      acc.fat += curr.macros.fat || 0;
+      acc.saturatedFat += curr.macros.saturatedFat || 0;
+      acc.transFat += curr.macros.transFat || 0;
+      acc.cholesterol += curr.macros.cholesterol || 0;
+      acc.sodium += curr.macros.sodium || 0;
+      acc.fiber += curr.macros.fiber || 0;
+      acc.sugar += curr.macros.sugar || 0;
+      return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0, saturatedFat: 0, transFat: 0, cholesterol: 0, sodium: 0, fiber: 0, sugar: 0 });
+
+    const servings = recipe.recipeServings || 1;
+
+    return {
+      ...recipe,
+      recipeIngredients: updatedIngredients,
+      calories: Number((totalMacros.calories / servings).toFixed(2)),
+      protein: Number((totalMacros.protein / servings).toFixed(2)),
+      carbs: Number((totalMacros.carbs / servings).toFixed(2)),
+      fat: Number((totalMacros.fat / servings).toFixed(2)),
+      saturatedFat: Number((totalMacros.saturatedFat / servings).toFixed(2)),
+      transFat: Number((totalMacros.transFat / servings).toFixed(2)),
+      cholesterol: Number((totalMacros.cholesterol / servings).toFixed(2)),
+      sodium: Number((totalMacros.sodium / servings).toFixed(2)),
+      fiber: Number((totalMacros.fiber / servings).toFixed(2)),
+      sugar: Number((totalMacros.sugar / servings).toFixed(2)),
+    };
+  };
+
+  // 2. UPDATE ANY RECIPES IN "PREVIOUS FOODS" THAT CONTAIN THIS INGREDIENT
+  try {
+    const foodsQuery = query(collection(db, 'foods'), where('userId', '==', userId));
+    const foodsSnap = await getDocs(foodsQuery);
+    const recipeUpdatePromises: Promise<void>[] = [];
+
+    foodsSnap.docs.forEach(docSnap => {
+      const foodData = docSnap.data();
+      if (foodData.isRecipe && foodData.recipeIngredients) {
+        const hasIngredient = foodData.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
+        if (hasIngredient) {
+          const updatedRecipe = recalculateRecipeNutrition(foodData);
+          recipeUpdatePromises.push(updateDoc(doc(db, 'foods', docSnap.id), updatedRecipe));
+        }
+      }
+    });
+
+    await Promise.all(recipeUpdatePromises);
+  } catch (e) {
+    console.error("Failed to cascade updates to master recipes:", e);
+  }
+
+  // 3. UPDATE PAST LOGS (BOTH DIRECT LOGS & RECIPE LOGS)
+  if (!docSnap.exists()) return;
+  const data = docSnap.data();
+  let updated = false;
+
+  const recalculateLog = (log: any) => {
+    // CASE A: The log is directly the food we edited
+    if (log.foodId === foodId || log.food?.id === foodId) {
+      updated = true;
+      let multiplier = 1;
+
+      if (log.unit === 'serving') {
+        multiplier = log.amount / (cleanUpdatedFood.servingSize || 1);
       } else {
-        multiplier = 0; // Fallback if the unit was deleted
+        const vol = cleanUpdatedFood.volumes?.find(v => v.unit === log.unit);
+        if (vol && vol.amount) {
+          multiplier = log.amount / vol.amount;
+        } else {
+          multiplier = 0;
+        }
+      }
+
+      const calcConsumed = (val: number | undefined) => {
+        if (val === undefined || isNaN(val)) return undefined;
+        return Number((val * multiplier).toFixed(2));
+      };
+
+      const consumedNutrition = {
+        calories: calcConsumed(cleanUpdatedFood.calories) || 0,
+        fat: calcConsumed(cleanUpdatedFood.fat),
+        saturatedFat: calcConsumed(cleanUpdatedFood.saturatedFat),
+        transFat: calcConsumed((cleanUpdatedFood as any).transFat),
+        cholesterol: calcConsumed((cleanUpdatedFood as any).cholesterol),
+        sodium: calcConsumed((cleanUpdatedFood as any).sodium),
+        carbs: calcConsumed(cleanUpdatedFood.carbs),
+        fiber: calcConsumed(cleanUpdatedFood.fiber),
+        sugar: calcConsumed(cleanUpdatedFood.sugar),
+        protein: calcConsumed(cleanUpdatedFood.protein),
+      };
+
+      const cleanConsumedNutrition = Object.fromEntries(
+        Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
+      ) as any;
+
+      return {
+        ...log,
+        food: cleanUpdatedFood,
+        ...cleanConsumedNutrition
+      };
+    }
+
+    // CASE B: The log is a RECIPE that contains the food we edited
+    if (log.food?.isRecipe && log.food?.recipeIngredients) {
+      const hasIngredient = log.food.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
+      
+      if (hasIngredient) {
+        updated = true;
+        const updatedRecipe = recalculateRecipeNutrition(log.food);
+        
+        // Recalculate what the user consumed of this updated recipe
+        const multiplier = log.amount; 
+
+        const calcConsumed = (val: number | undefined) => {
+          if (val === undefined || isNaN(val)) return undefined;
+          return Number((val * multiplier).toFixed(2));
+        };
+
+        const consumedNutrition = {
+          calories: calcConsumed(updatedRecipe.calories) || 0,
+          fat: calcConsumed(updatedRecipe.fat),
+          saturatedFat: calcConsumed(updatedRecipe.saturatedFat),
+          transFat: calcConsumed(updatedRecipe.transFat),
+          cholesterol: calcConsumed(updatedRecipe.cholesterol),
+          sodium: calcConsumed(updatedRecipe.sodium),
+          carbs: calcConsumed(updatedRecipe.carbs),
+          fiber: calcConsumed(updatedRecipe.fiber),
+          sugar: calcConsumed(updatedRecipe.sugar),
+          protein: calcConsumed(updatedRecipe.protein),
+        };
+
+        const cleanConsumedNutrition = Object.fromEntries(
+          Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
+        ) as any;
+
+        return {
+          ...log,
+          food: updatedRecipe,
+          ...cleanConsumedNutrition
+        };
       }
     }
 
-    const calcConsumed = (val: number | undefined) => {
-      if (val === undefined || isNaN(val)) return undefined;
-      return Number((val * multiplier).toFixed(2));
-    };
-
-    const consumedNutrition = {
-      calories: calcConsumed(cleanUpdatedFood.calories) || 0,
-      fat: calcConsumed(cleanUpdatedFood.fat),
-      saturatedFat: calcConsumed(cleanUpdatedFood.saturatedFat),
-      transFat: calcConsumed((cleanUpdatedFood as any).transFat),
-      cholesterol: calcConsumed((cleanUpdatedFood as any).cholesterol),
-      sodium: calcConsumed((cleanUpdatedFood as any).sodium),
-      carbs: calcConsumed(cleanUpdatedFood.carbs),
-      fiber: calcConsumed(cleanUpdatedFood.fiber),
-      sugar: calcConsumed(cleanUpdatedFood.sugar),
-      protein: calcConsumed(cleanUpdatedFood.protein),
-    };
-
-    const cleanConsumedNutrition = Object.fromEntries(
-      Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
-    ) as any;
-
-    return {
-      ...log,
-      food: cleanUpdatedFood, // USE THE CLEANED OBJECT HERE
-      ...cleanConsumedNutrition // Update calculated log macros
-    };
+    return log;
   };
 
   if (data.foodData) {
@@ -362,7 +489,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     }
   }
 }
-
 
 // Workout Log Operations
 export async function createWorkoutLog(userId: string, workout: Omit<WorkoutLog, 'id' | 'userId' | 'timestamp'>) {
@@ -519,7 +645,6 @@ export async function getHealthLogs(userId: string) {
 export const getSyncedHealthWorkouts = async (userId: string) => {
   let allWorkouts: any[] = [];
   
-  // Helper function to force Firebase Object Maps back into usable Arrays
   const extractData = (dataPart: any) => {
     if (!dataPart) return [];
     if (Array.isArray(dataPart)) return dataPart;
@@ -534,7 +659,6 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
     if (userDocSnap.exists()) {
       const payload = userDocSnap.data();
 
-      // THE FIX: Loop through the 'syncs' array to find the hidden workouts!
       if (payload.syncs && Array.isArray(payload.syncs)) {
         payload.syncs.forEach((syncBatch: any) => {
           if (syncBatch.data && syncBatch.data.workouts) {
@@ -543,13 +667,9 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
             allWorkouts.push(...extractData(syncBatch.workouts));
           }
         });
-      } 
-      // Fallback 1: Just in case it's saved directly to data
-      else if (payload.data && payload.data.workouts) {
+      } else if (payload.data && payload.data.workouts) {
         allWorkouts.push(...extractData(payload.data.workouts));
-      } 
-      // Fallback 2: Just in case it's sitting at the root level
-      else if (payload.workouts) {
+      } else if (payload.workouts) {
         allWorkouts.push(...extractData(payload.workouts));
       }
     }
@@ -557,7 +677,6 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
     console.warn(`❌ Error reading root doc:`, err.message);
   }
 
-  // Fallback 3: Double-check the sub-collection just in case
   try {
     const workoutsRef = collection(db, `healthLogs/${userId}/workouts`);
     const snapshot = await getDocs(workoutsRef);
@@ -575,19 +694,16 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
         });
     }
   } catch (err: any) {
-    // Silently ignore missing sub-collections
   }
 
-  // Remove any duplicates (Using Apple Health's unique ID so workouts don't double up)
   const uniqueWorkouts = Array.from(
     new Map(allWorkouts.filter(w => w != null).map(w => [w.id || w.dbId || Math.random(), w])).values()
   );
 
-  // Sort newest on top
   uniqueWorkouts.sort((a: any, b: any) => {
     const dateA = new Date(a.start || a.date || a.timestamp || 0).getTime();
     const dateB = new Date(b.start || b.date || b.timestamp || 0).getTime();
-    return dateB - dateA; // Descending order
+    return dateB - dateA;
   });
 
   return uniqueWorkouts;
@@ -595,7 +711,6 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
 
 export const getIgnoredWorkouts = async (userId: string): Promise<string[]> => {
   try {
-    // FIX: Read directly from the main user profile document
     const docRef = doc(db, 'users', userId);
     const snap = await getDoc(docRef);
     if (snap.exists() && snap.data().ignoredWorkouts) {
@@ -610,7 +725,6 @@ export const getIgnoredWorkouts = async (userId: string): Promise<string[]> => {
 
 export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ignore: boolean) => {
   try {
-    // FIX: Save directly to the main user profile document
     const docRef = doc(db, 'users', userId);
     await setDoc(docRef, {
       ignoredWorkouts: ignore ? arrayUnion(workoutId) : arrayRemove(workoutId)
@@ -639,7 +753,6 @@ export async function getDoneLoggingDates(userId: string): Promise<Record<string
 export async function toggleDoneLoggingDate(userId: string, dateStr: string, isDone: boolean) {
   try {
     const docRef = doc(db, 'users', userId);
-    // Use merge: true to update just this specific date without erasing the user's other profile data
     await setDoc(docRef, {
       doneLoggingDates: {
         [dateStr]: isDone
