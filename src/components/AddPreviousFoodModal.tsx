@@ -4,6 +4,8 @@ import { Food, FoodLog } from '../types';
 import { deleteFood, getAllFoodLogs, updateFood, createFoodLog, updateAllPastLogsForFood } from '../services/database';
 import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from './BarcodeScanner';
+import { FOOD_ICONS } from '../constants/icons';
+import Icon from './Icon';
 import './AddPreviousFoodModal.css';
 
 interface Props {
@@ -23,52 +25,6 @@ interface Props {
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
-
-const FOOD_ICONS = [
-  { icon: '🍎', title: 'Apple (Red)' }, { icon: '🍏', title: 'Apple (Green)' }, { icon: '🥑', title: 'Avocado' },
-  { icon: '🍼', title: 'Baby Bottle / Formula' }, { icon: '🥓', title: 'Bacon' }, { icon: '🥯', title: 'Bagel' },
-  { icon: '🥖', title: 'Baguette' }, { icon: '🍌', title: 'Banana' }, { icon: '🫘', title: 'Beans' },
-  { icon: '🍺', title: 'Beer' }, { icon: '🍻', title: 'Beers (Cheers)' }, { icon: '🫑', title: 'Bell Pepper' },
-  { icon: '🍱', title: 'Bento / Lunchbox' }, { icon: '🎂', title: 'Birthday Cake' }, { icon: '🫐', title: 'Blueberries' },
-  { icon: '🍖', title: 'Bone-In Meat / Ribs' }, { icon: '🥣', title: 'Bowl with Spoon / Cereal' }, { icon: '🍞', title: 'Bread' },
-  { icon: '🥦', title: 'Broccoli' }, { icon: '🧋', title: 'Bubble Tea / Boba' }, { icon: '🍔', title: 'Burger' },
-  { icon: '🌯', title: 'Burrito' }, { icon: '🧈', title: 'Butter' }, { icon: '🍰', title: 'Cake / Shortcake' },
-  { icon: '🍬', title: 'Candy' }, { icon: '🥫', title: 'Canned Food / Soup' }, { icon: '🥕', title: 'Carrot' },
-  { icon: '🍾', title: 'Champagne / Sparkling Wine' }, { icon: '🧀', title: 'Cheese' }, { icon: '🍒', title: 'Cherries' },
-  { icon: '🌰', title: 'Chestnut / Nut' }, { icon: '🍗', title: 'Chicken / Poultry' }, { icon: '🍫', title: 'Chocolate' },
-  { icon: '🥂', title: 'Clinking Glasses' }, { icon: '🍸', title: 'Cocktail / Martini' }, { icon: '🥥', title: 'Coconut' },
-  { icon: '☕', title: 'Coffee / Hot Drink' }, { icon: '🍪', title: 'Cookie' }, { icon: '🌽', title: 'Corn' },
-  { icon: '🦀', title: 'Crab' }, { icon: '🥐', title: 'Croissant' }, { icon: '🥒', title: 'Cucumber' },
-  { icon: '🧁', title: 'Cupcake / Muffin' }, { icon: '🍛', title: 'Curry' }, { icon: '🍡', title: 'Dango / Sweet Skewer' },
-  { icon: '🍩', title: 'Donut' }, { icon: '🥟', title: 'Dumplings' }, { icon: '🥚', title: 'Egg (Boiled/Raw)' },
-  { icon: '🍳', title: 'Egg (Fried)' }, { icon: '🍆', title: 'Eggplant' }, { icon: '🧆', title: 'Falafel / Meatball' },
-  { icon: '🍥', title: 'Fish Cake' }, { icon: '🫓', title: 'Flatbread / Arepa' }, { icon: '🫕', title: 'Fondue / Cheese Dip' },
-  { icon: '🥠', title: 'Fortune Cookie' }, { icon: '🍟', title: 'Fries' }, { icon: '🧄', title: 'Garlic' },
-  { icon: '🫚', title: 'Ginger' }, { icon: '🍇', title: 'Grapes' }, { icon: '🍯', title: 'Honey / Syrup' },
-  { icon: '🌭', title: 'Hot Dog' }, { icon: '🌶️', title: 'Hot Pepper / Spicy' }, { icon: '🧊', title: 'Ice / Water' },
-  { icon: '🍨', title: 'Ice Cream (Scoop)' }, { icon: '🍦', title: 'Ice Cream (Soft Serve)' }, { icon: '🧃', title: 'Juice Box' },
-  { icon: '🥝', title: 'Kiwi' }, { icon: '🍋', title: 'Lemon' }, { icon: '🥬', title: 'Lettuce / Greens' },
-  { icon: '🦞', title: 'Lobster' }, { icon: '🍭', title: 'Lollipop' }, { icon: '🥭', title: 'Mango' },
-  { icon: '🧉', title: 'Mate / Herbal Tea' }, { icon: '🍈', title: 'Melon' }, { icon: '🥛', title: 'Milk' },
-  { icon: '🥮', title: 'Mooncake' }, { icon: '🍄', title: 'Mushroom' }, { icon: '🍜', title: 'Noodles / Ramen' },
-  { icon: '🐙', title: 'Octopus' }, { icon: '🍢', title: 'Oden / Skewer' }, { icon: '🫒', title: 'Olive' },
-  { icon: '🧅', title: 'Onion' }, { icon: '🍊', title: 'Orange' }, { icon: '🦪', title: 'Oyster / Clam' },
-  { icon: '🥞', title: 'Pancakes' }, { icon: '🍝', title: 'Pasta' }, { icon: '🍑', title: 'Peach' },
-  { icon: '🥜', title: 'Peanuts' }, { icon: '🍐', title: 'Pear' }, { icon: '🫛', title: 'Peas / Pea Pod' },
-  { icon: '🥧', title: 'Pie' }, { icon: '🍍', title: 'Pineapple' }, { icon: '🥙', title: 'Pita / Gyro / Falafel Wrap' },
-  { icon: '🍕', title: 'Pizza' }, { icon: '🍿', title: 'Popcorn' }, { icon: '🍲', title: 'Pot of Food / Soup' },
-  { icon: '🥔', title: 'Potato' }, { icon: '🥨', title: 'Pretzel' }, { icon: '🍮', title: 'Pudding / Flan' },
-  { icon: '🍚', title: 'Rice' }, { icon: '🍙', title: 'Rice Ball' }, { icon: '🍘', title: 'Rice Cracker' },
-  { icon: '🍶', title: 'Sake' }, { icon: '🥗', title: 'Salad' }, { icon: '🧂', title: 'Salt / Spices' },
-  { icon: '🥪', title: 'Sandwich' }, { icon: '🍧', title: 'Shaved Ice' }, { icon: '🦐', title: 'Shrimp' },
-  { icon: '🍤', title: 'Shrimp (Fried)' }, { icon: '🥤', title: 'Soda / Fast Food Drink' }, { icon: '🦑', title: 'Squid' },
-  { icon: '🥩', title: 'Steak / Meat' }, { icon: '🥘', title: 'Stew / Casserole / Paella' }, { icon: '🍓', title: 'Strawberry' },
-  { icon: '🍣', title: 'Sushi' }, { icon: '🍠', title: 'Sweet Potato / Yam' }, { icon: '🌮', title: 'Taco' },
-  { icon: '🥡', title: 'Takeout Box' }, { icon: '🫔', title: 'Tamale / Wrap' }, { icon: '🍵', title: 'Tea / Matcha' },
-  { icon: '🫖', title: 'Teapot' }, { icon: '🍅', title: 'Tomato' }, { icon: '🍹', title: 'Tropical Drink' },
-  { icon: '💊', title: 'Vitamin / Supplement' }, { icon: '🧇', title: 'Waffle' }, { icon: '🍉', title: 'Watermelon' },
-  { icon: '🥃', title: 'Whiskey / Liquor' }, { icon: '🍷', title: 'Wine' }
-].sort((a, b) => a.title.localeCompare(b.title));
 
 const getLocalTodayString = () => {
   const d = new Date();
@@ -147,7 +103,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   });
 
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
-  const [pendingFoodUpdate, setPendingFoodUpdate] = useState<Food | null>(null); 
   const [editFormData, setEditFormData] = useState({
     name: '', brand: '', icon: '', upc: '', calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
     carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
@@ -326,9 +281,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
   };
 
-  const handleSaveNutrition = (e: React.FormEvent) => {
+  // Directly save updates to DB, cascade to all logs, and close edit mode without popup
+  const handleSaveNutritionForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFood) return;
+    if (!selectedFood || !user) return;
+    setError('');
 
     if (!editFormData.name.trim()) { setError('Name is required'); return; }
     if (!editFormData.calories) { setError('Calories is required'); return; }
@@ -363,43 +320,49 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       volumes: validVolumes.length > 0 ? validVolumes : undefined,
     };
 
-    setPendingFoodUpdate(updatedFood);
-  };
-
-  const finalizeSaveNutrition = async (updatePast: boolean) => {
-    if (!selectedFood || !pendingFoodUpdate) return;
-
     try {
       setLoading(true);
       const cleanFirebasePayload = Object.fromEntries(
-        Object.entries(pendingFoodUpdate).filter(([_, v]) => v !== undefined)
+        Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
       );
       
+      // Update Base Food
       await updateFood(selectedFood.id, cleanFirebasePayload);
       
-      if (updatePast && user) {
-        await updateAllPastLogsForFood(user.uid, selectedFood.id, pendingFoodUpdate);
-        const newLogs = await getAllFoodLogs(user.uid);
-        setAllLogs(newLogs);
-      }
+      // Cascade past logs
+      await updateAllPastLogsForFood(user.uid, selectedFood.id, updatedFood);
+      const newLogs = await getAllFoodLogs(user.uid);
+      setAllLogs(newLogs);
 
-      setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? pendingFoodUpdate : f));
-      setSelectedFood(pendingFoodUpdate);
+      // Update local state
+      setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
+      setSelectedFood(updatedFood);
+      
+      // Safely reset method if a volume they were previously logging with was deleted
+      setLogDetails(prev => {
+        let safeDetails = { ...prev };
+        const isVolMethod = safeDetails.consumptionMethod.startsWith('volume-');
+        if (isVolMethod) {
+            const vIdx = parseInt(safeDetails.consumptionMethod.split('-')[1]);
+            if (!updatedFood.volumes || !updatedFood.volumes[vIdx]) {
+                safeDetails = {
+                    ...safeDetails,
+                    consumptionMethod: 'serving',
+                    servingsConsumed: '1',
+                    volumeConsumed: ''
+                };
+            }
+        }
+        return safeDetails;
+      });
+
       setIsEditingNutrition(false);
       setError('');
-      
-      setLogDetails(prev => ({
-        ...prev,
-        consumptionMethod: 'serving',
-        servingsConsumed: '1',
-        volumeConsumed: ''
-      }));
     } catch (err) {
       console.error("Failed to update food label:", err);
       setError("Failed to save changes to database.");
     } finally {
       setLoading(false);
-      setPendingFoodUpdate(null);
     }
   };
 
@@ -531,8 +494,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     };
   };
 
-  const preview = selectedFood ? calculatePreview() : null;
-
   const handleAddFood = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFood) return;
@@ -608,17 +569,25 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
 
-  if (!selectedFood) {
-    const filteredFoods = localFoods.filter(food => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
-      const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
-      const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
-      return matchesName || matchesBrand || matchesUPC;
-    });
+  const filteredFoods = localFoods.filter(food => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
+    const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
+    const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
+    return matchesName || matchesBrand || matchesUPC;
+  });
 
-    return (
-      <div className="previous-food-modal list-view" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+  const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
+  const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
+  const selectedVol = (selectedVolIndex >= 0 && selectedFood?.volumes) ? selectedFood.volumes[selectedVolIndex] : null;
+  const hasVolumes = selectedFood?.volumes && selectedFood.volumes.length > 0;
+  
+  const preview = selectedFood ? calculatePreview() : null;
+
+  return (
+    <>
+      {/* --- 1. LIST VIEW --- */}
+      <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexShrink: 0 }}>
@@ -750,9 +719,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                   )}
                   
                   <div style={{ flex: 1, paddingRight: '2rem' }}>
-                    <div className="food-name" style={{ marginBottom: '0.15rem', textTransform: 'capitalize' }}>
-                      {food.icon && <span style={{ marginRight: '0.3rem' }}>{food.icon}</span>}
-                      {food.name}
+                    <div className="food-name" style={{ marginBottom: '0.15rem', textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
+                      {food.icon && <Icon icon={food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />}
+                      <span>{food.name}</span>
                     </div>
                     {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', textTransform: 'capitalize' }}>{food.brand}</div>}
                     <div className="food-serving">
@@ -783,12 +752,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           </button>
         </div>
       </div>
-    );
-  }
 
-  if (isEditingNutrition) {
-    return (
-      <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+      {/* --- 2. EDIT NUTRITION VIEW --- */}
+      <div className="previous-food-modal" style={{ display: isEditingNutrition ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Edit Nutrition Label</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
           Update the base nutrition for this entry.
@@ -796,7 +762,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
         {error && <div className="error">{error}</div>}
         
-        <form onSubmit={handleSaveNutrition}>
+        <form onSubmit={handleSaveNutritionForm}>
           <div className="form-group">
             <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
             <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} required />
@@ -818,7 +784,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {editFormData.icon ? (
-                  <><span style={{ fontSize: '1.2rem' }}>{editFormData.icon}</span><span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span></>
+                  <>
+                    <Icon icon={editFormData.icon} size="1.2rem" />
+                    <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span>
+                  </>
                 ) : "Select an Icon..."}
               </div>
               <span>▼</span>
@@ -837,7 +806,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
                   <div onClick={() => { setEditFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
                   {filteredIcons.map(item => (
                     <div key={item.title} onClick={() => { setEditFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: editFormData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
-                      <span style={{ fontSize: '1.4rem' }}>{item.icon}</span><span>{item.title}</span>
+                      <Icon icon={item.icon} size="1.4rem" />
+                      <span>{item.title}</span>
                     </div>
                   ))}
                 </div>
@@ -909,275 +879,228 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           <div className="form-group"><label htmlFor="protein">Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={editFormData.protein} onChange={handleEditChange} /></div>
 
           <div className="form-actions" style={{ marginTop: '2rem' }}>
-            <button type="submit" className="btn btn-primary">Save Changes</button>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsEditingNutrition(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditingNutrition(false)} disabled={loading}>
+              Cancel
+            </button>
           </div>
         </form>
 
-        {pendingFoodUpdate && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 9999, 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', 
-            padding: '1rem'
-          }}>
-            <div style={{ 
-              backgroundColor: '#fff', padding: '1.5rem', borderRadius: '0.75rem', 
-              maxWidth: '400px', width: '100%', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1e293b' }}>Update Past Logs?</h3>
-              <p style={{ color: '#475569', marginBottom: '1.5rem', fontSize: '0.95rem', lineHeight: 1.5 }}>
-                Do you want to update all past logs of this food with the new nutrition information? <br/><br/>
-                If you click <strong>No</strong>, only future logs will use this new information.
-              </p>
-              
-              <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => finalizeSaveNutrition(false)} 
-                  disabled={loading} 
-                  style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
-                >
-                  No
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-primary" 
-                  onClick={() => finalizeSaveNutrition(true)} 
-                  disabled={loading} 
-                  style={{ flex: '1 1 0', boxSizing: 'border-box', padding: '0.75rem', margin: 0 }}
-                >
-                  {loading ? 'Saving...' : 'Yes'}
-                </button>
-              </div>
-
-              <button 
-                type="button" 
-                onClick={() => setPendingFoodUpdate(null)} 
-                disabled={loading} 
-                style={{ width: '100%', marginTop: '0.75rem', padding: '0.5rem', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                Cancel Edit
-              </button>
-            </div>
-          </div>
-        )}
         {isEditScannerOpen && (
           <BarcodeScanner onClose={() => setIsEditScannerOpen(false)} onScanSuccess={(code) => { setEditFormData(prev => ({ ...prev, upc: code })); setIsEditScannerOpen(false); }} />
         )}
       </div>
-    );
-  }
 
-  const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
-  const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
-  const selectedVol = (selectedVolIndex >= 0 && selectedFood.volumes) ? selectedFood.volumes[selectedVolIndex] : null;
-  const hasVolumes = selectedFood.volumes && selectedFood.volumes.length > 0;
-
-  return (
-    <div className="previous-food-modal" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h3 style={{ marginBottom: '0.25rem' }}>Log Details</h3>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
-          When did you {isVitaminMode ? 'take' : 'eat'} <strong style={{ textTransform: 'capitalize' }}>{selectedFood.name}</strong>, and how much?
-        </p>
-        <button
-          type="button" 
-          className="btn btn-secondary btn-sm" 
-          onClick={handleEditClick}
-          style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-        >
-          ✏️ Edit Label
-        </button>
-      </div>
-
-      {error && <div className="error">{error}</div>}
-
-      <form onSubmit={handleAddFood}>
-        <div className="form-group">
-          <label htmlFor="date">Date *</label>
-          <input 
-            type="date" 
-            id="date"
-            name="date"
-            value={logDetails.date} 
-            onChange={handleLogDetailsChange}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
-            required
-          />
-        </div>
-
-        {!isVitaminMode && (
-          <div className="form-group">
-            <label htmlFor="mealType">Meal Category *</label>
-            <select
-              id="mealType"
-              name="mealType"
-              value={logDetails.mealType}
-              onChange={handleLogDetailsChange}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-              required
-            >
-              <option value="" disabled>Select a Category...</option>
-              <option value="Breakfast">🌅 Breakfast</option>
-              <option value="Lunch">☀️ Lunch</option>
-              <option value="Dinner">🌙 Dinner</option>
-              <option value="Snack">🍎 Snack</option>
-            </select>
-          </div>
-        )}
-
-        <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
-
-        <div className="form-group">
-          <label style={{ display: 'block', marginBottom: '0.75rem' }}>How do you want to log this? *</label>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
-              <input 
-                type="radio" 
-                name="consumptionMethod" 
-                value="serving" 
-                checked={logDetails.consumptionMethod === 'serving'} 
-                onChange={handleLogDetailsChange} 
-                style={{ width: 'auto', margin: 0 }} 
-              /> 
-              By Servings
-            </label>
-            
-            {hasVolumes && selectedFood.volumes!.map((vol, index) => {
-              if (!vol.amount) return null;
-              return (
-                <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
-                  <input 
-                    type="radio" 
-                    name="consumptionMethod" 
-                    value={`volume-${index}`} 
-                    checked={logDetails.consumptionMethod === `volume-${index}`} 
-                    onChange={handleLogDetailsChange} 
-                    style={{ width: 'auto', margin: 0 }} 
-                  /> 
-                  By {vol.unit}
-                </label>
-              );
-            })}
-          </div>
-          {!hasVolumes && (
-             <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
-               * Logging by weight/volume/amount is disabled because no volume was entered for this food previously. Use the 'Edit Label' button to add volumes.
-             </span>
-          )}
-        </div>
-
-        {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
-          <div className="form-group">
-            <label htmlFor="servingsConsumed">Number of Servings {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
-            <input
-              id="servingsConsumed"
-              type="text"
-              inputMode="decimal"
-              name="servingsConsumed"
-              value={logDetails.servingsConsumed}
-              onChange={handleLogDetailsChange}
-              placeholder="1"
-              required
-            />
-          </div>
-        ) : (
-          <div className="form-group">
-            <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
-            <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                id="volumeConsumed"
-                type="text"
-                inputMode="decimal"
-                name="volumeConsumed"
-                style={{ flex: 1 }}
-                value={logDetails.volumeConsumed}
-                onChange={handleLogDetailsChange}
-                placeholder={`e.g., ${selectedVol.amount}`}
-                required
-              />
-              <span style={{ 
-                padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', 
-                border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', minWidth: '3rem'
-              }}>
-                {selectedVol.unit}
-              </span>
+      {/* --- 3. LOG DETAILS VIEW --- */}
+      <div className="previous-food-modal" style={{ display: (selectedFood && !isEditingNutrition) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {selectedFood && (
+          <>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ marginBottom: '0.25rem' }}>Log Details</h3>
+              <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
+                When did you {isVitaminMode ? 'take' : 'eat'} <strong style={{ textTransform: 'capitalize' }}>{selectedFood.name}</strong>, and how much?
+              </p>
+              <button
+                type="button" 
+                className="btn btn-secondary btn-sm" 
+                onClick={handleEditClick}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              >
+                ✏️ Edit Label
+              </button>
             </div>
-          </div>
-        )}
 
-        {preview && (
-          <div style={{ 
-            marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', 
-            borderRadius: '0.75rem', border: '1px solid #e2e8f0'
-          }}>
-            <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
-              Nutrition Preview
-            </h4>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              {[
-                { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
-                { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
-                { label: 'Saturated Fat', value: `${preview.saturatedFat}g`, isHighlight: false, indent: true },
-                { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false, indent: true },
-                { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false, indent: false },
-                { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false, indent: false },
-                { label: 'Total Carbohydrate', value: `${preview.carbs}g`, isHighlight: false, indent: false },
-                { label: 'Dietary Fiber', value: `${preview.fiber}g`, isHighlight: false, indent: true },
-                { label: 'Total Sugars', value: `${preview.sugar}g`, isHighlight: false, indent: true },
-                { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
-              ].map((nutrient, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                  borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 9 ? '0.2rem' : '0'
-                }}>
-                  <span style={{ 
-                     fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', 
-                     color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400,
-                     paddingLeft: nutrient.indent ? '0.75rem' : '0'
-                  }}>
-                    {nutrient.label}
-                  </span>
-                  <span style={{ 
-                    fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
-                    fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
-                  }}>
-                    {nutrient.value}
-                  </span>
+            {error && <div className="error">{error}</div>}
+
+            <form onSubmit={handleAddFood}>
+              <div className="form-group">
+                <label htmlFor="date">Date *</label>
+                <input 
+                  type="date" 
+                  id="date"
+                  name="date"
+                  value={logDetails.date} 
+                  onChange={handleLogDetailsChange}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
+                  required
+                />
+              </div>
+
+              {!isVitaminMode && (
+                <div className="form-group">
+                  <label htmlFor="mealType">Meal Category *</label>
+                  <select
+                    id="mealType"
+                    name="mealType"
+                    value={logDetails.mealType}
+                    onChange={handleLogDetailsChange}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+                    required
+                  >
+                    <option value="" disabled>Select a Category...</option>
+                    <option value="Breakfast">🌅 Breakfast</option>
+                    <option value="Lunch">☀️ Lunch</option>
+                    <option value="Dinner">🌙 Dinner</option>
+                    <option value="Snack">🍎 Snack</option>
+                  </select>
                 </div>
-              ))}
-            </div>
+              )}
 
-          </div>
+              <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
+
+              <div className="form-group">
+                <label style={{ display: 'block', marginBottom: '0.75rem' }}>How do you want to log this? *</label>
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
+                    <input 
+                      type="radio" 
+                      name="consumptionMethod" 
+                      value="serving" 
+                      checked={logDetails.consumptionMethod === 'serving'} 
+                      onChange={handleLogDetailsChange} 
+                      style={{ width: 'auto', margin: 0 }} 
+                    /> 
+                    By Servings
+                  </label>
+                  
+                  {hasVolumes && selectedFood.volumes!.map((vol, index) => {
+                    if (!vol.amount) return null;
+                    return (
+                      <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'normal' }}>
+                        <input 
+                          type="radio" 
+                          name="consumptionMethod" 
+                          value={`volume-${index}`} 
+                          checked={logDetails.consumptionMethod === `volume-${index}`} 
+                          onChange={handleLogDetailsChange} 
+                          style={{ width: 'auto', margin: 0 }} 
+                        /> 
+                        By {vol.unit}
+                      </label>
+                    );
+                  })}
+                </div>
+                {!hasVolumes && (
+                   <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
+                     * Logging by weight/volume/amount is disabled because no volume was entered for this food previously. Use the 'Edit Label' button to add volumes.
+                   </span>
+                )}
+              </div>
+
+              {logDetails.consumptionMethod === 'serving' || !selectedVol ? (
+                <div className="form-group">
+                  <label htmlFor="servingsConsumed">Number of Servings {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
+                  <input
+                    id="servingsConsumed"
+                    type="text"
+                    inputMode="decimal"
+                    name="servingsConsumed"
+                    value={logDetails.servingsConsumed}
+                    onChange={handleLogDetailsChange}
+                    placeholder="1"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label htmlFor="volumeConsumed">Amount {isVitaminMode ? 'Taken' : 'Eaten'} *</label>
+                  <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      id="volumeConsumed"
+                      type="text"
+                      inputMode="decimal"
+                      name="volumeConsumed"
+                      style={{ flex: 1 }}
+                      value={logDetails.volumeConsumed}
+                      onChange={handleLogDetailsChange}
+                      placeholder={`e.g., ${selectedVol.amount}`}
+                      required
+                    />
+                    <span style={{ 
+                      padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', 
+                      border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', minWidth: '3rem'
+                    }}>
+                      {selectedVol.unit}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {preview && (
+                <div style={{ 
+                  marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', 
+                  borderRadius: '0.75rem', border: '1px solid #e2e8f0'
+                }}>
+                  <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
+                    Nutrition Preview
+                  </h4>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {[
+                      { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
+                      { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
+                      { label: 'Saturated Fat', value: `${preview.saturatedFat}g`, isHighlight: false, indent: true },
+                      { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false, indent: true },
+                      { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false, indent: false },
+                      { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false, indent: false },
+                      { label: 'Total Carbohydrate', value: `${preview.carbs}g`, isHighlight: false, indent: false },
+                      { label: 'Dietary Fiber', value: `${preview.fiber}g`, isHighlight: false, indent: true },
+                      { label: 'Total Sugars', value: `${preview.sugar}g`, isHighlight: false, indent: true },
+                      { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
+                    ].map((nutrient, idx) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                        borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                      }}>
+                        <span style={{ 
+                           fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', 
+                           color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400,
+                           paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                        }}>
+                          {nutrient.label}
+                        </span>
+                        <span style={{ 
+                          fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                          fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                        }}>
+                          {nutrient.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+                <input 
+                  type="checkbox" 
+                  id="isPlanned"
+                  name="isPlanned"
+                  checked={logDetails.isPlanned}
+                  onChange={handleLogDetailsChange}
+                  style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                />
+                <label htmlFor="isPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+                  Plan for later
+                </label>
+              </div>
+
+              <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Adding...' : 'Add to Log'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setSelectedFood(null)}>
+                  Back
+                </button>
+              </div>
+            </form>
+          </>
         )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
-          <input 
-            type="checkbox" 
-            id="isPlanned"
-            name="isPlanned"
-            checked={logDetails.isPlanned}
-            onChange={handleLogDetailsChange}
-            style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
-          />
-          <label htmlFor="isPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
-            Plan for later
-          </label>
-        </div>
-
-        <div className="form-actions" style={{ marginTop: '1.5rem' }}>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Adding...' : 'Add to Log'}
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setSelectedFood(null)}>
-            Back
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </>
   );
 }

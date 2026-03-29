@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Food, FoodLog } from '../types';
-import { createFood, updateFood, createFoodLog, updateFoodLog } from '../services/database';
+import { createFood, updateFood, createFoodLog, updateFoodLog, getAllFoodLogs } from '../services/database';
 import CreateFoodModal from './CreateFoodModal';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
@@ -222,11 +222,34 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Used when editing from "Previous Foods" menu and hitting "Save Updates" (does not log it)
   const handleSaveUpdatesOnly = async () => {
     if (!user) return;
     setIsLogging(true);
     try {
-      await saveRecipeToDb(getBaseNutrition());
+      const baseNutrition = getBaseNutrition();
+      const targetFoodId = await saveRecipeToDb(baseNutrition);
+
+      // Cascade ONLY Name & Icon changes to ALL OTHER logs of this recipe
+      const allLogs = await getAllFoodLogs(user.uid);
+      const otherLogs = allLogs.filter((l: any) => 
+        (l.foodId === targetFoodId || l.food?.id === targetFoodId)
+      );
+      
+      const updatePromises = otherLogs.map((pastLog: any) => {
+        if (pastLog.food?.name !== baseNutrition.name || pastLog.food?.icon !== baseNutrition.icon) {
+          const updatedPastFood = { 
+            ...pastLog.food, 
+            name: baseNutrition.name, 
+            icon: baseNutrition.icon 
+          };
+          return updateFoodLog(user.uid, pastLog.id, { food: updatedPastFood });
+        }
+        return Promise.resolve();
+      });
+      
+      await Promise.all(updatePromises);
+
       onCreated();
       onClose();
     } catch (err) {
@@ -264,9 +287,53 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       if (isEditLogMode && editLog) {
         payload.foodId = targetFoodId;
         payload.food.id = targetFoodId;
+        
+        // 1. Update the SPECIFIC log with full nutrition updates
         await updateFoodLog(user.uid, editLog.id, payload);
+        
+        // 2. Cascade ONLY Name & Icon changes to ALL OTHER logs of this recipe
+        const allLogs = await getAllFoodLogs(user.uid);
+        const otherLogs = allLogs.filter((l: any) => 
+          (l.foodId === targetFoodId || l.food?.id === targetFoodId) && l.id !== editLog.id
+        );
+        
+        const updatePromises = otherLogs.map((pastLog: any) => {
+          if (pastLog.food?.name !== baseNutrition.name || pastLog.food?.icon !== baseNutrition.icon) {
+            const updatedPastFood = { 
+              ...pastLog.food, 
+              name: baseNutrition.name, 
+              icon: baseNutrition.icon 
+            };
+            return updateFoodLog(user.uid, pastLog.id, { food: updatedPastFood });
+          }
+          return Promise.resolve();
+        });
+        
+        await Promise.all(updatePromises);
       } else {
+        // We are creating a NEW log.
         await createFoodLog(user.uid, payload);
+        
+        // But if we are modifying an EXISTING recipe from the Previous Foods menu...
+        if (sourceFood && sourceFood.id) {
+           const allLogs = await getAllFoodLogs(user.uid);
+           // We filter out logs that match the target ID, and we don't have to worry about the new log conflicting because it has a new ID.
+           const otherLogs = allLogs.filter((l: any) => 
+             (l.foodId === targetFoodId || l.food?.id === targetFoodId)
+           );
+           const updatePromises = otherLogs.map((pastLog: any) => {
+             if (pastLog.food?.name !== baseNutrition.name || pastLog.food?.icon !== baseNutrition.icon) {
+               const updatedPastFood = { 
+                 ...pastLog.food, 
+                 name: baseNutrition.name, 
+                 icon: baseNutrition.icon 
+               };
+               return updateFoodLog(user.uid, pastLog.id, { food: updatedPastFood });
+             }
+             return Promise.resolve();
+           });
+           await Promise.all(updatePromises);
+        }
       }
       
       onCreated();

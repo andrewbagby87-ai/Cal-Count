@@ -17,12 +17,12 @@ export const FOOD_ICONS = [
   { icon: '🦀', title: 'Crab' }, { icon: '🥐', title: 'Croissant' }, { icon: '🥒', title: 'Cucumber' },
   { icon: '🧁', title: 'Cupcake / Muffin' }, { icon: '🍛', title: 'Curry' }, { icon: '🍡', title: 'Dango / Sweet Skewer' },
   { icon: '🍩', title: 'Donut' }, { icon: '🥟', title: 'Dumplings' }, { icon: '🥚', title: 'Egg (Boiled/Raw)' },
-  { icon: '🍳', title: 'Egg (Fried)' }, { icon: '🍆', title: 'Eggplant' }, { icon: '🧆', title: 'Falafel / Meatball' },
+  { icon: '🍳', title: 'Egg (Fried)' }, { icon: '🍆', title: 'Eggplant' }, { icon: './meatballs.png', title: 'Meatball' },
   { icon: '🍥', title: 'Fish Cake' }, { icon: '🫓', title: 'Flatbread / Arepa' }, { icon: '🫕', title: 'Fondue / Cheese Dip' },
   { icon: '🥠', title: 'Fortune Cookie' }, { icon: '🍟', title: 'Fries' }, { icon: '🧄', title: 'Garlic' },
   { icon: '🫚', title: 'Ginger' }, { icon: '🍇', title: 'Grapes' }, { icon: '🍯', title: 'Honey / Syrup' },
   { icon: '🌭', title: 'Hot Dog' }, { icon: '🌶️', title: 'Hot Pepper / Spicy' }, { icon: '🧊', title: 'Ice / Water' },
-  { icon: '🍨', title: 'Ice Cream (Scoop)' }, { icon: '🍦', title: 'Ice Cream (Soft Serve)' }, { icon: '🧃', title: 'Juice Box' },
+  { icon: '🍨', title: 'Ice Cream (Scoop)' }, { icon: '🍦', title: 'Ice Cream (Cone)' }, { icon: '🧃', title: 'Juice Box' },
   { icon: '🥝', title: 'Kiwi' }, { icon: '🍋', title: 'Lemon' }, { icon: '🥬', title: 'Lettuce / Greens' },
   { icon: '🦞', title: 'Lobster' }, { icon: '🍭', title: 'Lollipop' }, { icon: '🥭', title: 'Mango' },
   { icon: '🧉', title: 'Mate / Herbal Tea' }, { icon: '🍈', title: 'Melon' }, { icon: '🥛', title: 'Milk' },
@@ -43,9 +43,17 @@ export const FOOD_ICONS = [
   { icon: '🥡', title: 'Takeout Box' }, { icon: '🫔', title: 'Tamale / Wrap' }, { icon: '🍵', title: 'Tea / Matcha' },
   { icon: '🫖', title: 'Teapot' }, { icon: '🍅', title: 'Tomato' }, { icon: '🍹', title: 'Tropical Drink' },
   { icon: '💊', title: 'Vitamin / Supplement' }, { icon: '🧇', title: 'Waffle' }, { icon: '🍉', title: 'Watermelon' },
-  { icon: '🥃', title: 'Whiskey / Liquor' }, { icon: '🍷', title: 'Wine' },
-  
-  // Custom Image Examples: Just drop files in the `public` folder and reference them with `/`!
-  //{ icon: '/scale.png', title: 'Kitchen Scale' }
+  { icon: '🥃', title: 'Whiskey / Liquor' }, { icon: '🍷', title: 'Wine' },{ icon: './yogurt.png', title: 'Yogurt' },
+  { icon: './snack.png', title: 'Snack / Chips' }, { icon: './fish.png', title: 'Fish' }, { icon: './crackers.png', title: 'Crackers' },
+  { icon: './guacamole.png', title: 'Guacamole' }, { icon: './bar.png', title: 'Granola Bar' }, { icon: './milk-shake.png', title: 'Milk Shake' },
+  { icon: './oats.png', title: 'Oats / Granola' }, { icon: './dipping-sauce.png', title: 'Dipping Sauce' }, { icon: './chicken-nuggets.png', title: 'Chicken Nuggets' },
+  { icon: './iced-coffee.png', title: 'Iced Coffee' }, { icon: './quesadilla.png', title: 'Quesadilla' }, { icon: './protein-shake.png', title: 'Protein Shake' },
+  { icon: './garlic-bread.png', title: 'Garlic Bread' }, { icon: './peanut-sandwich.png', title: 'Peanut Butter Sandwich' }, { icon: './biscuit.png', title: 'Biscuit' },
+  { icon: './sour-cream.png', title: 'Sour Cream / Cream Cheese' }, { icon: './chicken-sandwich.png', title: 'Chicken Sandwich' }, { icon: './hummus.png', title: 'Hummus' },
+  { icon: './smoothie.png', title: 'Smoothie' }, { icon: './ice-cream-pint.png', title: 'Ice Cream (Pint)' }, { icon: './churros.png', title: 'Churros' },
+  { icon: './sub.png', title: 'Sub' }, { icon: './sugar.png', title: 'Sugar' }, { icon: './can.png', title: 'Soda Can' },
+  { icon: './hash-brown.png', title: 'Hash Brown' }, { icon: './meat.png', title: 'Meat' }, { icon: './breakfast-sandwich.png', title: 'Breakfast Sandwich' },
+  // Custom Image Examples: Just drop files in the `public` folder and reference them with `./`!
+  //{ icon: './scale.png', title: 'Kitchen Scale' }
 
 ].sort((a, b) => a.title.localeCompare(b.title));
