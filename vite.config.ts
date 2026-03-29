@@ -4,7 +4,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/cal-count/',
+  // FIX 1: Exact matching case with capital C's
+  base: '/Cal-Count/', 
   plugins: [
     react(),
     VitePWA({
@@ -21,8 +22,9 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait-primary',
-        id: './cal-count/',
-        start_url: './cal-count/',
+        // FIX 2: Use absolute paths (/) instead of relative (./) and match the exact case
+        id: '/Cal-Count/',
+        start_url: '/Cal-Count/',
         icons: [
           {
             src: 'logo.png',
