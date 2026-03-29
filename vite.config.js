@@ -24,7 +24,7 @@ export default defineConfig({
                 start_url: './Cal-Count/',
                 icons: [
                     {
-                        src: 'public/scale.png',
+                        src: 'public/logo.png',
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'any'
