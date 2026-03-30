@@ -326,7 +326,9 @@ export default function FoodLogTab() {
       await updateFoodLog(user.uid, editingLog.id, updates);
 
       // 2. Update the Master Food Database so your edits save for future use!
-      if (updates.food && updates.food.id) {
+      // Prevent saving Quick Add foods (which have dummy IDs) to the permanent database
+      const isQuickAddLog = updates.food?.id?.startsWith('quick-add-');
+      if (updates.food && updates.food.id && !isQuickAddLog) {
         const baseFoodUpdates = {
           name: updates.food.name,
           brand: updates.food.brand,
@@ -345,7 +347,6 @@ export default function FoodLogTab() {
           volumeUnit: updates.food.volumeUnit
         };
         
-        // FIX: Strip out 'undefined' values before sending to Firebase
         const cleanBaseFoodUpdates = Object.fromEntries(
           Object.entries(baseFoodUpdates).filter(([_, v]) => v !== undefined)
         );
@@ -850,7 +851,10 @@ export default function FoodLogTab() {
         </p>
       </div>
 
-      {selectedLog && (
+      {selectedLog && (() => {
+        const isQuickAddLog = selectedLog.foodId?.startsWith('quick-add-') || selectedLog.food?.id?.startsWith('quick-add-');
+        
+        return (
         <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
             <div className="selected-log-header">
@@ -869,49 +873,75 @@ export default function FoodLogTab() {
                 <h4 style={{ margin: 0, color: '#1e293b' }}>
                   Nutrition Logged
                 </h4>
-                <span style={{ fontSize: '0.85rem', color: '#2563eb', fontWeight: 700, backgroundColor: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #bfdbfe' }}>
-                  {selectedLog.amount} {selectedLog.unit}
-                </span>
+                {!isQuickAddLog && (
+                  <span style={{ fontSize: '0.85rem', color: '#2563eb', fontWeight: 700, backgroundColor: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #bfdbfe' }}>
+                    {selectedLog.amount} {selectedLog.unit}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {[
-                  { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
-                  { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
-                  { label: 'Saturated Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false, indent: true },
-                  { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false, indent: true },
-                  { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false, indent: false },
-                  { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false, indent: false },
-                  { label: 'Total Carbohydrate', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false, indent: false },
-                  { label: 'Dietary Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false, indent: true },
-                  { label: 'Total Sugars', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false, indent: true },
-                  { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false, indent: false },
-                ].map((nutrient, idx) => (
-                  <div key={idx} style={{ 
+                {isQuickAddLog ? (
+                  <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
-                    paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                    alignItems: 'center'
                   }}>
                     <span style={{ 
-                      fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                      fontSize: '0.75rem', 
                       textTransform: 'uppercase', 
-                      color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                      fontWeight: nutrient.isHighlight ? 700 : 400,
-                      paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                      color: '#475569',
+                      fontWeight: 700
                     }}>
-                      {nutrient.label}
+                      Calories
                     </span>
                     <span style={{ 
                       fontWeight: 700, 
-                      color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
-                      fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                      color: '#2563eb', 
+                      fontSize: '1rem' 
                     }}>
-                      {nutrient.value}
+                      {selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal
                     </span>
                   </div>
-                ))}
+                ) : (
+                  [
+                    { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
+                    { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
+                    { label: 'Saturated Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false, indent: true },
+                    { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false, indent: true },
+                    { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false, indent: false },
+                    { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false, indent: false },
+                    { label: 'Total Carbohydrate', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false, indent: false },
+                    { label: 'Dietary Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false, indent: true },
+                    { label: 'Total Sugars', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false, indent: true },
+                    { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false, indent: false },
+                  ].map((nutrient, idx) => (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                      paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                    }}>
+                      <span style={{ 
+                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                        textTransform: 'uppercase', 
+                        color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                        fontWeight: nutrient.isHighlight ? 700 : 400,
+                        paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                      }}>
+                        {nutrient.label}
+                      </span>
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                      }}>
+                        {nutrient.value}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -995,7 +1025,8 @@ export default function FoodLogTab() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showAddModal && (
         <AddFoodModal 

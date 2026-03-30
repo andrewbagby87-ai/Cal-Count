@@ -13,7 +13,7 @@ interface Props {
   onSave: (updates: Partial<FoodLog>) => void;
   onClose: () => void;
   isDoneDay?: boolean;
-  onLabelSaved?: () => void; // NEW: Triggers a background refresh in the parent
+  onLabelSaved?: () => void; 
 }
 
 const ALL_UNITS = ['g', 'oz', 'cup', 'ml', 'each'];
@@ -30,10 +30,10 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const { user } = useAuth();
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
 
-  // We maintain a local copy of the food object so it updates immediately when editing the label
-  const [localFood, setLocalFood] = useState<Food>(log.food as any);
+  // Detect if this is a "Quick Add Calories" log
+  const isQuickAddLog = log.foodId?.startsWith('quick-add-') || log.food?.id?.startsWith('quick-add-');
 
-  // --- States for the "Edit Label" view ---
+  const [localFood, setLocalFood] = useState<Food>(log.food as any);
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
 
   const [editFormData, setEditFormData] = useState({
@@ -45,7 +45,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     labelVolumes: (localFood.volumes && localFood.volumes.length > 0) 
       ? localFood.volumes.map((v: any) => ({ amount: toStr(v.amount), unit: v.unit })) 
       : [{ amount: '', unit: 'g' }],
-    calories: toStr(localFood.calories ?? 0),
+    calories: toStr(localFood.calories ?? (isQuickAddLog ? log.calories : 0)),
     fat: toStr(localFood.fat),
     saturatedFat: toStr(localFood.saturatedFat),
     transFat: toStr((localFood as any).transFat),
@@ -72,7 +72,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- States for the "Log Details" view ---
   let initialMethod = 'serving';
   let initialVolConsumed = '';
   let initialServingsConsumed = '1';
@@ -99,11 +98,49 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Determine if we should show the Planned Toggle
   const originalDate = log.date || getLocalTodayString();
   const isCurrentDateDone = isDoneDay && logDetails.date === originalDate;
 
-  // --- Reusable Logic for Saving the Log Details to DB ---
+// --- Handlers for "Quick Add" Edit View ---
+  const handleQuickAddSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!editFormData.name.trim()) { setError('Title is required'); return; }
+    if (!editFormData.calories) { setError('Calories is required'); return; }
+    if (!localFood.isVitamin && !logDetails.mealType) { setError('Meal Category is required'); return; }
+
+    const cals = parseFloat(editFormData.calories);
+    if (isNaN(cals)) { setError('Invalid calories'); return; }
+
+    setLoading(true);
+    try {
+      const updatedFood = {
+        ...localFood,
+        name: editFormData.name.trim(),
+        icon: editFormData.icon || undefined,
+        calories: cals
+      };
+
+      // By completely omitting 'editedNutrition' here, we satisfy both
+      // TypeScript (because it's a Partial) and Firebase (no undefined values)
+      const cleanFirebasePayload: Partial<FoodLog> = {
+        date: logDetails.date,
+        mealType: logDetails.mealType,
+        isPlanned: logDetails.isPlanned,
+        food: updatedFood,
+        calories: cals
+      };
+
+      onSave(cleanFirebasePayload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      setLoading(false);
+    }
+  };
+
+
+  // --- Reusable Logic for Saving normal Log Details to DB ---
   const processLogSave = async (foodObj: Food, details: typeof logDetails, shouldClose: boolean = true) => {
     if (!foodObj.isVitamin && !details.mealType) throw new Error('A meal category is required');
 
@@ -174,17 +211,14 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     const cleanFirebasePayload = JSON.parse(JSON.stringify(rawPayload));
     
     if (shouldClose) {
-      // Calls parent save handler which commits changes and closes modal
       onSave(cleanFirebasePayload);
     } else {
-      // Directly updates the DB and refreshes background WITHOUT closing the modal
       if (!user) return;
       await updateFoodLog(user.uid, log.id, cleanFirebasePayload);
       if (onLabelSaved) onLabelSaved();
     }
   };
 
-  // --- Handlers for "Edit Label" ---
   const handleEditClick = () => {
     setEditFormData({
       name: localFood.name || '',
@@ -248,7 +282,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     });
   };
 
-  // Directly save updates to the DB without prompting the user
   const handleSaveNutritionForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -294,15 +327,11 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
         Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
       );
       
-      // Save to main foods collection
       await updateFood(localFood.id, cleanFirebasePayload);
-      
-      // Automatically cascade update to ALL past logs and recipes containing this food
       await updateAllPastLogsForFood(user.uid, localFood.id, updatedFood);
 
       setLocalFood(updatedFood);
       
-      // Safely reset method if a volume they were previously logging with was deleted
       let safeDetails = { ...logDetails };
       const isVolMethod = safeDetails.consumptionMethod.startsWith('volume-');
       if (isVolMethod) {
@@ -318,11 +347,8 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
           }
       }
 
-      // Switch back to the edit log view without closing!
       setIsEditingNutrition(false);
       setError('');
-
-      // Save the log specifically with current text inputs, but pass FALSE to prevent closing
       await processLogSave(updatedFood, safeDetails, false);
 
     } catch (err) {
@@ -333,7 +359,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     }
   };
 
-  // --- Handlers for "Log Details" ---
   const handleLogDetailsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = e.target as HTMLInputElement;
     const name = target.name;
@@ -392,7 +417,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     e.preventDefault();
     setError('');
     try {
-      // Passes true to close the modal after manual Log Details save
       await processLogSave(localFood, logDetails, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -428,8 +452,137 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
       <div className="modal-content edit-log-modal-container" onClick={(e) => e.stopPropagation()} style={{ padding: 0, display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflow: 'hidden', borderRadius: '1rem', boxSizing: 'border-box', backgroundColor: '#fff' }}>
         
-        {/* === EDIT NUTRITION VIEW === */}
-        {isEditingNutrition ? (
+        {/* === QUICK ADD EDIT VIEW === */}
+        {isQuickAddLog ? (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, width: '100%' }}>
+            <div style={{ padding: '1.5rem 1.5rem 0.5rem 1.5rem', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                <h3 style={{ margin: 0 }}>Edit Quick Calories</h3>
+                <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0, color: '#64748b' }}>✕</button>
+              </div>
+              <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
+                Update the details of your quick log.
+              </p>
+              {error && <div className="error" style={{ marginTop: '1rem', marginBottom: 0 }}>{error}</div>}
+            </div>
+
+            <form onSubmit={handleQuickAddSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', overflowX: 'hidden' }}>
+                
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="quickName" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Title *</label>
+                  <input id="quickName" type="text" name="name" value={editFormData.name} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required />
+                </div>
+
+                <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }} ref={iconPickerRef}>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Icon / Emoji (Optional)</label>
+                  <div 
+                    onClick={() => setShowIconPicker(!showIconPicker)}
+                    style={{ 
+                      padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex',
+                      alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', color: editFormData.icon ? '#000' : '#94a3b8'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {editFormData.icon ? (
+                        <>
+                          <Icon icon={editFormData.icon} size="1.2rem" />
+                          <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span>
+                        </>
+                      ) : "Select an Icon..."}
+                    </div>
+                    <span>▼</span>
+                  </div>
+
+                  {showIconPicker && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff',
+                      border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '250px', display: 'flex', flexDirection: 'column'
+                    }}>
+                      <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input type="text" placeholder="Search icons..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ width: '100%', padding: '0.5rem', margin: 0 }} />
+                      </div>
+                      <div className="hide-scrollbar" style={{ overflowY: 'auto', flex: 1 }}>
+                        <div onClick={() => { setEditFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
+                        {filteredIcons.map(item => (
+                          <div key={item.title} onClick={() => { setEditFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: editFormData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
+                            <Icon icon={item.icon} size="1.4rem" />
+                            <span>{item.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="quickCalories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories *</label>
+                  <input id="quickCalories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="quickDate" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
+                  <input 
+                    type="date" 
+                    id="quickDate"
+                    name="date"
+                    value={logDetails.date} 
+                    onChange={handleLogDetailsChange}
+                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+                    required
+                  />
+                </div>
+
+                {!localFood.isVitamin && (
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label htmlFor="quickMealType" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Meal Category *</label>
+                    <select
+                      id="quickMealType"
+                      name="mealType"
+                      value={logDetails.mealType}
+                      onChange={handleLogDetailsChange}
+                      style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+                      required
+                    >
+                      <option value="" disabled>Select a Category...</option>
+                      <option value="Breakfast">🌅 Breakfast</option>
+                      <option value="Lunch">☀️ Lunch</option>
+                      <option value="Dinner">🌙 Dinner</option>
+                      <option value="Snack">🍎 Snack</option>
+                    </select>
+                  </div>
+                )}
+
+                {!isCurrentDateDone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+                    <input 
+                      type="checkbox" 
+                      id="quickIsPlanned"
+                      name="isPlanned"
+                      checked={logDetails.isPlanned}
+                      onChange={handleLogDetailsChange}
+                      style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                    />
+                    <label htmlFor="quickIsPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+                      Plan for later
+                    </label>
+                  </div>
+                )}
+
+              </div>
+              <div style={{ padding: '1rem 1.5rem', backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', gap: '0.75rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={loading} style={{ margin: 0, flex: '1 1 0' }}>
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading} style={{ margin: 0, flex: '1 1 0' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : isEditingNutrition ? (
+          /* === EDIT NUTRITION VIEW === */
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, width: '100%' }}>
             {/* Header */}
             <div style={{ padding: '1.5rem 1.5rem 0.5rem 1.5rem', flexShrink: 0 }}>

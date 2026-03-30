@@ -45,6 +45,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
+  // Quick Add Mode States
+  const [isQuickAddMode, setIsQuickAddMode] = useState(false);
+  const [quickAddData, setQuickAddData] = useState({ name: '', icon: '', calories: '' });
+
   useEffect(() => { setLocalFoods(foods); }, [foods]);
 
   useEffect(() => {
@@ -114,12 +118,23 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
-  const iconPickerRef = useRef<HTMLDivElement>(null);
+  
+  // Separate refs for the icon pickers to avoid click-outside conflicts
+  const editIconPickerRef = useRef<HTMLDivElement>(null);
+  const quickAddIconPickerRef = useRef<HTMLDivElement>(null);
+  
   const [isEditScannerOpen, setIsEditScannerOpen] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (iconPickerRef.current && !iconPickerRef.current.contains(event.target as Node)) {
+      let isOutside = true;
+      if (editIconPickerRef.current && editIconPickerRef.current.contains(event.target as Node)) {
+        isOutside = false;
+      }
+      if (quickAddIconPickerRef.current && quickAddIconPickerRef.current.contains(event.target as Node)) {
+        isOutside = false;
+      }
+      if (isOutside) {
         setShowIconPicker(false);
       }
     };
@@ -567,6 +582,51 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     }
   };
 
+  const handleQuickAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setError('');
+
+    if (!quickAddData.name.trim()) { setError('Title is required'); return; }
+    if (!quickAddData.calories) { setError('Calories is required'); return; }
+    if (!isVitaminMode && !logDetails.mealType) { setError('Meal Category is required'); return; }
+
+    const cals = parseFloat(quickAddData.calories);
+    if (isNaN(cals)) { setError('Invalid calories'); return; }
+
+    setLoading(true);
+    try {
+      const tempFoodId = `quick-add-${Date.now()}`;
+      const dummyFood: Food = {
+        id: tempFoodId,
+        userId: user.uid,
+        name: quickAddData.name.trim(),
+        icon: quickAddData.icon || undefined,
+        calories: cals,
+        servingSize: 1,
+        servingUnit: 'serving',
+        createdAt: Date.now()
+      };
+
+      const payload = {
+        date: logDetails.date,
+        foodId: tempFoodId,
+        food: dummyFood,
+        amount: 1,
+        unit: 'serving',
+        mealType: logDetails.mealType,
+        isPlanned: logDetails.isPlanned,
+        calories: cals
+      };
+
+      await onAdd(JSON.parse(JSON.stringify(payload)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to quick add calories');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
 
   const filteredFoods = localFoods.filter(food => {
@@ -587,10 +647,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   return (
     <>
       {/* --- 1. LIST VIEW --- */}
-      <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition && !isQuickAddMode) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexShrink: 0 }}>
           {onCreateNew && (
             <button className="btn btn-primary btn-sm" style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem' }} onClick={onCreateNew}>
               ➕ Create {isVitaminMode ? 'Vitamin' : 'Food'}
@@ -602,6 +662,18 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             </button>
           )}
         </div>
+
+        {!isVitaminMode && (
+          <div style={{ display: 'flex', marginBottom: '1.25rem', flexShrink: 0 }}>
+            <button 
+              className="btn btn-secondary btn-sm" 
+              style={{ width: '100%', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }} 
+              onClick={() => setIsQuickAddMode(true)}
+            >
+              ⚡ Add Calories (Quick Log)
+            </button>
+          </div>
+        )}
 
         <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', flexShrink: 0 }}>
           <input
@@ -753,7 +825,144 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         </div>
       </div>
 
-      {/* --- 2. EDIT NUTRITION VIEW --- */}
+      {/* --- 2. QUICK ADD CALORIES VIEW --- */}
+      <div className="previous-food-modal" style={{ display: isQuickAddMode ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+        <h3 style={{ marginBottom: '0.25rem' }}>Quick Add Calories</h3>
+        <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+          Log calories directly without saving a new food to your list.
+        </p>
+
+        {error && <div className="error">{error}</div>}
+
+        <form onSubmit={handleQuickAddSubmit}>
+          <div className="form-group">
+            <label htmlFor="quickName">Title *</label>
+            <input 
+              id="quickName" 
+              type="text" 
+              value={quickAddData.name} 
+              onChange={e => setQuickAddData({...quickAddData, name: e.target.value})} 
+              placeholder="e.g., Office Donut"
+              required 
+            />
+          </div>
+
+          <div className="form-group" style={{ position: 'relative' }} ref={quickAddIconPickerRef}>
+            <label>Icon / Emoji (Optional)</label>
+            <div 
+              onClick={() => setShowIconPicker(!showIconPicker)}
+              style={{ 
+                padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', color: quickAddData.icon ? '#000' : '#94a3b8'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {quickAddData.icon ? (
+                  <>
+                    <Icon icon={quickAddData.icon} size="1.2rem" />
+                    <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === quickAddData.icon)?.title || 'Custom Icon'}</span>
+                  </>
+                ) : "Select an Icon..."}
+              </div>
+              <span>▼</span>
+            </div>
+
+            {showIconPicker && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff',
+                border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                maxHeight: '250px', display: 'flex', flexDirection: 'column'
+              }}>
+                <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
+                  <input type="text" placeholder="Search icons..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ width: '100%', padding: '0.5rem', margin: 0, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  <div onClick={() => { setQuickAddData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
+                  {filteredIcons.map(item => (
+                    <div key={item.title} onClick={() => { setQuickAddData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: quickAddData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
+                      <Icon icon={item.icon} size="1.4rem" />
+                      <span>{item.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="quickCalories">Calories *</label>
+            <input 
+              id="quickCalories" 
+              type="text" 
+              inputMode="decimal" 
+              value={quickAddData.calories} 
+              onChange={e => {
+                if (e.target.value !== '' && !/^\d*\.?\d*$/.test(e.target.value)) return;
+                setQuickAddData({...quickAddData, calories: e.target.value});
+              }} 
+              required 
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="quickDate">Date *</label>
+            <input 
+              type="date" 
+              id="quickDate"
+              name="date"
+              value={logDetails.date} 
+              onChange={handleLogDetailsChange}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
+              required
+            />
+          </div>
+
+          {!isVitaminMode && (
+            <div className="form-group">
+              <label htmlFor="quickMealType">Meal Category *</label>
+              <select
+                id="quickMealType"
+                name="mealType"
+                value={logDetails.mealType}
+                onChange={handleLogDetailsChange}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
+                required
+              >
+                <option value="" disabled>Select a Category...</option>
+                <option value="Breakfast">🌅 Breakfast</option>
+                <option value="Lunch">☀️ Lunch</option>
+                <option value="Dinner">🌙 Dinner</option>
+                <option value="Snack">🍎 Snack</option>
+              </select>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+            <input 
+              type="checkbox" 
+              id="quickIsPlanned"
+              name="isPlanned"
+              checked={logDetails.isPlanned}
+              onChange={handleLogDetailsChange}
+              style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+            />
+            <label htmlFor="quickIsPlanned" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+              Plan for later
+            </label>
+          </div>
+
+          <div className="form-actions" style={{ marginTop: '2rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Adding...' : 'Add to Log'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsQuickAddMode(false)} disabled={loading}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* --- 3. EDIT NUTRITION VIEW --- */}
       <div className="previous-food-modal" style={{ display: isEditingNutrition ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
         <h3 style={{ marginBottom: '0.25rem' }}>Edit Nutrition Label</h3>
         <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -773,7 +982,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
             <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} />
           </div>
 
-          <div className="form-group" style={{ position: 'relative' }} ref={iconPickerRef}>
+          <div className="form-group" style={{ position: 'relative' }} ref={editIconPickerRef}>
             <label htmlFor="icon">Icon / Emoji (Optional)</label>
             <div 
               onClick={() => setShowIconPicker(!showIconPicker)}
@@ -893,8 +1102,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         )}
       </div>
 
-      {/* --- 3. LOG DETAILS VIEW --- */}
-      <div className="previous-food-modal" style={{ display: (selectedFood && !isEditingNutrition) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {/* --- 4. LOG DETAILS VIEW --- */}
+      <div className="previous-food-modal" style={{ display: (selectedFood && !isEditingNutrition && !isQuickAddMode) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         {selectedFood && (
           <>
             <div style={{ marginBottom: '1.5rem' }}>
