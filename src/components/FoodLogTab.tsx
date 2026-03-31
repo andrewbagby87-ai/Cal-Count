@@ -62,61 +62,42 @@ export default function FoodLogTab() {
   const [burnedCalories, setBurnedCalories] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  // 1. Create the reference point for scrolling to the top
   const topRef = useRef<HTMLDivElement>(null);
 
-  // 2. Scroll to the reference point instantly when the tab loads
   useEffect(() => {
     if (topRef.current) {
       topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
   }, []);
   
-  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [isVitaminMode, setIsVitaminMode] = useState(false);
   const [activeAddMealType, setActiveAddMealType] = useState<string>(''); 
   
-  // Separate Edit States for normal foods vs recipes
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [editingRecipeLog, setEditingRecipeLog] = useState<FoodLog | null>(null);
   const [editingRecipeFood, setEditingRecipeFood] = useState<Food | null>(null);
-  
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Navigator State
   const [viewDate, setViewDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
-
-  // Popup Modal State
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
-
-  // --- Independent Summary Toggle States ---
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
 
-  const isShowingRemaining = (key: string) => {
-    return summaryToggles[key] ?? true; 
-  };
+  const isShowingRemaining = (key: string) => summaryToggles[key] ?? true; 
 
   const toggleSummaryMode = (key: string) => {
-    setSummaryToggles(prev => ({
-      ...prev,
-      [key]: !(prev[key] ?? true) 
-    }));
+    setSummaryToggles(prev => ({ ...prev, [key]: !(prev[key] ?? true) }));
   };
 
-  // Double Tap / Drag and Drop State
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
   const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
-    return () => {
-      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-    };
+    return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current); };
   }, []);
 
   const getDateString = (date: Date) => {
@@ -130,46 +111,23 @@ export default function FoodLogTab() {
   const todayStr = getDateString(new Date());
   const isToday = todayStr === viewStr;
 
-  // --- Firebase Synced Done Logging State ---
   const [doneLoggingDates, setDoneLoggingDates] = useState<Record<string, boolean>>({});
-
   const isDoneLogging = doneLoggingDates[viewStr] || false;
   
   const toggleDoneLogging = async () => {
     if (!user) return;
     const nextState = !isDoneLogging;
-
-    // Optimistic update for instant UI feedback
-    setDoneLoggingDates(prev => ({
-      ...prev,
-      [viewStr]: nextState
-    }));
-
-    // Save to Firebase
+    setDoneLoggingDates(prev => ({ ...prev, [viewStr]: nextState }));
     try {
       await toggleDoneLoggingDate(user.uid, viewStr, nextState);
     } catch (error) {
-      console.error("Failed to sync done state to Firebase", error);
-      // Optional: revert state if it fails
-      setDoneLoggingDates(prev => ({
-        ...prev,
-        [viewStr]: !nextState
-      }));
+      console.error("Failed to sync done state", error);
+      setDoneLoggingDates(prev => ({ ...prev, [viewStr]: !nextState }));
     }
   };
 
-  const handlePrevDay = () => {
-    const prev = new Date(viewDate);
-    prev.setDate(prev.getDate() - 1);
-    setViewDate(prev);
-  };
-
-  const handleNextDay = () => {
-    const next = new Date(viewDate);
-    next.setDate(next.getDate() + 1);
-    setViewDate(next);
-  };
-
+  const handlePrevDay = () => { const prev = new Date(viewDate); prev.setDate(prev.getDate() - 1); setViewDate(prev); };
+  const handleNextDay = () => { const next = new Date(viewDate); next.setDate(next.getDate() + 1); setViewDate(next); };
   const handleGoToToday = () => setViewDate(new Date());
 
   const handlePrevMonth = () => {
@@ -202,7 +160,6 @@ export default function FoodLogTab() {
     try {
       const dateStr = getDateString(viewDate);
       
-      // Fetch foods, workouts, and the done dates from Firebase simultaneously
       const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
         getUserFoods(user.uid),
         getDayFoodLogs(user.uid, dateStr),
@@ -322,11 +279,8 @@ export default function FoodLogTab() {
   const handleEditLog = async (updates: any) => {
     if (!editingLog || !user) return;
     try {
-      // 1. Update the daily diary entry
       await updateFoodLog(user.uid, editingLog.id, updates);
 
-      // 2. Update the Master Food Database so your edits save for future use!
-      // Prevent saving Quick Add foods (which have dummy IDs) to the permanent database
       const isQuickAddLog = updates.food?.id?.startsWith('quick-add-');
       if (updates.food && updates.food.id && !isQuickAddLog) {
         const baseFoodUpdates = {
@@ -362,7 +316,6 @@ export default function FoodLogTab() {
     }
   };
 
-  // Double Tap / Interaction Handler
   const handleItemInteraction = (e: React.MouseEvent | React.TouchEvent, log: FoodLog) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
     if ((e.target as HTMLElement).classList.contains('drag-handle')) return;
@@ -381,7 +334,6 @@ export default function FoodLogTab() {
     }
   };
 
-  // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent, log: FoodLog) => {
     setDraggedLog(log);
     e.dataTransfer.effectAllowed = 'move';
@@ -524,7 +476,6 @@ export default function FoodLogTab() {
   return (
     <div className="food-log-tab">
       
-      {/* Invisible anchor point for auto-scrolling to the top */}
       <div ref={topRef} />
       
       <div className="date-navigator">
@@ -799,8 +750,13 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              <h4 style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {log.food.icon && <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />}
+                              {/* FIXED: Removed flexWrap: wrap and added flexShrink: 0 to the icon wrapper */}
+                              <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
+                                {log.food.icon && (
+                                  <div style={{ flexShrink: 0, display: 'flex' }}>
+                                    <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
+                                  </div>
+                                )}
                                 <span>{log.food.name}</span>
                               </h4>
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
