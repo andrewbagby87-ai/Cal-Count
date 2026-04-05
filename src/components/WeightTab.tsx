@@ -1,3 +1,4 @@
+// src/components/WeightTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllWeightLogs, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
@@ -103,7 +104,8 @@ export default function WeightTab() {
                   id: `health-sync-${payloadId}-${i}`,
                   date: parsedDate.dateStr,
                   time: parsedDate.timeStr,
-                  weight: Number(entry.qty || entry.value || 0),
+                  // We also round the imported sync data just in case
+                  weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
                   unit: parseUnit(metric.units || log.units),
                   timestamp: parsedDate.timeMs,
                   isSynced: true
@@ -124,7 +126,7 @@ export default function WeightTab() {
                 id: `health-sync-flat-${payloadId}`,
                 date: parsedDate.dateStr,
                 time: parsedDate.timeStr,
-                weight: Number(log.qty || log.value || log.weight || 0),
+                weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
                 unit: parseUnit(log.units || log.unit),
                 timestamp: parsedDate.timeMs,
                 isSynced: true
@@ -175,7 +177,8 @@ export default function WeightTab() {
 
     try {
       setSubmitting(true);
-      const weightNum = parseFloat(weight);
+      // Round to the nearest tenth place before saving to Firebase
+      const weightNum = Math.round(parseFloat(weight) * 10) / 10;
       if (isNaN(weightNum) || weightNum <= 0) {
         throw new Error('Please enter a valid weight');
       }
@@ -248,7 +251,7 @@ export default function WeightTab() {
                 type="number"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
-                placeholder="175"
+                placeholder="175.0"
                 required
                 min="0"
                 step="0.1"
@@ -319,7 +322,8 @@ export default function WeightTab() {
                 )}
               </div>
               <div className="log-weight">
-                <span className="value">{log.weight}</span>
+                {/* Use .toFixed(1) to guarantee exactly 1 decimal place is shown in the UI */}
+                <span className="value">{Number(log.weight).toFixed(1)}</span>
                 <span className="unit">{log.unit}</span>
               </div>
             </div>

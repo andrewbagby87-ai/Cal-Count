@@ -349,7 +349,8 @@ export default function DailyStatsTab() {
                   todaysHealthWeights.push({
                     date: parsedDate.dateStr,
                     time: parsedDate.timeStr,
-                    weight: Number(entry.qty || entry.value || 0),
+                    // Round the incoming health data to 1 decimal place
+                    weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
                     unit: parseUnit(metric.units || log.units),
                     timestamp: parsedDate.timeMs,
                     isSynced: true
@@ -369,7 +370,8 @@ export default function DailyStatsTab() {
                 todaysHealthWeights.push({
                   date: parsedDate.dateStr,
                   time: parsedDate.timeStr,
-                  weight: Number(log.qty || log.value || log.weight || 0),
+                  // Round the incoming health data to 1 decimal place
+                  weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
                   unit: parseUnit(log.units || log.unit),
                   timestamp: parsedDate.timeMs,
                   isSynced: true
@@ -592,7 +594,8 @@ export default function DailyStatsTab() {
                 <span className="stat-label">Weight</span>
                 {todayWeight ? (
                   <div className="weight-highlight">
-                    <span className="weight-number">{todayWeight.weight}</span>
+                    {/* Add .toFixed(1) to guarantee one decimal place displays in the UI */}
+                    <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
                     <span className="weight-unit">{todayWeight.unit}</span>
                     <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
                       at {formatTime12Hour(todayWeight.time)}

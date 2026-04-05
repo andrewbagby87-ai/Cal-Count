@@ -1,3 +1,4 @@
+// src/pages/SetupPage.tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createUserProfile } from '../services/database';
@@ -5,17 +6,17 @@ import type { UserProfile } from '../types/index';
 import './SetupPage.css';
 
 export default function SetupPage() {
-  const { user, refreshUserProfile } = useAuth();
+  const { user, refreshUserProfile, logout } = useAuth();
   
   const [fullName, setFullName] = useState('');
   
-  // Toggles (Now defaulting to true so they are automatically checked)
-  const [trackFat, setTrackFat] = useState(true);
-  const [trackSaturatedFat, setTrackSaturatedFat] = useState(true);
-  const [trackCarbs, setTrackCarbs] = useState(true);
-  const [trackFiber, setTrackFiber] = useState(true);
-  const [trackSugar, setTrackSugar] = useState(true);
-  const [trackProtein, setTrackProtein] = useState(true);
+  // Toggles (Defaulting to false so they are automatically unchecked)
+  const [trackFat, setTrackFat] = useState(false);
+  const [trackSaturatedFat, setTrackSaturatedFat] = useState(false);
+  const [trackCarbs, setTrackCarbs] = useState(false);
+  const [trackFiber, setTrackFiber] = useState(false);
+  const [trackSugar, setTrackSugar] = useState(false);
+  const [trackProtein, setTrackProtein] = useState(false);
 
   // Budgets (Start as empty strings so the fields are blank)
   const [caloriesBudget, setCaloriesBudget] = useState<string | number>('');
@@ -28,6 +29,16 @@ export default function SetupPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleCancel = async () => {
+    try {
+      setLoading(true);
+      await logout();
+    } catch (err) {
+      setError('Failed to cancel and log out.');
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,17 +57,18 @@ export default function SetupPage() {
         return;
       }
 
-      const profile: Omit<UserProfile, 'uid' | 'createdAt'> = {
+      // Build the raw profile, using undefined for empty budget strings
+      const rawProfile = {
         name: fullName,
         email: user.email || '',
         caloriesBudget: Number(caloriesBudget),
         
-        fatBudget: Number(fatBudget) || 0,
-        saturatedFatBudget: Number(saturatedFatBudget) || 0,
-        carbsBudget: Number(carbsBudget) || 0,
-        fiberBudget: Number(fiberBudget) || 0,
-        sugarBudget: Number(sugarBudget) || 0,
-        proteinBudget: Number(proteinBudget) || 0,
+        fatBudget: fatBudget !== '' ? Number(fatBudget) : undefined,
+        saturatedFatBudget: saturatedFatBudget !== '' ? Number(saturatedFatBudget) : undefined,
+        carbsBudget: carbsBudget !== '' ? Number(carbsBudget) : undefined,
+        fiberBudget: fiberBudget !== '' ? Number(fiberBudget) : undefined,
+        sugarBudget: sugarBudget !== '' ? Number(sugarBudget) : undefined,
+        proteinBudget: proteinBudget !== '' ? Number(proteinBudget) : undefined,
         
         trackFat,
         trackSaturatedFat,
@@ -67,6 +79,11 @@ export default function SetupPage() {
         
         updatedAt: new Date(),
       };
+
+      // Strip out the undefined values so Firebase doesn't crash or save 0s
+      const profile = Object.fromEntries(
+        Object.entries(rawProfile).filter(([_, v]) => v !== undefined)
+      ) as any;
 
       await createUserProfile(user.uid, profile);
       await refreshUserProfile();
@@ -145,7 +162,6 @@ export default function SetupPage() {
               />
             </div>
 
-            {/* The input fields below will automatically show up because their corresponding toggles are now set to true by default */}
             {trackFat && (
               <div className="form-group">
                 <label>Daily Fat (g) *</label>
@@ -189,9 +205,14 @@ export default function SetupPage() {
             )}
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? 'Setting up...' : 'Complete Setup'}
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', width: '100%', marginTop: '1rem' }}>
+            <button type="submit" disabled={loading} className="btn-primary" style={{ margin: 0, flex: 1 }}>
+              {loading ? 'Setting up...' : 'Complete Setup'}
+            </button>
+            <button type="button" disabled={loading} className="btn btn-secondary" onClick={handleCancel} style={{ margin: 0, flex: 1, backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', color: '#64748b' }}>
+              Cancel
+            </button>
+          </div>
         </form>
       </div>
     </div>
