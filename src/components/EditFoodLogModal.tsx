@@ -26,6 +26,20 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateDisplay = (dateString: string) => {
+  if (!dateString) return '';
+  const [y, m, d] = dateString.split('-');
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const month = date.toLocaleString('default', { month: 'long' });
+  const day = date.getDate();
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
+};
+
 export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLabelSaved }: Props) {
   const { user } = useAuth();
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
@@ -522,16 +536,10 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="quickDate" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
-                  <input 
-                    type="date" 
-                    id="quickDate"
-                    name="date"
-                    value={logDetails.date} 
-                    onChange={handleLogDetailsChange}
-                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-                    required
-                  />
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date</label>
+                  <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+                    {formatDateDisplay(logDetails.date)}
+                  </div>
                 </div>
 
                 {!localFood.isVitamin && (
@@ -754,16 +762,10 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
             <form onSubmit={handleSaveLogDetails} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', overflowX: 'hidden' }}>
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="date" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
-                  <input 
-                    type="date" 
-                    id="date"
-                    name="date"
-                    value={logDetails.date} 
-                    onChange={handleLogDetailsChange}
-                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem' }}
-                    required
-                  />
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date</label>
+                  <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+                    {formatDateDisplay(logDetails.date)}
+                  </div>
                 </div>
 
                 {!localFood.isVitamin && (

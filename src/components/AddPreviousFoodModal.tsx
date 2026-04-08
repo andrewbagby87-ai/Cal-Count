@@ -34,6 +34,20 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateDisplay = (dateString: string) => {
+  if (!dateString) return '';
+  const [y, m, d] = dateString.split('-');
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const month = date.toLocaleString('default', { month: 'long' });
+  const day = date.getDate();
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
+};
+
 export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, initialMealType, onEditRecipe, onCreateNew, onCreateRecipe, onOpenScanner }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
@@ -395,7 +409,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setLoading(true);
     setError('');
     
-    try {
+try {
+      const payloads = [];
+
       for (const foodId of multiSelectedIds) {
         const food = localFoods.find(f => f.id === foodId);
         if (!food) continue;
@@ -462,16 +478,15 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           ...cleanConsumedNutrition,
         };
 
-        const cleanPayload = JSON.parse(JSON.stringify(payload));
-        await createFoodLog(user.uid, cleanPayload);
+        payloads.push(JSON.parse(JSON.stringify(payload)));
       }
       
-      onClose(); 
+      await onAdd(payloads);
+      
     } catch (err) {
       console.error("Batch add failed:", err);
       setError(err instanceof Error ? err.message : 'Failed to add selected foods.');
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only reset loading if it fails, otherwise let it unmount
     }
   };
 
@@ -905,16 +920,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
           </div>
 
           <div className="form-group">
-            <label htmlFor="quickDate">Date *</label>
-            <input 
-              type="date" 
-              id="quickDate"
-              name="date"
-              value={logDetails.date} 
-              onChange={handleLogDetailsChange}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
-              required
-            />
+            <label>Date</label>
+            <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+              {formatDateDisplay(logDetails.date)}
+            </div>
           </div>
 
           {!isVitaminMode && (
@@ -1125,16 +1134,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
             <form onSubmit={handleAddFood}>
               <div className="form-group">
-                <label htmlFor="date">Date *</label>
-                <input 
-                  type="date" 
-                  id="date"
-                  name="date"
-                  value={logDetails.date} 
-                  onChange={handleLogDetailsChange}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }}
-                  required
-                />
+                <label>Date</label>
+                <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+                  {formatDateDisplay(logDetails.date)}
+                </div>
               </div>
 
               {!isVitaminMode && (

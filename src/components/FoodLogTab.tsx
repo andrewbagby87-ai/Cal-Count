@@ -154,9 +154,9 @@ export default function FoodLogTab() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
-    setLoading(true);
+    if (showLoadingScreen) setLoading(true);
     try {
       const dateStr = getDateString(viewDate);
       
@@ -250,29 +250,50 @@ export default function FoodLogTab() {
     loadNavigatorStats();
   }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
 
-  const handleAddFood = async (foodData: any) => {
+  const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
+    
+    // 1. Instantly close the menu so the app feels completely responsive
+    setShowAddModal(false);
+
     try {
       const targetDate = getDateString(viewDate);
-      await createFoodLog(user.uid, {
+      
+      const foodsToAdd = Array.isArray(foodData) ? foodData : [foodData];
+
+      const tempLogs = foodsToAdd.map((data, index) => ({
+        id: `temp-${Date.now()}-${index}`,
+        timestamp: Date.now() + index, // Space out timestamps slightly to preserve order
+        ...data,
         date: targetDate,
-        ...foodData,
-      });
-      setShowAddModal(false);
-      await loadData();
+      }));
+      
+      setFoodLogs(prev => [...prev, ...tempLogs].sort((a, b) => a.timestamp - b.timestamp));
+
+      const promises = foodsToAdd.map(data => 
+        createFoodLog(user.uid, { date: targetDate, ...data })
+      );
+      await Promise.all(promises);
+      
+      await loadData(false); 
     } catch (error) {
       console.error('Failed to add food:', error);
+      await loadData(false); 
     }
   };
 
   const handleDeleteLog = async (logId: string) => {
     if (!user) return;
+    
+    setSelectedLog(null);
+    setFoodLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
+
     try {
       await deleteFoodLog(user.uid, logId);
-      await loadData();
-      setSelectedLog(null);
+
     } catch (error) {
       console.error('Failed to delete food log:', error);
+      await loadData(false);
     }
   };
 
@@ -1028,7 +1049,7 @@ export default function FoodLogTab() {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
             setEditingRecipeFood(null);
-            loadData();
+            loadData(false);
           }}
           selectedDate={getDateString(viewDate)}
         />

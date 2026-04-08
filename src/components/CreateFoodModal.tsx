@@ -30,6 +30,20 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateDisplay = (dateString: string) => {
+  if (!dateString) return '';
+  const [y, m, d] = dateString.split('-');
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const month = date.toLocaleString('default', { month: 'long' });
+  const day = date.getDate();
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
+};
+
 export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType, foods = [] }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
@@ -545,8 +559,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
             {!isRecipeIngredientMode && (
               <>
                 <div className="form-group">
-                  <label htmlFor="date">Date *</label>
-                  <input type="date" id="date" name="date" value={logDetails.date} onChange={handleLogDetailsChange} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '1rem', boxSizing: 'border-box' }} required />
+                  <label>Date</label>
+                  <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+                    {formatDateDisplay(logDetails.date)}
+                  </div>
                 </div>
 
                 {!isVitaminMode && (

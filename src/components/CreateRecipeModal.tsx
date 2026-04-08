@@ -34,6 +34,20 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateDisplay = (dateString: string) => {
+  if (!dateString) return '';
+  const [y, m, d] = dateString.split('-');
+  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const month = date.toLocaleString('default', { month: 'long' });
+  const day = date.getDate();
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
+};
+
 export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood, initialMealType, isDoneDay }: Props) {
   const { user } = useAuth();
   const isEditLogMode = !!editLog;
@@ -225,12 +239,13 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   // Used when editing from "Previous Foods" menu and hitting "Save Updates" (does not log it)
   const handleSaveUpdatesOnly = async () => {
     if (!user) return;
-    setIsLogging(true);
+    
+    onClose();
+    
     try {
       const baseNutrition = getBaseNutrition();
       const targetFoodId = await saveRecipeToDb(baseNutrition);
 
-      // Cascade ONLY Name & Icon changes to ALL OTHER logs of this recipe
       const allLogs = await getAllFoodLogs(user.uid);
       const otherLogs = allLogs.filter((l: any) => 
         (l.foodId === targetFoodId || l.food?.id === targetFoodId)
@@ -251,12 +266,8 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       await Promise.all(updatePromises);
 
       onCreated();
-      onClose();
     } catch (err) {
       console.error(err);
-      alert("Failed to save recipe updates.");
-    } finally {
-      setIsLogging(false);
     }
   };
 
@@ -274,11 +285,12 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     }
   };
 
-  const handleFinalLog = async (e: React.FormEvent) => {
+ const handleFinalLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    setIsLogging(true);
     
+    onClose();
+
     try {
       const baseNutrition = getBaseNutrition();
       const targetFoodId = await saveRecipeToDb(baseNutrition);
@@ -288,10 +300,8 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         payload.foodId = targetFoodId;
         payload.food.id = targetFoodId;
         
-        // 1. Update the SPECIFIC log with full nutrition updates
         await updateFoodLog(user.uid, editLog.id, payload);
         
-        // 2. Cascade ONLY Name & Icon changes to ALL OTHER logs of this recipe
         const allLogs = await getAllFoodLogs(user.uid);
         const otherLogs = allLogs.filter((l: any) => 
           (l.foodId === targetFoodId || l.food?.id === targetFoodId) && l.id !== editLog.id
@@ -311,13 +321,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         
         await Promise.all(updatePromises);
       } else {
-        // We are creating a NEW log.
         await createFoodLog(user.uid, payload);
         
-        // But if we are modifying an EXISTING recipe from the Previous Foods menu...
         if (sourceFood && sourceFood.id) {
            const allLogs = await getAllFoodLogs(user.uid);
-           // We filter out logs that match the target ID, and we don't have to worry about the new log conflicting because it has a new ID.
            const otherLogs = allLogs.filter((l: any) => 
              (l.foodId === targetFoodId || l.food?.id === targetFoodId)
            );
@@ -337,13 +344,9 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       }
       
       onCreated();
-      onClose();
     } catch(err) {
       console.error(err);
-      alert("Failed to save and log recipe.");
-    } finally {
-      setIsLogging(false);
-    }
+    } 
   };
 
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
@@ -713,18 +716,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
             
             <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, paddingRight: '0.25rem' }}>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date *</label>
-                <input 
-                  type="date" 
-                  value={logDate} 
-                  onChange={e => {
-                    const newDate = e.target.value;
-                    setLogDate(newDate);
-                    setIsPlanned(newDate > getLocalTodayString());
-                  }} 
-                  required 
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} 
-                />
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date</label>
+                <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
+                  {formatDateDisplay(logDate)}
+                </div>
               </div>
 
               <div style={{ marginBottom: '1rem' }}>

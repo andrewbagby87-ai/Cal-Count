@@ -110,10 +110,19 @@ export default function Dashboard() {
       </nav>
 
       <div className="dashboard-content">
-        {activeTab === 'stats' && <DailyStatsTab />}
-        {activeTab === 'foodlog' && <FoodLogTab />}
-        {activeTab === 'weight' && <WeightTab />}
-        {activeTab === 'workout' && <WorkoutTab />}
+        {/* Render all tabs, but only display the active one */}
+        <div style={{ display: activeTab === 'stats' ? 'block' : 'none', height: '100%' }}>
+          <DailyStatsTab />
+        </div>
+        <div style={{ display: activeTab === 'foodlog' ? 'block' : 'none', height: '100%' }}>
+          <FoodLogTab />
+        </div>
+        <div style={{ display: activeTab === 'weight' ? 'block' : 'none', height: '100%' }}>
+          <WeightTab />
+        </div>
+        <div style={{ display: activeTab === 'workout' ? 'block' : 'none', height: '100%' }}>
+          <WorkoutTab />
+        </div>
       </div>
     </div>
   );
