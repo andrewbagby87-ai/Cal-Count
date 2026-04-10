@@ -163,6 +163,15 @@ export default function DailyStatsTab() {
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
 
+  // ADD THIS FOR AUTO-REFRESH
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  useEffect(() => {
+    const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
+    window.addEventListener('foodDataChanged', handleUpdate);
+    return () => window.removeEventListener('foodDataChanged', handleUpdate);
+  }, []);
+
   // 1. Create the reference point for scrolling to the top
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -253,7 +262,7 @@ export default function DailyStatsTab() {
     };
 
     fetchStreak();
-  }, [user, viewDate]); 
+  }, [user, viewDate, refreshTrigger]); 
 
   useEffect(() => {
     const loadNavigatorStats = async () => {
@@ -298,7 +307,7 @@ export default function DailyStatsTab() {
     };
 
     loadNavigatorStats();
-  }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
+  }, [user, viewDate, viewMode, userProfile?.caloriesBudget, refreshTrigger]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -399,7 +408,7 @@ export default function DailyStatsTab() {
       }
     };
     loadData();
-  }, [user, viewDate]);
+  }, [user, viewDate, refreshTrigger]);
 
   const todayStr = getDateString(new Date());
   const viewStr = getDateString(viewDate);
