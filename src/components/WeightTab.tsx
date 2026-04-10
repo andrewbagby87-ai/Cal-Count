@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllWeightLogs, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './WeightTab.css';
 
 const formatTime12Hour = (timeValue: string) => {
@@ -69,10 +70,11 @@ export default function WeightTab() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. Create the reference point for scrolling to the top
+  // Time Range State for Chart
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('month');
+
   const topRef = useRef<HTMLDivElement>(null);
 
-  // 2. Scroll to the reference point instantly when the tab loads
   useEffect(() => {
     if (topRef.current) {
       topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
@@ -104,7 +106,6 @@ export default function WeightTab() {
                   id: `health-sync-${payloadId}-${i}`,
                   date: parsedDate.dateStr,
                   time: parsedDate.timeStr,
-                  // We also round the imported sync data just in case
                   weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
                   unit: parseUnit(metric.units || log.units),
                   timestamp: parsedDate.timeMs,
@@ -143,7 +144,6 @@ export default function WeightTab() {
       const validHealthLogs = healthWeightLogs.filter(log => log.weight > 0);
       const combinedLogs = [...dbLogs, ...validHealthLogs].sort((a, b) => b.timestamp - a.timestamp);
       
-      // Deduplicate the combined logs
       const seen = new Set();
       const uniqueLogs = combinedLogs.filter(log => {
         const uniqueKey = `${log.date}_${log.time}_${log.weight}`;
@@ -177,7 +177,6 @@ export default function WeightTab() {
 
     try {
       setSubmitting(true);
-      // Round to the nearest tenth place before saving to Firebase
       const weightNum = Math.round(parseFloat(weight) * 10) / 10;
       if (isNaN(weightNum) || weightNum <= 0) {
         throw new Error('Please enter a valid weight');
@@ -217,7 +216,6 @@ export default function WeightTab() {
     }
   };
 
-  // Render the anchor even while loading so the scroll effect works instantly
   if (loading) {
     return (
       <div className="weight-tab">
@@ -227,14 +225,150 @@ export default function WeightTab() {
     );
   }
 
+  // --- CHART PREPARATION & TIME FILTERING ---
+  const getRangeMs = () => {
+    switch(timeRange) {
+      case 'week': return 7 * 24 * 60 * 60 * 1000;
+      case 'month': return 30 * 24 * 60 * 60 * 1000;
+      case 'year': return 365 * 24 * 60 * 60 * 1000;
+      default: return Infinity;
+    }
+  };
+
+  const rangeMs = getRangeMs();
+  const nowMs = Date.now();
+  
+  const chartData = [...weightLogs]
+    .filter(log => (nowMs - log.timestamp) <= rangeMs)
+    .reverse() // Reverse so oldest is on the left
+    .map(log => ({
+      dateLabel: new Date(log.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      weight: Number(log.weight),
+      unit: log.unit
+    }));
+
+  // Calculate statistics for the current selected period
+  let lowest = 0, highest = 0, average = 0;
+  const displayUnit = chartData.length > 0 ? chartData[0].unit : 'lbs';
+  
+  if (chartData.length > 0) {
+    const weights = chartData.map(d => d.weight);
+    lowest = Math.min(...weights);
+    highest = Math.max(...weights);
+    average = weights.reduce((sum, val) => sum + val, 0) / weights.length;
+  }
+
   return (
     <div className="weight-tab">
-      {/* Invisible anchor point for auto-scrolling to the top */}
       <div ref={topRef} />
       
-      <div className="tab-header">
-        <h2>Weight Tracker</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
+      {/* 1. TITLE AT THE TOP */}
+      <div style={{ marginBottom: '1rem', marginTop: '0.5rem' }}>
+        <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#1e293b' }}>Weight Tracker</h2>
+      </div>
+
+      {/* 2. CHART SECTION BELOW TITLE */}
+      {weightLogs.length > 0 && (
+        <div className="weight-chart-section" style={{ backgroundColor: '#fff', padding: '1.25rem 1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem', marginBottom: '1rem' }}>
+            {(['week', 'month', 'year', 'all'] as const).map(range => (
+              <button 
+                key={range}
+                onClick={() => setTimeRange(range)}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '2rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  backgroundColor: timeRange === range ? '#2563eb' : '#f1f5f9',
+                  color: timeRange === range ? '#fff' : '#64748b',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+
+          {chartData.length < 2 ? (
+            <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
+              Not enough data logged this {timeRange === 'all' ? 'period' : timeRange}.
+            </div>
+          ) : (
+            <>
+              <div style={{ width: '100%', height: '220px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 10, right: 15, bottom: 5, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="dateLabel" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }} 
+                      minTickGap={20}
+                      padding={{ left: 15, right: 15 }} 
+                    />
+                    <YAxis 
+                      domain={[(dataMin: number) => Math.max(0, Math.floor(dataMin - 3)), (dataMax: number) => Math.ceil(dataMax + 3)]}
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      tickMargin={10} 
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '0.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#64748b', marginBottom: '0.25rem', fontSize: '0.875rem' }}
+                      itemStyle={{ color: '#2563eb', fontWeight: 600 }}
+                      formatter={(value: any, name: any, props: any) => [`${value} ${props.payload.unit}`, 'Weight']}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="weight" 
+                      stroke="#2563eb" 
+                      strokeWidth={3} 
+                      dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} 
+                      activeDot={{ r: 6, fill: '#2563eb', strokeWidth: 0 }} 
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* STATS ROW */}
+              <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Lowest</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
+                    {lowest.toFixed(1)} <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>{displayUnit}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Average</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#2563eb' }}>
+                    {average.toFixed(1)} <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>{displayUnit}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Highest</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
+                    {highest.toFixed(1)} <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>{displayUnit}</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 3. BUTTON BELOW THE CHART */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '1.5rem' }}>
+        <button 
+          className="btn btn-primary btn-sm" 
+          onClick={() => setShowForm(!showForm)}
+        >
           {showForm ? '✕ Cancel' : '+ Log Weight'}
         </button>
       </div>
@@ -322,7 +456,6 @@ export default function WeightTab() {
                 )}
               </div>
               <div className="log-weight">
-                {/* Use .toFixed(1) to guarantee exactly 1 decimal place is shown in the UI */}
                 <span className="value">{Number(log.weight).toFixed(1)}</span>
                 <span className="unit">{log.unit}</span>
               </div>
