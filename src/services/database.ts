@@ -107,28 +107,25 @@ export async function deleteFood(id: string) {
 }
 
 // --- Food Log Operations ---
-export async function createFoodLog(userId: string, foodLog: Omit<FoodLog, 'id' | 'userId' | 'timestamp'>) {
+export async function createFoodLog(userId: string, foodLog: any) {
   const docRef = doc(db, 'foodLogs', userId);
-  const docSnap = await getDoc(docRef);
   
+  // 1. Deep clean undefined values
+  const cleanFoodLog = JSON.parse(JSON.stringify(foodLog));
+
   const newLog = {
-    ...foodLog,
-    id: crypto.randomUUID(), 
-    timestamp: Timestamp.now().toMillis(),
+    ...cleanFoodLog,
+    id: cleanFoodLog.id || crypto.randomUUID(),
+    timestamp: cleanFoodLog.timestamp || Date.now(),
   };
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    const existingData = data.foodData || data.logs || [];
-    await updateDoc(docRef, {
-      foodData: [newLog, ...existingData]
-    });
-  } else {
-    await setDoc(docRef, {
-      userId,
-      foodData: [newLog]
-    });
-  }
+  // 2. ATOMIC SAVE: Use arrayUnion to append directly on the server.
+  // This completely eliminates race conditions when batch-adding items.
+  await setDoc(docRef, {
+    userId,
+    foodData: arrayUnion(newLog)
+  }, { merge: true });
+
   return newLog.id;
 }
 
@@ -207,6 +204,9 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
 
+  // Strip any undefined values to prevent Firebase from silently crashing
+  const cleanUpdates = JSON.parse(JSON.stringify(updates));
+
   if (docSnap.exists()) {
     const data = docSnap.data();
     let updated = false;
@@ -215,7 +215,7 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
       const newFoodData = data.foodData.map((log: any) => {
         if (log.id === id) {
           updated = true;
-          return { ...log, ...updates };
+          return { ...log, ...cleanUpdates };
         }
         return log;
       });
@@ -229,7 +229,7 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
       const newLogs = data.logs.map((log: any) => {
         if (log.id === id) {
           updated = true;
-          return { ...log, ...updates };
+          return { ...log, ...cleanUpdates };
         }
         return log;
       });
@@ -242,7 +242,7 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
 
   try {
     const fallbackRef = doc(db, 'foodLogs', id);
-    await updateDoc(fallbackRef, updates);
+    await updateDoc(fallbackRef, cleanUpdates);
   } catch (e) {
     console.warn("Could not update multi-doc format fallback:", e);
   }
@@ -254,29 +254,26 @@ export async function deleteFoodLog(userId: string, id: string) {
 
   if (docSnap.exists()) {
     const data = docSnap.data();
-    let updated = false;
 
+    // 1. ATOMIC DELETE: Find the exact object and tell the server to remove it
     if (data.foodData) {
-      const initialLength = data.foodData.length;
-      const newFoodData = data.foodData.filter((log: any) => log.id !== id);
-      if (newFoodData.length !== initialLength) {
-        await updateDoc(docRef, { foodData: newFoodData });
-        updated = true;
+      const exactLog = data.foodData.find((log: any) => log.id === id);
+      if (exactLog) {
+        await updateDoc(docRef, { foodData: arrayRemove(exactLog) });
+        return;
       }
     }
 
-    if (data.logs && !updated) {
-      const initialLength = data.logs.length;
-      const newLogs = data.logs.filter((log: any) => log.id !== id);
-      if (newLogs.length !== initialLength) {
-        await updateDoc(docRef, { logs: newLogs });
-        updated = true;
+    if (data.logs) {
+      const exactLog = data.logs.find((log: any) => log.id === id);
+      if (exactLog) {
+        await updateDoc(docRef, { logs: arrayRemove(exactLog) });
+        return;
       }
     }
-    
-    if (updated) return;
   }
 
+  // Fallback for older data structures
   try {
     const fallbackRef = doc(db, 'foodLogs', id);
     await deleteDoc(fallbackRef);

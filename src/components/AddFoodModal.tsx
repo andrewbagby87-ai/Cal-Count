@@ -35,8 +35,12 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
-  const handleFoodCreated = (food: Food) => {
+  // Update handleFoodCreated to receive the payload and pass it to onAdd
+  const handleFoodCreated = async (payload: any) => {
     onClose();
+    if (payload && payload.mealType !== undefined) {
+      await onAdd(payload);
+    }
   };
 
   const handleScanSuccess = (code: string) => {

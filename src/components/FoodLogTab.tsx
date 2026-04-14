@@ -64,6 +64,14 @@ export default function FoodLogTab() {
   
   const topRef = useRef<HTMLDivElement>(null);
 
+  // --- Toast Notification State ---
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 2500); // Disappears after 2.5 seconds
+  };
+
   useEffect(() => {
     if (topRef.current) {
       topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
@@ -156,7 +164,9 @@ export default function FoodLogTab() {
 
   const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
+    
     if (showLoadingScreen) setLoading(true);
+    
     try {
       const dateStr = getDateString(viewDate);
       
@@ -195,7 +205,7 @@ export default function FoodLogTab() {
     } catch (error) {
       console.error('Failed to load food data:', error);
     } finally {
-      setLoading(false);
+      if (showLoadingScreen) setLoading(false);
     }
   };
 
@@ -250,7 +260,7 @@ export default function FoodLogTab() {
     loadNavigatorStats();
   }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
 
-const handleAddFood = async (foodData: any | any[]) => {
+  const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
 
     // 1. Instantly close the menu so the app feels completely responsive
@@ -265,7 +275,7 @@ const handleAddFood = async (foodData: any | any[]) => {
       const spacedTimestamp = baseTimestamp + (index * 1000);
       return {
         ...data, 
-        id: `temp-${spacedTimestamp}-${index}`,
+        id: data.id || `temp-${spacedTimestamp}-${index}`, // respect incoming ID
         timestamp: spacedTimestamp, // Guarantees unique order
         date: targetDate,
       };
@@ -277,8 +287,8 @@ const handleAddFood = async (foodData: any | any[]) => {
     // 3. Save to database SEQUENTIALLY to prevent network rejections and rate limits
     for (let i = 0; i < tempLogs.length; i++) {
       try {
-        const { id, ...dataToSave } = tempLogs[i];
-        await createFoodLog(user.uid, dataToSave);
+        // We DO NOT strip the ID here, we pass the exact tempLog so Firebase matches our UI
+        await createFoodLog(user.uid, tempLogs[i]);
         
         // Force a physical 400ms delay between saves
         if (i < tempLogs.length - 1) {
@@ -295,6 +305,7 @@ const handleAddFood = async (foodData: any | any[]) => {
     // 5. Silent refresh to replace temp IDs with real database IDs
     setTimeout(() => {
       loadData(false);
+      showToast('Food logged!');
     }, 800);
   };
 
@@ -309,6 +320,7 @@ const handleAddFood = async (foodData: any | any[]) => {
       // Perform the actual database deletion in the background
       await deleteFoodLog(user.uid, logId);
       window.dispatchEvent(new Event('foodDataChanged')); // Ping Stats Tab
+      showToast('Item removed!');
     } catch (error) {
       console.error('Failed to delete food log:', error);
       await loadData(false);
@@ -354,6 +366,7 @@ const handleAddFood = async (foodData: any | any[]) => {
       window.dispatchEvent(new Event('foodDataChanged')); 
       
       await loadData(false); // Silent refresh
+      showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
     }
@@ -477,7 +490,7 @@ const handleAddFood = async (foodData: any | any[]) => {
       });
     } catch (error) {
       console.error("Failed to update log position:", error);
-      loadData(); 
+      loadData(false); 
     }
   };
 
@@ -793,7 +806,6 @@ const handleAddFood = async (foodData: any | any[]) => {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              {/* FIXED: Removed flexWrap: wrap and added flexShrink: 0 to the icon wrapper */}
                               <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
                                 {log.food.icon && (
                                   <div style={{ flexShrink: 0, display: 'flex' }}>
@@ -953,9 +965,24 @@ const handleAddFood = async (foodData: any | any[]) => {
                   style={{ backgroundColor: '#10b981', borderColor: '#10b981', width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', borderRadius: '0.5rem', color: '#fff', fontWeight: 'bold' }}
                   onClick={async () => {
                     if (!user) return;
-                    await updateFoodLog(user.uid, selectedLog.id, { isPlanned: false });
+                    
+                    const targetId = selectedLog.id;
+                    const originalLogs = [...foodLogs]; 
+                    
+                    // Optimistic UI
+                    setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: false } : log));
                     setSelectedLog(null);
-                    loadData();
+                    
+                    try {
+                      await updateFoodLog(user.uid, targetId, { isPlanned: false });
+                      window.dispatchEvent(new Event('foodDataChanged'));
+                      loadData(false);
+                      showToast('Confirmed as eaten!');
+                    } catch (err) {
+                      console.error('Failed to update planned status:', err);
+                      setFoodLogs(originalLogs);
+                      alert("Network error: Failed to save to database.");
+                    }
                   }}
                 >
                   ✅ Confirm as Eaten
@@ -968,9 +995,24 @@ const handleAddFood = async (foodData: any | any[]) => {
                     style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
                     onClick={async () => {
                       if (!user) return;
-                      await updateFoodLog(user.uid, selectedLog.id, { isPlanned: true });
+                      
+                      const targetId = selectedLog.id;
+                      const originalLogs = [...foodLogs]; 
+                      
+                      // Optimistic UI
+                      setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: true } : log));
                       setSelectedLog(null);
-                      loadData();
+                      
+                      try {
+                        await updateFoodLog(user.uid, targetId, { isPlanned: true });
+                        window.dispatchEvent(new Event('foodDataChanged'));
+                        loadData(false);
+                        showToast('Marked as planned!');
+                      } catch (err) {
+                        console.error('Failed to update planned status:', err);
+                        setFoodLogs(originalLogs);
+                        alert("Network error: Failed to save to database.");
+                      }
                     }}
                   >
                     🗓️ Mark as Planned
@@ -1033,10 +1075,10 @@ const handleAddFood = async (foodData: any | any[]) => {
           onAdd={handleAddFood} 
           onClose={() => {
             setShowAddModal(false);
-            loadData(); 
+            loadData(false); 
           }} 
           onFoodDeleted={() => {
-            loadData(); 
+            loadData(false); 
           }}
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
@@ -1071,7 +1113,6 @@ const handleAddFood = async (foodData: any | any[]) => {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
             setEditingRecipeFood(null);
-            window.dispatchEvent(new Event('foodDataChanged')); // <-- Ping Stats Tab
             loadData(false);
           }}
           selectedDate={getDateString(viewDate)}
@@ -1084,8 +1125,33 @@ const handleAddFood = async (foodData: any | any[]) => {
           onSave={handleEditLog} 
           onClose={() => setShowEditModal(false)} 
           isDoneDay={isDoneLogging}
-          onLabelSaved={() => loadData()} 
+          onLabelSaved={() => loadData(false)} 
         />
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '100px', 
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#1e293b',
+          color: '#ffffff',
+          padding: '0.75rem 1.5rem',
+          borderRadius: '2rem',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 10px 15px -3px rgba(0,0,0,0.1)',
+          zIndex: 9999,
+          fontSize: '0.95rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          pointerEvents: 'none',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {toastMessage}
+        </div>
       )}
     </div>
   );

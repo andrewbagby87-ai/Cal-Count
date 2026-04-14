@@ -233,7 +233,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    
+    // Do NOT set loading to true unless it's an ingredient calculation. 
+    // We want the modal to vanish instantly for normal logging.
+    if (isRecipeIngredientMode) setLoading(true);
 
     try {
       if (!user) throw new Error('User not found');
@@ -294,6 +297,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         baseNutrition.volumeUnit = validVolumes[0].unit;
       }
 
+      // If we are NOT calculating a recipe ingredient, instantly close the 
+      // modal to free the user's screen while we do database work
+      if (!isRecipeIngredientMode) onClose();
+
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
@@ -330,6 +337,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
       if (isRecipeIngredientMode && onIngredientCalculated) {
         onIngredientCalculated(foodObject, consumedNutrition, finalAmount, finalUnit);
+        setLoading(false);
         return; 
       }
 
@@ -344,19 +352,23 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         ...consumedNutrition 
       };
 
+      // 1. Strip out all undefined values so Firebase doesn't crash
       const cleanPayload = JSON.parse(JSON.stringify(payload));
-      await createFoodLog(user.uid, cleanPayload);
 
+      // 2. Pass the clean payload UP to the instant UI
       if (onCreated) {
-        onCreated(foodObject);
-      } else {
-        onClose();
+         (onCreated as any)(cleanPayload); 
       }
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
+      console.error(err);
+      if (!isRecipeIngredientMode) {
+        alert(err instanceof Error ? err.message : 'An error occurred while saving.');
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
       setLoading(false);
-    }
+    } 
   };
 
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
