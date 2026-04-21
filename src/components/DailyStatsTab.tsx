@@ -423,7 +423,7 @@ export default function DailyStatsTab() {
       <div ref={topRef} />
       
       <div className="date-navigator">
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto' }}>
+        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
           <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
           <p className="date">
             {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -431,7 +431,7 @@ export default function DailyStatsTab() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', padding: '0 45px', marginBottom: '1.5rem' }}>
+      <div className="weekly-nav-wrapper">
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handlePrevWeek} 

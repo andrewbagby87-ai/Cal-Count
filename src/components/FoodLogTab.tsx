@@ -526,7 +526,7 @@ export default function FoodLogTab() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', padding: '0 45px', marginBottom: '1.5rem' }}>
+      <div className="weekly-nav-wrapper">
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handlePrevWeek} 

@@ -438,3 +438,24 @@
     height: 26px;
   }
 }
+
+/* Default spacing for Desktop (leaves room for arrows) */
+.weekly-nav-wrapper {
+  position: relative;
+  padding: 0 45px;
+  margin-bottom: 1.5rem;
+}
+
+/* Mobile overrides */
+@media (max-width: 768px) {
+  /* Give the space back to the calendar on phones! */
+  .weekly-nav-wrapper {
+    padding: 0 5px; 
+  }
+  
+  /* Make sure the container stretches the full width */
+  .navigator-container {
+    max-width: 100% !important; 
+    width: 100%;
+  }
+}
