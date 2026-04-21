@@ -20,27 +20,6 @@ const getWeekDates = (date: Date) => {
   });
 };
 
-const getMonthDates = (date: Date) => {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  
-  const start = new Date(firstDay);
-  start.setDate(firstDay.getDate() - firstDay.getDay());
-  
-  const end = new Date(lastDay);
-  end.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
-  
-  const dates = [];
-  let current = new Date(start);
-  while (current <= end) {
-    dates.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return dates;
-};
-
 const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   if (!rawDate) return false;
   if (typeof rawDate === 'string') {
@@ -69,7 +48,7 @@ export default function FoodLogTab() {
 
   const showToast = (message: string) => {
     setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 2500); // Disappears after 2.5 seconds
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   useEffect(() => {
@@ -89,7 +68,6 @@ export default function FoodLogTab() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const [viewDate, setViewDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
@@ -103,6 +81,10 @@ export default function FoodLogTab() {
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
   const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
+
+  // Swipe navigation states
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   useEffect(() => {
     return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current); };
@@ -128,44 +110,59 @@ export default function FoodLogTab() {
     setDoneLoggingDates(prev => ({ ...prev, [viewStr]: nextState }));
     try {
       await toggleDoneLoggingDate(user.uid, viewStr, nextState);
+      
+      window.dispatchEvent(new Event('dayCompletedChanged'));
+      
     } catch (error) {
       console.error("Failed to sync done state", error);
       setDoneLoggingDates(prev => ({ ...prev, [viewStr]: !nextState }));
     }
   };
 
-  const handlePrevDay = () => { const prev = new Date(viewDate); prev.setDate(prev.getDate() - 1); setViewDate(prev); };
-  const handleNextDay = () => { const next = new Date(viewDate); next.setDate(next.getDate() + 1); setViewDate(next); };
   const handleGoToToday = () => setViewDate(new Date());
 
-  const handlePrevMonth = () => {
-    const targetDate = new Date(viewDate);
-    targetDate.setDate(1); 
-    targetDate.setMonth(viewDate.getMonth() - 1);
-    const today = new Date();
-    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date());
-    } else {
-      setViewDate(targetDate);
+  // Swipe and desktop arrow logic
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      handleNextWeek();
+    } else if (isRightSwipe) {
+      handlePrevWeek();
     }
   };
 
-  const handleNextMonth = () => {
-    const targetDate = new Date(viewDate);
-    targetDate.setDate(1);
-    targetDate.setMonth(viewDate.getMonth() + 1);
-    const today = new Date();
-    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date());
-    } else {
-      setViewDate(targetDate);
-    }
+  const handlePrevWeek = () => {
+    const prev = new Date(viewDate);
+    prev.setDate(prev.getDate() - 7);
+    setViewDate(prev);
+  };
+
+  const handleNextWeek = () => {
+    const next = new Date(viewDate);
+    next.setDate(next.getDate() + 7);
+    setViewDate(next);
   };
 
   const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
     
-    if (showLoadingScreen) setLoading(true);
+    if (showLoadingScreen) {
+      setLoading(true);
+      setFoodLogs([]);
+    }
     
     try {
       const dateStr = getDateString(viewDate);
@@ -215,8 +212,8 @@ export default function FoodLogTab() {
 
   useEffect(() => {
     const loadNavigatorStats = async () => {
-      if (!user || viewMode === 'none') return;
-      const datesToFetch = viewMode === 'monthly' ? getMonthDates(viewDate) : getWeekDates(viewDate);
+      if (!user) return;
+      const datesToFetch = getWeekDates(viewDate);
       const summaries: Record<string, number> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
@@ -258,39 +255,31 @@ export default function FoodLogTab() {
     };
 
     loadNavigatorStats();
-  }, [user, viewDate, viewMode, userProfile?.caloriesBudget]);
+  }, [user, viewDate, userProfile?.caloriesBudget]);
 
   const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
-
-    // 1. Instantly close the menu so the app feels completely responsive
     setShowAddModal(false);
 
     const targetDate = getDateString(viewDate);
     const foodsToAdd = Array.isArray(foodData) ? foodData : [foodData];
 
-    // 2. Optimistic UI Update
     const baseTimestamp = Date.now();
     const tempLogs = foodsToAdd.map((data, index) => {
       const spacedTimestamp = baseTimestamp + (index * 1000);
       return {
         ...data, 
-        id: data.id || `temp-${spacedTimestamp}-${index}`, // respect incoming ID
-        timestamp: spacedTimestamp, // Guarantees unique order
+        id: data.id || `temp-${spacedTimestamp}-${index}`, 
+        timestamp: spacedTimestamp, 
         date: targetDate,
       };
     });
 
-    // Place the temporary items on screen instantly
     setFoodLogs(prev => [...prev, ...tempLogs].sort((a, b) => a.timestamp - b.timestamp));
 
-    // 3. Save to database SEQUENTIALLY to prevent network rejections and rate limits
     for (let i = 0; i < tempLogs.length; i++) {
       try {
-        // We DO NOT strip the ID here, we pass the exact tempLog so Firebase matches our UI
         await createFoodLog(user.uid, tempLogs[i]);
-        
-        // Force a physical 400ms delay between saves
         if (i < tempLogs.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 400));
         }
@@ -299,10 +288,8 @@ export default function FoodLogTab() {
       }
     }
 
-    // 4. Ping the Daily Stats tab to update automatically
     window.dispatchEvent(new Event('foodDataChanged'));
 
-    // 5. Silent refresh to replace temp IDs with real database IDs
     setTimeout(() => {
       loadData(false);
       showToast('Food logged!');
@@ -311,15 +298,12 @@ export default function FoodLogTab() {
 
   const handleDeleteLog = async (logId: string) => {
     if (!user) return;
-    
-    // Instantly remove the item from the screen
     setSelectedLog(null);
     setFoodLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
 
     try {
-      // Perform the actual database deletion in the background
       await deleteFoodLog(user.uid, logId);
-      window.dispatchEvent(new Event('foodDataChanged')); // Ping Stats Tab
+      window.dispatchEvent(new Event('foodDataChanged')); 
       showToast('Item removed!');
     } catch (error) {
       console.error('Failed to delete food log:', error);
@@ -362,10 +346,9 @@ export default function FoodLogTab() {
       setShowEditModal(false);
       setEditingLog(null);
       
-      // Ping Stats Tab
       window.dispatchEvent(new Event('foodDataChanged')); 
       
-      await loadData(false); // Silent refresh
+      await loadData(false); 
       showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
@@ -535,56 +518,42 @@ export default function FoodLogTab() {
       <div ref={topRef} />
       
       <div className="date-navigator">
-        <button className="nav-btn" onClick={handlePrevDay}>←</button>
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
+        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto' }}>
           <h2>{isToday ? "Today's Food" : "Food Log"}</h2>
           <p className="date">
             {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <button className="nav-btn" onClick={handleNextDay}>→</button>
       </div>
 
-      <div className="view-toggle-container">
+      <div style={{ position: 'relative', padding: '0 45px', marginBottom: '1.5rem' }}>
         <button 
-          className="btn-weekly-toggle" 
-          onClick={() => setViewMode(viewMode === 'none' ? 'weekly' : 'none')}
+          className="nav-btn desktop-arrow" 
+          onClick={handlePrevWeek} 
+          // Make sure this matches DailyStatsTab (55% centers it on the circles)
+          style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
-          {viewMode === 'none' ? '▼ Show Navigator' : '▲ Hide Navigator'}
+          ←
         </button>
-        
-        {viewMode !== 'none' && (
-          <button 
-            className="btn-mode-switch"
-            onClick={() => setViewMode(viewMode === 'weekly' ? 'monthly' : 'weekly')}
-          >
-            Switch to {viewMode === 'weekly' ? 'Month' : 'Week'} View
-          </button>
-        )}
-      </div>
 
-      {viewMode !== 'none' && (
-        <div className={`navigator-container ${viewMode}-view`}>
-          {viewMode === 'monthly' && (
-            <div className="month-header">
-              <button className="nav-btn small-nav-btn" onClick={handlePrevMonth}>←</button>
-              <span>{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-              <button className="nav-btn small-nav-btn" onClick={handleNextMonth}>→</button>
-            </div>
-          )}
-          
+        <div 
+          className="navigator-container weekly-view"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{ margin: 0 }} 
+        >
           <div className="navigator-grid">
-            {(viewMode === 'weekly' ? getWeekDates(viewDate) : getMonthDates(viewDate)).map((date) => {
+            {getWeekDates(viewDate).map((date) => {
               const dStr = getDateString(date);
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
-              const isDifferentMonth = date.getMonth() !== viewDate.getMonth();
               const progress = navigatorSummaries[dStr] || 0;
               
               return (
                 <button 
                   key={dStr} 
-                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''} ${isDifferentMonth ? 'diff-month' : ''}`}
+                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                   onClick={() => setViewDate(date)}
                 >
                   <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
@@ -597,14 +566,22 @@ export default function FoodLogTab() {
             })}
           </div>
         </div>
-      )}
+
+        <button 
+          className="nav-btn desktop-arrow" 
+          onClick={handleNextWeek} 
+          // Make sure this matches DailyStatsTab
+          style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+        >
+          →
+        </button>
+      </div>
 
       <div className="tab-header">
         <h2>{isToday ? "Today's Foods" : "Logged Foods"}</h2>
       </div>
 
       <div className="food-summary">
-        {/* CALORIES TOGGLE ROW */}
         <div 
           onClick={() => toggleSummaryMode('Calories')} 
           style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}
@@ -641,7 +618,6 @@ export default function FoodLogTab() {
           </div>
         )}
 
-        {/* INDIVIDUAL MACRO TOGGLES */}
         {trackedMacros.length > 0 && (
           <div className="macros-grid">
             {trackedMacros.map(macro => {
@@ -692,7 +668,6 @@ export default function FoodLogTab() {
         )}
       </div>
 
-      {/* DONE LOGGING TOGGLE */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
         <button
           onClick={() => {
@@ -831,7 +806,6 @@ export default function FoodLogTab() {
                 </div>
               )}
 
-              {/* ONLY SHOW ADD BUTTON IF NOT DONE LOGGING */}
               {!isDoneLogging && (
                 <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
                   <button
@@ -958,7 +932,6 @@ export default function FoodLogTab() {
 
             <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
               
-              {/* QUICK PLAN / CONFIRM BUTTON */}
               {selectedLog.isPlanned ? (
                 <button 
                   className="btn btn-primary" 
@@ -969,7 +942,6 @@ export default function FoodLogTab() {
                     const targetId = selectedLog.id;
                     const originalLogs = [...foodLogs]; 
                     
-                    // Optimistic UI
                     setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: false } : log));
                     setSelectedLog(null);
                     
@@ -988,7 +960,6 @@ export default function FoodLogTab() {
                   ✅ Confirm as Eaten
                 </button>
               ) : (
-                /* ONLY RENDER THE BUTTON IF THE DAY IS NOT DONE */
                 !isDoneLogging && (
                   <button 
                     className="btn btn-secondary" 
@@ -999,7 +970,6 @@ export default function FoodLogTab() {
                       const targetId = selectedLog.id;
                       const originalLogs = [...foodLogs]; 
                       
-                      // Optimistic UI
                       setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: true } : log));
                       setSelectedLog(null);
                       
@@ -1129,7 +1099,6 @@ export default function FoodLogTab() {
         />
       )}
 
-      {/* TOAST NOTIFICATION */}
       {toastMessage && (
         <div style={{
           position: 'fixed',

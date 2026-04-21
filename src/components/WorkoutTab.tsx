@@ -33,6 +33,7 @@ export default function WorkoutsTab() {
     
     setIgnoredIds(prev => willIgnore ? [...prev, workoutId] : prev.filter(id => id !== workoutId));
     await toggleIgnoredWorkout(user.uid, workoutId, willIgnore);
+    window.dispatchEvent(new Event('workoutDataChanged'));
   };
 
   if (loading) {

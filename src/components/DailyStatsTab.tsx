@@ -61,27 +61,6 @@ const getWeekDates = (date: Date) => {
   });
 };
 
-const getMonthDates = (date: Date) => {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  
-  const start = new Date(firstDay);
-  start.setDate(firstDay.getDate() - firstDay.getDay());
-  
-  const end = new Date(lastDay);
-  end.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
-  
-  const dates = [];
-  let current = new Date(start);
-  while (current <= end) {
-    dates.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return dates;
-};
-
 const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   if (!rawDate) return false;
   if (typeof rawDate === 'string') {
@@ -152,30 +131,36 @@ const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { 
 export default function DailyStatsTab() {
   const { user, userProfile } = useAuth();
   const [viewDate, setViewDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'none' | 'weekly' | 'monthly'>('none');
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
 
-  // ADD THIS FOR AUTO-REFRESH
+  // Auto-refresh trigger
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Swipe navigation states
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
   
   useEffect(() => {
     const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
     window.addEventListener('foodDataChanged', handleUpdate);
-    return () => window.removeEventListener('foodDataChanged', handleUpdate);
+    window.addEventListener('workoutDataChanged', handleUpdate);
+    window.addEventListener('dayCompletedChanged', handleUpdate);
+    return () => {
+      window.removeEventListener('foodDataChanged', handleUpdate);
+      window.removeEventListener('workoutDataChanged', handleUpdate);
+      window.removeEventListener('dayCompletedChanged', handleUpdate);
+    };
   }, []);
 
-  // 1. Create the reference point for scrolling to the top
   const topRef = useRef<HTMLDivElement>(null);
 
-  // 2. Scroll to the reference point instantly when the tab loads
   useEffect(() => {
     if (topRef.current) {
       topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
@@ -189,45 +174,44 @@ export default function DailyStatsTab() {
     return `${year}-${month}-${day}`;
   };
 
-  const handlePrevDay = () => {
+  const handleGoToToday = () => setViewDate(new Date());
+
+  // Swipe and desktop arrow logic
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      handleNextWeek();
+    } else if (isRightSwipe) {
+      handlePrevWeek();
+    }
+  };
+
+  const handlePrevWeek = () => {
     const prev = new Date(viewDate);
-    prev.setDate(prev.getDate() - 1);
+    prev.setDate(prev.getDate() - 7);
     setViewDate(prev);
   };
 
-  const handleNextDay = () => {
+  const handleNextWeek = () => {
     const next = new Date(viewDate);
-    next.setDate(next.getDate() + 1);
+    next.setDate(next.getDate() + 7);
     setViewDate(next);
   };
 
-  const handleGoToToday = () => setViewDate(new Date());
-
-  const handlePrevMonth = () => {
-    const targetDate = new Date(viewDate);
-    targetDate.setDate(1);
-    targetDate.setMonth(viewDate.getMonth() - 1);
-    const today = new Date();
-    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date());
-    } else {
-      setViewDate(targetDate);
-    }
-  };
-
-  const handleNextMonth = () => {
-    const targetDate = new Date(viewDate);
-    targetDate.setDate(1);
-    targetDate.setMonth(viewDate.getMonth() + 1);
-    const today = new Date();
-    if (targetDate.getMonth() === today.getMonth() && targetDate.getFullYear() === today.getFullYear()) {
-      setViewDate(new Date());
-    } else {
-      setViewDate(targetDate);
-    }
-  };
-
-  // --- Calculate Streak from Firebase ---
+  // Calculate Streak
   useEffect(() => {
     const fetchStreak = async () => {
       if (!user) return;
@@ -237,12 +221,10 @@ export default function DailyStatsTab() {
         const today = new Date();
         const todayStr = getDateString(today);
         
-        // 1. Check if today is marked done
         if (doneDates[todayStr]) {
            currentStreak++;
         }
         
-        // 2. Count backward from yesterday
         let checkDate = new Date(today);
         checkDate.setDate(checkDate.getDate() - 1);
         
@@ -252,7 +234,7 @@ export default function DailyStatsTab() {
             currentStreak++;
             checkDate.setDate(checkDate.getDate() - 1);
           } else {
-            break; // Streak broken!
+            break; 
           }
         }
         setStreak(currentStreak);
@@ -264,10 +246,11 @@ export default function DailyStatsTab() {
     fetchStreak();
   }, [user, viewDate, refreshTrigger]); 
 
+  // Load Weekly Navigator Stats
   useEffect(() => {
     const loadNavigatorStats = async () => {
-      if (!user || viewMode === 'none') return;
-      const datesToFetch = viewMode === 'monthly' ? getMonthDates(viewDate) : getWeekDates(viewDate);
+      if (!user) return;
+      const datesToFetch = getWeekDates(viewDate);
       const summaries: Record<string, number> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
@@ -307,8 +290,9 @@ export default function DailyStatsTab() {
     };
 
     loadNavigatorStats();
-  }, [user, viewDate, viewMode, userProfile?.caloriesBudget, refreshTrigger]);
+  }, [user, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
 
+  // Load Main Daily Data
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
@@ -342,7 +326,6 @@ export default function DailyStatsTab() {
         }));
 
         const todaysHealthWeights: any[] = [];
-        
         const safeHealthLogsRaw = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
         
         safeHealthLogsRaw.forEach((log: any) => {
@@ -358,7 +341,6 @@ export default function DailyStatsTab() {
                   todaysHealthWeights.push({
                     date: parsedDate.dateStr,
                     time: parsedDate.timeStr,
-                    // Round the incoming health data to 1 decimal place
                     weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
                     unit: parseUnit(metric.units || log.units),
                     timestamp: parsedDate.timeMs,
@@ -379,7 +361,6 @@ export default function DailyStatsTab() {
                 todaysHealthWeights.push({
                   date: parsedDate.dateStr,
                   time: parsedDate.timeStr,
-                  // Round the incoming health data to 1 decimal place
                   weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
                   unit: parseUnit(log.units || log.unit),
                   timestamp: parsedDate.timeMs,
@@ -439,60 +420,47 @@ export default function DailyStatsTab() {
   return (
     <div className="daily-stats">
       
-      {/* Invisible anchor point for auto-scrolling to the top */}
       <div ref={topRef} />
       
       <div className="date-navigator">
-        <button className="nav-btn" onClick={handlePrevDay}>←</button>
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer' }}>
+        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto' }}>
           <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
           <p className="date">
             {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <button className="nav-btn" onClick={handleNextDay}>→</button>
       </div>
 
-      <div className="view-toggle-container">
+      <div style={{ position: 'relative', padding: '0 45px', marginBottom: '1.5rem' }}>
         <button 
-          className="btn-weekly-toggle" 
-          onClick={() => setViewMode(viewMode === 'none' ? 'weekly' : 'none')}
+          className="nav-btn desktop-arrow" 
+          onClick={handlePrevWeek} 
+          // 2. Tweak the top percentage here if you want to move them up or down 
+          // (55% usually lines them up perfectly with the circles instead of the text)
+          style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
-          {viewMode === 'none' ? '▼ Show Navigator' : '▲ Hide Navigator'}
+          ←
         </button>
-        
-        {viewMode !== 'none' && (
-          <button 
-            className="btn-mode-switch"
-            onClick={() => setViewMode(viewMode === 'weekly' ? 'monthly' : 'weekly')}
-          >
-            Switch to {viewMode === 'weekly' ? 'Month' : 'Week'} View
-          </button>
-        )}
-      </div>
 
-      {viewMode !== 'none' && (
-        <div className={`navigator-container ${viewMode}-view`}>
-          {viewMode === 'monthly' && (
-            <div className="month-header">
-              <button className="nav-btn small-nav-btn" onClick={handlePrevMonth}>←</button>
-              <span>{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-              <button className="nav-btn small-nav-btn" onClick={handleNextMonth}>→</button>
-            </div>
-          )}
-          
+        <div 
+          className="navigator-container weekly-view"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          // 3. Changed from marginTop: '0' to margin: 0 to strip out any CSS margins throwing off the center
+          style={{ margin: 0 }} 
+        >
           <div className="navigator-grid">
-            {(viewMode === 'weekly' ? getWeekDates(viewDate) : getMonthDates(viewDate)).map((date) => {
+            {getWeekDates(viewDate).map((date) => {
               const dStr = getDateString(date);
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
-              const isDifferentMonth = date.getMonth() !== viewDate.getMonth();
               const progress = navigatorSummaries[dStr] || 0;
               
               return (
                 <button 
                   key={dStr} 
-                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''} ${isDifferentMonth ? 'diff-month' : ''}`}
+                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                   onClick={() => setViewDate(date)}
                 >
                   <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
@@ -505,14 +473,22 @@ export default function DailyStatsTab() {
             })}
           </div>
         </div>
-      )}
+
+        <button 
+          className="nav-btn desktop-arrow" 
+          onClick={handleNextWeek} 
+          // Match the top percentage here too
+          style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+        >
+          →
+        </button>
+      </div>
 
       {loading ? (
         <div className="loading">Loading stats...</div>
       ) : (
         <>
-          {/* Streak Banner */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', marginTop: viewMode === 'none' ? '1rem' : '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
             <div style={{ 
               background: streak > 0 ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' : '#f1f5f9', 
               color: streak > 0 ? 'white' : '#64748b', 
@@ -548,7 +524,6 @@ export default function DailyStatsTab() {
                 </span>
               </div>
               
-              {/* ALWAYS GREEN PROGRESS BAR */}
               <div className="progress-bar">
                 <div 
                   className="progress-fill" 
@@ -559,7 +534,6 @@ export default function DailyStatsTab() {
                 ></div>
               </div>
               
-              {/* TEXT ADAPTS TO EXACTLY 0 (GRAY) OR OVER (RED) */}
               <div className="stat-value full-width">
                 {showCalRemaining ? (
                    <>
@@ -603,7 +577,6 @@ export default function DailyStatsTab() {
                 <span className="stat-label">Weight</span>
                 {todayWeight ? (
                   <div className="weight-highlight">
-                    {/* Add .toFixed(1) to guarantee one decimal place displays in the UI */}
                     <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
                     <span className="weight-unit">{todayWeight.unit}</span>
                     <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
