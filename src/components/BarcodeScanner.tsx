@@ -26,8 +26,9 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
     
     // FIX 1: Attempt to lock the device screen orientation to portrait
     try {
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('portrait').catch((err) => {
+      // Cast to 'any' to bypass strict TypeScript checks for experimental APIs
+      if (screen.orientation && (screen.orientation as any).lock) {
+        (screen.orientation as any).lock('portrait').catch((err: any) => {
           console.warn("Screen orientation lock denied or not supported:", err);
         });
       }
@@ -76,8 +77,8 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
       
       // Unlock the screen orientation when the modal closes
       try {
-        if (screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock();
+        if (screen.orientation && (screen.orientation as any).unlock) {
+          (screen.orientation as any).unlock();
         }
       } catch (e) {}
 
