@@ -19,11 +19,7 @@ interface Props {
 
 export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialMealType, onOpenRecipe }: Props) {
   
-  // Default directly to the 'previous' list unless a brand new barcode was scanned
-  const [mode, setMode] = useState<'create' | 'previous' | 'choose-scan-type'>(
-    // Note: Assuming initialUpc logic was passed here in your implementation
-    'previous'
-  );
+  const [mode, setMode] = useState<'create' | 'previous' | 'choose-scan-type'>('previous');
   
   const [newFood, setNewFood] = useState<Food | null>(null);
   const [scanVitaminMode, setScanVitaminMode] = useState<boolean | undefined>(undefined);
@@ -35,12 +31,12 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
-  // Update handleFoodCreated to receive the payload and pass it to onAdd
   const handleFoodCreated = async (payload: any) => {
-    onClose();
+    // FIX: Wait for the database addition to completely finish BEFORE closing the modal!
     if (payload && payload.mealType !== undefined) {
       await onAdd(payload);
     }
+    onClose();
   };
 
   const handleScanSuccess = (code: string) => {
@@ -61,7 +57,6 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
 
   return (
     <>
-      {/* DISABLED BACKGROUND CLICK WHEN CREATING A FOOD */}
       <div className="modal-overlay" onClick={mode === 'create' ? undefined : onClose}>
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
           

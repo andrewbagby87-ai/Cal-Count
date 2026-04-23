@@ -135,20 +135,27 @@ export default function DailyStatsTab() {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
-  const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
+  
+  // NEW COLOR RECORD TYPE
+  const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
+  
   const [loading, setLoading] = useState(true);
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
 
-  // Auto-refresh trigger
+  // Auto-refresh trigger & silent load guard
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
+  const isBackgroundRefresh = useRef(false);
+  
   // Swipe navigation states
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   
   useEffect(() => {
-    const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
+    const handleUpdate = () => {
+      isBackgroundRefresh.current = true;
+      setRefreshTrigger(prev => prev + 1);
+    };
     window.addEventListener('foodDataChanged', handleUpdate);
     window.addEventListener('workoutDataChanged', handleUpdate);
     window.addEventListener('dayCompletedChanged', handleUpdate);
@@ -214,7 +221,7 @@ export default function DailyStatsTab() {
   // Calculate Streak
   useEffect(() => {
     const fetchStreak = async () => {
-      if (!user) return;
+      if (!user?.uid) return;
       try {
         const doneDates = await getDoneLoggingDates(user.uid);
         let currentStreak = 0;
@@ -244,14 +251,16 @@ export default function DailyStatsTab() {
     };
 
     fetchStreak();
-  }, [user, viewDate, refreshTrigger]); 
+  }, [user?.uid, viewDate, refreshTrigger]); 
 
   // Load Weekly Navigator Stats
   useEffect(() => {
     const loadNavigatorStats = async () => {
-      if (!user) return;
+      if (!user?.uid) return;
       const datesToFetch = getWeekDates(viewDate);
-      const summaries: Record<string, number> = {};
+      
+      // NEW COLOR RECORD TYPE
+      const summaries: Record<string, { progress: number, color: string }> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
@@ -283,20 +292,40 @@ export default function DailyStatsTab() {
 
         const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
-        summaries[dStr] = budget > 0 ? (consumed / budget) : 0;
+        
+        // NEW COLOR LOGIC
+        let progress = 0;
+        let color = '#10b981'; 
+        
+        if (budget > 0) {
+          progress = consumed / budget;
+          const remaining = Math.round(budget - consumed);
+          
+          if (remaining < 0) color = '#ef4444'; 
+          else if (remaining === 0 && consumed > 0) color = '#2563eb'; 
+        } else if (consumed > 0) {
+          progress = 1;
+          color = '#ef4444'; 
+        }
+        
+        summaries[dStr] = { progress, color };
       }));
 
       setNavigatorSummaries(summaries);
     };
 
     loadNavigatorStats();
-  }, [user, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
+  }, [user?.uid, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
 
   // Load Main Daily Data
   useEffect(() => {
     const loadData = async () => {
-      if (!user) return;
-      setLoading(true);
+      if (!user?.uid) return;
+      
+      if (!isBackgroundRefresh.current) {
+        setLoading(true);
+      }
+      
       try {
         const dateStr = getDateString(viewDate);
         
@@ -386,10 +415,11 @@ export default function DailyStatsTab() {
         console.error('Failed to load stats:', error);
       } finally {
         setLoading(false);
+        isBackgroundRefresh.current = false;
       }
     };
     loadData();
-  }, [user, viewDate, refreshTrigger]);
+  }, [user?.uid, viewDate, refreshTrigger]);
 
   const todayStr = getDateString(new Date());
   const viewStr = getDateString(viewDate);
@@ -435,8 +465,6 @@ export default function DailyStatsTab() {
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handlePrevWeek} 
-          // 2. Tweak the top percentage here if you want to move them up or down 
-          // (55% usually lines them up perfectly with the circles instead of the text)
           style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
           ←
@@ -447,7 +475,6 @@ export default function DailyStatsTab() {
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          // 3. Changed from marginTop: '0' to margin: 0 to strip out any CSS margins throwing off the center
           style={{ margin: 0 }} 
         >
           <div className="navigator-grid">
@@ -455,7 +482,11 @@ export default function DailyStatsTab() {
               const dStr = getDateString(date);
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
-              const progress = navigatorSummaries[dStr] || 0;
+              
+              // NEW COLOR RENDER
+              const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
+              const progress = summary.progress;
+              const barColor = summary.color;
               
               return (
                 <button 
@@ -465,7 +496,7 @@ export default function DailyStatsTab() {
                 >
                   <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
                   <div className="day-circle">
-                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: progress > 1 ? '#ef4444' : '#2563eb' }} />
+                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                      <span className="day-number">{date.getDate()}</span>
                   </div>
                 </button>
@@ -477,7 +508,6 @@ export default function DailyStatsTab() {
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handleNextWeek} 
-          // Match the top percentage here too
           style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
           →

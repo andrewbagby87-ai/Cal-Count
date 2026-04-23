@@ -23,16 +23,33 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
   // 1. Initialize the LIVE camera (as a convenience)
   useEffect(() => {
     let isMounted = true;
+    
+    // FIX 1: Attempt to lock the device screen orientation to portrait
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait').catch((err) => {
+          console.warn("Screen orientation lock denied or not supported:", err);
+        });
+      }
+    } catch (e) {
+      console.warn("Orientation API not available.");
+    }
+
     const html5QrCode = new Html5Qrcode("barcode-reader-container");
     scannerRef.current = html5QrCode;
 
     const startScanner = async () => {
       try {
+        // FIX 2: Calculate a portrait aspect ratio so the video feed stays up-right
+        const currentRatio = window.innerWidth / window.innerHeight;
+        const portraitRatio = currentRatio < 1 ? currentRatio : 0.75; 
+
         await html5QrCode.start(
           { facingMode: "environment" },
           {
             fps: 10,
             qrbox: { width: 250, height: 150 },
+            aspectRatio: portraitRatio, // Forces the camera feed to stay vertical
           },
           (decodedText) => {
             if (isMounted && !hasScannedRef.current) {
@@ -56,6 +73,14 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
     return () => {
       isMounted = false;
       clearTimeout(timer);
+      
+      // Unlock the screen orientation when the modal closes
+      try {
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+      } catch (e) {}
+
       if (html5QrCode.isScanning) {
         html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
       } else {

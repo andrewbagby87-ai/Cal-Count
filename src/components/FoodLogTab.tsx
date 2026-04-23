@@ -43,7 +43,6 @@ export default function FoodLogTab() {
   
   const topRef = useRef<HTMLDivElement>(null);
 
-  // --- Toast Notification State ---
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (message: string) => {
@@ -68,7 +67,10 @@ export default function FoodLogTab() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const [viewDate, setViewDate] = useState(new Date());
-  const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, number>>({});
+  
+  // NEW COLOR RECORD TYPE
+  const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
+  
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
   const [summaryToggles, setSummaryToggles] = useState<Record<string, boolean>>({});
 
@@ -82,9 +84,27 @@ export default function FoodLogTab() {
   const [draggedLog, setDraggedLog] = useState<FoodLog | null>(null);
   const [dragOverLogId, setDragOverLogId] = useState<string | null>(null);
 
-  // Swipe navigation states
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  // AUTO-REFRESH & SYNC LOGIC
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const isBackgroundRefresh = useRef(false);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      isBackgroundRefresh.current = true;
+      setRefreshTrigger(prev => prev + 1);
+    };
+    window.addEventListener('foodDataChanged', handleUpdate);
+    window.addEventListener('workoutDataChanged', handleUpdate);
+    window.addEventListener('dayCompletedChanged', handleUpdate);
+    return () => {
+      window.removeEventListener('foodDataChanged', handleUpdate);
+      window.removeEventListener('workoutDataChanged', handleUpdate);
+      window.removeEventListener('dayCompletedChanged', handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current); };
@@ -110,9 +130,7 @@ export default function FoodLogTab() {
     setDoneLoggingDates(prev => ({ ...prev, [viewStr]: nextState }));
     try {
       await toggleDoneLoggingDate(user.uid, viewStr, nextState);
-      
       window.dispatchEvent(new Event('dayCompletedChanged'));
-      
     } catch (error) {
       console.error("Failed to sync done state", error);
       setDoneLoggingDates(prev => ({ ...prev, [viewStr]: !nextState }));
@@ -121,7 +139,6 @@ export default function FoodLogTab() {
 
   const handleGoToToday = () => setViewDate(new Date());
 
-  // Swipe and desktop arrow logic
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
@@ -207,14 +224,17 @@ export default function FoodLogTab() {
   };
 
   useEffect(() => {
-    loadData();
-  }, [user, viewDate]);
+    loadData(!isBackgroundRefresh.current);
+    isBackgroundRefresh.current = false;
+  }, [user?.uid, viewDate, refreshTrigger]);
 
   useEffect(() => {
     const loadNavigatorStats = async () => {
       if (!user) return;
       const datesToFetch = getWeekDates(viewDate);
-      const summaries: Record<string, number> = {};
+      
+      // NEW COLOR RECORD TYPE
+      const summaries: Record<string, { progress: number, color: string }> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), 
@@ -248,18 +268,32 @@ export default function FoodLogTab() {
         const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
         
-        summaries[dStr] = budget > 0 ? (consumed / budget) : 0;
+        // NEW COLOR LOGIC
+        let progress = 0;
+        let color = '#10b981'; 
+        
+        if (budget > 0) {
+          progress = consumed / budget;
+          const remaining = Math.round(budget - consumed);
+          
+          if (remaining < 0) color = '#ef4444'; 
+          else if (remaining === 0 && consumed > 0) color = '#2563eb'; 
+        } else if (consumed > 0) {
+          progress = 1;
+          color = '#ef4444'; 
+        }
+        
+        summaries[dStr] = { progress, color };
       }));
 
       setNavigatorSummaries(summaries);
     };
 
     loadNavigatorStats();
-  }, [user, viewDate, userProfile?.caloriesBudget]);
+  }, [user?.uid, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
 
   const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
-    setShowAddModal(false);
 
     const targetDate = getDateString(viewDate);
     const foodsToAdd = Array.isArray(foodData) ? foodData : [foodData];
@@ -277,23 +311,17 @@ export default function FoodLogTab() {
 
     setFoodLogs(prev => [...prev, ...tempLogs].sort((a, b) => a.timestamp - b.timestamp));
 
-    for (let i = 0; i < tempLogs.length; i++) {
-      try {
-        await createFoodLog(user.uid, tempLogs[i]);
-        if (i < tempLogs.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 400));
-        }
-      } catch (err) {
-        console.error('Failed to save individual food item:', err);
-      }
+    try {
+      await Promise.all(tempLogs.map(log => createFoodLog(user.uid, log)));
+    } catch (err) {
+      console.error('Failed to save food items:', err);
     }
 
+    // Triggering this updates the navigator circles instantly!
     window.dispatchEvent(new Event('foodDataChanged'));
 
-    setTimeout(() => {
-      loadData(false);
-      showToast('Food logged!');
-    }, 800);
+    setShowAddModal(false);
+    showToast('Food logged!');
   };
 
   const handleDeleteLog = async (logId: string) => {
@@ -347,8 +375,6 @@ export default function FoodLogTab() {
       setEditingLog(null);
       
       window.dispatchEvent(new Event('foodDataChanged')); 
-      
-      await loadData(false); 
       showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
@@ -471,6 +497,7 @@ export default function FoodLogTab() {
         mealType: finalMealType, 
         timestamp: newTimestamp 
       });
+      window.dispatchEvent(new Event('foodDataChanged'));
     } catch (error) {
       console.error("Failed to update log position:", error);
       loadData(false); 
@@ -518,7 +545,7 @@ export default function FoodLogTab() {
       <div ref={topRef} />
       
       <div className="date-navigator">
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto' }}>
+        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
           <h2>{isToday ? "Today's Food" : "Food Log"}</h2>
           <p className="date">
             {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -530,7 +557,6 @@ export default function FoodLogTab() {
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handlePrevWeek} 
-          // Make sure this matches DailyStatsTab (55% centers it on the circles)
           style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
           ←
@@ -548,7 +574,11 @@ export default function FoodLogTab() {
               const dStr = getDateString(date);
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
-              const progress = navigatorSummaries[dStr] || 0;
+              
+              // NEW COLOR RENDER
+              const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
+              const progress = summary.progress;
+              const barColor = summary.color;
               
               return (
                 <button 
@@ -558,7 +588,7 @@ export default function FoodLogTab() {
                 >
                   <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
                   <div className="day-circle">
-                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: progress > 1 ? '#ef4444' : '#2563eb' }} />
+                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                      <span className="day-number">{date.getDate()}</span>
                   </div>
                 </button>
@@ -570,7 +600,6 @@ export default function FoodLogTab() {
         <button 
           className="nav-btn desktop-arrow" 
           onClick={handleNextWeek} 
-          // Make sure this matches DailyStatsTab
           style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
         >
           →
@@ -948,7 +977,6 @@ export default function FoodLogTab() {
                     try {
                       await updateFoodLog(user.uid, targetId, { isPlanned: false });
                       window.dispatchEvent(new Event('foodDataChanged'));
-                      loadData(false);
                       showToast('Confirmed as eaten!');
                     } catch (err) {
                       console.error('Failed to update planned status:', err);
@@ -976,7 +1004,6 @@ export default function FoodLogTab() {
                       try {
                         await updateFoodLog(user.uid, targetId, { isPlanned: true });
                         window.dispatchEvent(new Event('foodDataChanged'));
-                        loadData(false);
                         showToast('Marked as planned!');
                       } catch (err) {
                         console.error('Failed to update planned status:', err);
@@ -1043,17 +1070,10 @@ export default function FoodLogTab() {
         <AddFoodModal 
           foods={foods} 
           onAdd={handleAddFood} 
-          onClose={() => {
-            setShowAddModal(false);
-            loadData(false); 
-          }} 
-          onFoodDeleted={() => {
-            loadData(false); 
-          }}
+          onClose={() => setShowAddModal(false)} 
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
           initialMealType={activeAddMealType}
-          
           onOpenRecipe={(foodToEdit?: Food) => {
             setShowAddModal(false);
             if (foodToEdit) {
@@ -1083,7 +1103,6 @@ export default function FoodLogTab() {
             setShowRecipeModal(false);
             setEditingRecipeLog(null);
             setEditingRecipeFood(null);
-            loadData(false);
           }}
           selectedDate={getDateString(viewDate)}
         />
@@ -1095,7 +1114,6 @@ export default function FoodLogTab() {
           onSave={handleEditLog} 
           onClose={() => setShowEditModal(false)} 
           isDoneDay={isDoneLogging}
-          onLabelSaved={() => loadData(false)} 
         />
       )}
 

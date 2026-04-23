@@ -48,12 +48,17 @@ const formatDateDisplay = (dateString: string) => {
   return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
 };
 
+// GLOBAL CACHE: Prevents the "Last logged" text from disappearing when the modal remounts
+let globalCachedLogs: FoodLog[] | null = null;
+
 export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, initialMealType, onEditRecipe, onCreateNew, onCreateRecipe, onOpenScanner }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
   const [selectedFood, setSelectedFood] = useState<Food | null>(initialFood || null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
+  
+  // Initialize immediately with cached logs if they exist
+  const [allLogs, setAllLogs] = useState<FoodLog[]>(globalCachedLogs || []);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -67,7 +72,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   useEffect(() => {
     if (user) {
-      getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
+      // Fetch fresh data in the background and update the cache silently
+      getAllFoodLogs(user.uid).then(logs => {
+        globalCachedLogs = logs;
+        setAllLogs(logs);
+      }).catch(console.error);
     }
   }, [user]);
 
@@ -133,7 +142,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
   
-  // Separate refs for the icon pickers to avoid click-outside conflicts
   const editIconPickerRef = useRef<HTMLDivElement>(null);
   const quickAddIconPickerRef = useRef<HTMLDivElement>(null);
   
@@ -310,7 +318,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     });
   };
 
-  // Directly save updates to DB, cascade to all logs, and close edit mode without popup
   const handleSaveNutritionForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFood || !user) return;
@@ -360,7 +367,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       
       // Cascade past logs
       await updateAllPastLogsForFood(user.uid, selectedFood.id, updatedFood);
+      
       const newLogs = await getAllFoodLogs(user.uid);
+      globalCachedLogs = newLogs; // Update the cache
       setAllLogs(newLogs);
 
       // Update local state
