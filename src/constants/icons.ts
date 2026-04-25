@@ -54,6 +54,7 @@ export const FOOD_ICONS = [
   { icon: './sub.png', title: 'Sub' }, { icon: './sugar.png', title: 'Sugar' }, { icon: './can.png', title: 'Soda Can' },
   { icon: './hash-brown.png', title: 'Hash Brown' }, { icon: './meat.png', title: 'Turkey / Chicken' }, { icon: './breakfast-sandwich.png', title: 'Breakfast Sandwich' },
   { icon: './lasagna.png', title: 'Lasagna' }, { icon: './cinnamon-roll.png', title: 'Cinnamon Roll' }, { icon: './macaroni.png', title: 'Macaroni' },
+  { icon: './egg-roll.png', title: 'Egg Roll' },
   // Custom Image Examples: Just drop files in the `public` folder and reference them with `./`!
   //{ icon: './scale.png', title: 'Kitchen Scale' }
 

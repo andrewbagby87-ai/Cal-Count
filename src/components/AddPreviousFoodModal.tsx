@@ -18,6 +18,7 @@ interface Props {
   isVitaminMode?: boolean; 
   initialFood?: Food; 
   initialMealType?: string;
+  remainingCalories?: number; 
   onEditRecipe?: (food: Food) => void;
   onCreateNew?: () => void;
   onCreateRecipe?: () => void;
@@ -48,21 +49,38 @@ const formatDateDisplay = (dateString: string) => {
   return `${month} ${getOrdinal(day)}, ${date.getFullYear()}`;
 };
 
-// GLOBAL CACHE: Prevents the "Last logged" text from disappearing when the modal remounts
-let globalCachedLogs: FoodLog[] | null = null;
-
-export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, initialMealType, onEditRecipe, onCreateNew, onCreateRecipe, onOpenScanner }: Props) {
+export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, onFoodDeleted, initialDate, isVitaminMode, initialFood, initialMealType, remainingCalories, onEditRecipe, onCreateNew, onCreateRecipe, onOpenScanner }: Props) {
   const { user } = useAuth();
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
   const [selectedFood, setSelectedFood] = useState<Food | null>(initialFood || null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Initialize immediately with cached logs if they exist
-  const [allLogs, setAllLogs] = useState<FoodLog[]>(globalCachedLogs || []);
+  const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
+
+  // --- FILTER & SORT STATE ---
+  const [filters, setFilters] = useState<{
+    highProtein: boolean;
+    highFiber: boolean;
+    fitsBudget: boolean;
+    customLimitActive: boolean;
+    customLimitValue: string;
+    budgetMode: 'serving' | 'last-logged';
+  }>({
+    highProtein: false,
+    highFiber: false,
+    fitsBudget: false,
+    customLimitActive: false,
+    customLimitValue: '',
+    budgetMode: 'serving'
+  });
+  
+  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'cal-asc' | 'cal-desc'>('newest');
+  
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
 
   // Quick Add Mode States
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
@@ -72,11 +90,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   useEffect(() => {
     if (user) {
-      // Fetch fresh data in the background and update the cache silently
-      getAllFoodLogs(user.uid).then(logs => {
-        globalCachedLogs = logs;
-        setAllLogs(logs);
-      }).catch(console.error);
+      getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
     }
   }, [user]);
 
@@ -158,6 +172,10 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       }
       if (isOutside) {
         setShowIconPicker(false);
+      }
+
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target as Node)) {
+        setShowFilterMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -362,21 +380,14 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
       );
       
-      // Update Base Food
       await updateFood(selectedFood.id, cleanFirebasePayload);
-      
-      // Cascade past logs
       await updateAllPastLogsForFood(user.uid, selectedFood.id, updatedFood);
-      
       const newLogs = await getAllFoodLogs(user.uid);
-      globalCachedLogs = newLogs; // Update the cache
       setAllLogs(newLogs);
 
-      // Update local state
       setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
       setSelectedFood(updatedFood);
       
-      // Safely reset method if a volume they were previously logging with was deleted
       setLogDetails(prev => {
         let safeDetails = { ...prev };
         const isVolMethod = safeDetails.consumptionMethod.startsWith('volume-');
@@ -495,7 +506,7 @@ try {
     } catch (err) {
       console.error("Batch add failed:", err);
       setError(err instanceof Error ? err.message : 'Failed to add selected foods.');
-      setLoading(false); // Only reset loading if it fails, otherwise let it unmount
+      setLoading(false); 
     }
   };
 
@@ -653,13 +664,72 @@ try {
 
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
 
-  const filteredFoods = localFoods.filter(food => {
+  // --- FILTER & SORT LOGIC ---
+  const processedFoods = localFoods.filter(food => {
     const searchLower = searchTerm.toLowerCase();
     const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
     const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
     const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
-    return matchesName || matchesBrand || matchesUPC;
+    const matchesSearch = matchesName || matchesBrand || matchesUPC;
+
+    if (!matchesSearch) return false;
+
+    if (filters.highProtein) {
+      const isHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
+      if (!isHighProtein) return false;
+    }
+    
+    if (filters.highFiber) {
+      const isHighFiber = food.fiber ? food.fiber >= 4 : false;
+      if (!isHighFiber) return false;
+    }
+    
+    const isBudgetFilterActive = filters.fitsBudget || filters.customLimitActive;
+    if (isBudgetFilterActive) {
+      let maxCalories = undefined;
+      
+      if (filters.fitsBudget && remainingCalories !== undefined) {
+         maxCalories = remainingCalories;
+      } else if (filters.customLimitActive && filters.customLimitValue !== '') {
+         maxCalories = parseFloat(filters.customLimitValue);
+      }
+
+      if (maxCalories !== undefined) {
+        let calToCheck = food.calories || 0;
+        
+        if (filters.budgetMode === 'last-logged') {
+          const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+          if (lastLog) {
+            let multiplier = 1;
+            if (lastLog.unit === 'serving') {
+              multiplier = lastLog.amount / (food.servingSize || 1);
+            } else {
+              const vol = food.volumes?.find(v => v.unit === lastLog.unit);
+              if (vol && vol.amount) {
+                multiplier = lastLog.amount / vol.amount;
+              } else {
+                multiplier = 0;
+              }
+            }
+            calToCheck = calToCheck * multiplier;
+          }
+        }
+
+        const fits = calToCheck <= maxCalories;
+        if (!fits) return false;
+      }
+    }
+
+    return true;
+  }).sort((a, b) => {
+    if (sortMode === 'cal-asc') return (a.calories || 0) - (b.calories || 0);
+    if (sortMode === 'cal-desc') return (b.calories || 0) - (a.calories || 0);
+    if (sortMode === 'oldest') return (a.createdAt || 0) - (b.createdAt || 0);
+    // newest (default)
+    return (b.createdAt || 0) - (a.createdAt || 0); 
   });
+
+  const hasActiveFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
 
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
@@ -699,7 +769,7 @@ try {
           </div>
         )}
 
-        <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', flexShrink: 0 }}>
+        <div className="search-bar-container" style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch', marginBottom: '0.5rem', flexShrink: 0 }}>
           <input
             type="text"
             className="search-input"
@@ -708,6 +778,174 @@ try {
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ flex: 1, margin: 0 }}
           />
+          
+          {/* MULTI-FILTER MENU WITH DYNAMIC BUDGET LIMITS & SORT */}
+          <div style={{ position: 'relative', display: 'flex' }} ref={filterMenuRef}>
+            <button 
+              type="button"
+              onClick={() => setShowFilterMenu(!showFilterMenu)}
+              style={{
+                background: showFilterMenu ? '#dbeafe' : '#f1f5f9', 
+                border: `1px solid ${showFilterMenu ? '#bfdbfe' : '#cbd5e1'}`, 
+                borderRadius: '0.5rem',
+                padding: '0.65rem 0.75rem', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                color: showFilterMenu ? '#2563eb' : '#475569',
+                outline: 'none'
+              }}
+              title="Filter & Sort"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
+              
+              {/* Notification dot if filters or sort is active while menu is closed */}
+              {(hasActiveFilters || sortMode !== 'newest') && (
+                <span style={{ position: 'absolute', top: '-4px', right: '-4px', width: '12px', height: '12px', backgroundColor: '#3b82f6', borderRadius: '50%', border: '2px solid #fff' }}></span>
+              )}
+            </button>
+
+            {showFilterMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, zIndex: 20, backgroundColor: '#fff',
+                border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                minWidth: '220px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                maxHeight: '400px', overflowY: 'auto'
+              }}>
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Filters</span>
+                  {(hasActiveFilters || sortMode !== 'newest') && (
+                    <button 
+                      onClick={() => {
+                        setFilters({highProtein: false, highFiber: false, fitsBudget: false, customLimitActive: false, customLimitValue: '', budgetMode: 'serving'});
+                        setSortMode('newest');
+                      }} 
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="checkbox" checked={filters.highProtein} onChange={(e) => setFilters(p => ({...p, highProtein: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>P</span> High Protein
+                </label>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="checkbox" checked={filters.highFiber} onChange={(e) => setFilters(p => ({...p, highFiber: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff' }}>F</span> High Fiber
+                </label>
+
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {remainingCalories !== undefined && (
+                    <label style={{ padding: '10px 12px 5px 12px', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={filters.fitsBudget} 
+                        onChange={(e) => setFilters(p => ({...p, fitsBudget: e.target.checked, customLimitActive: e.target.checked ? false : p.customLimitActive}))} 
+                        style={{ margin: 0, cursor: 'pointer' }} 
+                      />
+                      <span>Fits remaining (<strong style={{color: remainingCalories >= 0 ? '#10b981' : '#ef4444'}}>{remainingCalories}</strong> cal)</span>
+                    </label>
+                  )}
+
+                  <div style={{ padding: remainingCalories !== undefined ? '5px 12px 10px 12px' : '10px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                      <input 
+                         type="checkbox" 
+                         id="customLimitCheckbox"
+                         checked={filters.customLimitActive} 
+                         onChange={(e) => setFilters(p => ({...p, customLimitActive: e.target.checked, fitsBudget: e.target.checked ? false : p.fitsBudget}))} 
+                         style={{ margin: 0, cursor: 'pointer' }} 
+                      />
+                      <label htmlFor="customLimitCheckbox" style={{ cursor: 'pointer', margin: 0 }}>Under</label>
+                      <input 
+                         type="text" 
+                         inputMode="numeric"
+                         maxLength={4}
+                         placeholder="___"
+                         value={filters.customLimitValue}
+                         onChange={(e) => {
+                           const val = e.target.value.replace(/\D/g, '');
+                           setFilters(p => ({
+                              ...p, 
+                              customLimitValue: val, 
+                              customLimitActive: val !== '' ? true : p.customLimitActive, 
+                              fitsBudget: val !== '' ? false : p.fitsBudget
+                           }));
+                         }}
+                         style={{ width: '45px', padding: '0.15rem 0.35rem', border: '1px solid #cbd5e1', borderRadius: '0.25rem', margin: 0, fontSize: '0.85rem', textAlign: 'center' }}
+                      />
+                      <label htmlFor="customLimitCheckbox" style={{ cursor: 'pointer', margin: 0 }}>cal</label>
+                  </div>
+
+                  {(filters.fitsBudget || filters.customLimitActive) && (
+                    <div style={{ 
+                      margin: '4px 12px 12px 12px', 
+                      display: 'flex', 
+                      backgroundColor: '#f1f5f9', 
+                      borderRadius: '0.5rem', 
+                      padding: '0.25rem' 
+                    }}>
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFilters(p => ({...p, budgetMode: 'serving'})); }}
+                        style={{
+                          flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem', fontWeight: 600,
+                          borderRadius: '0.35rem', border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                          backgroundColor: filters.budgetMode === 'serving' ? '#ffffff' : 'transparent',
+                          color: filters.budgetMode === 'serving' ? '#2563eb' : '#64748b',
+                          boxShadow: filters.budgetMode === 'serving' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        1 Serving
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFilters(p => ({...p, budgetMode: 'last-logged'})); }}
+                        style={{
+                          flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem', fontWeight: 600,
+                          borderRadius: '0.35rem', border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                          backgroundColor: filters.budgetMode === 'last-logged' ? '#ffffff' : 'transparent',
+                          color: filters.budgetMode === 'last-logged' ? '#2563eb' : '#64748b',
+                          boxShadow: filters.budgetMode === 'last-logged' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                        }}
+                      >
+                        Last Logged
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* SORTING OPTIONS */}
+                <div style={{ padding: '8px 12px', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Sort By</span>
+                </div>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="radio" checked={sortMode === 'newest'} onChange={() => setSortMode('newest')} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>Newest to Oldest</span>
+                </label>
+                
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="radio" checked={sortMode === 'oldest'} onChange={() => setSortMode('oldest')} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>Oldest to Newest</span>
+                </label>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="radio" checked={sortMode === 'cal-asc'} onChange={() => setSortMode('cal-asc')} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>Calories: Lowest to Highest</span>
+                </label>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="radio" checked={sortMode === 'cal-desc'} onChange={() => setSortMode('cal-desc')} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>Calories: Highest to Lowest</span>
+                </label>
+
+              </div>
+            )}
+          </div>
+
           {onOpenScanner && (
             <button 
               type="button"
@@ -771,12 +1009,12 @@ try {
         {error && <div className="error" style={{ flexShrink: 0 }}>{error}</div>}
 
         <div className="food-list" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
-          {filteredFoods.length === 0 ? (
+          {processedFoods.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
-              {isVitaminMode ? 'No vitamins found.' : 'No foods found.'}
+              {isVitaminMode ? 'No vitamins found.' : 'No foods found matching criteria.'}
             </p>
           ) : (
-            filteredFoods.map((food) => {
+            processedFoods.map((food) => {
               const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
               const isSelected = multiSelectedIds.has(food.id);
 

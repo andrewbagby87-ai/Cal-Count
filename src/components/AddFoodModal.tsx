@@ -14,10 +14,11 @@ interface Props {
   selectedDate?: string; 
   isVitaminMode?: boolean; 
   initialMealType?: string; 
+  remainingCalories?: number; // <--- NEW
   onOpenRecipe?: (foodToEdit?: Food) => void;
 }
 
-export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialMealType, onOpenRecipe }: Props) {
+export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, selectedDate, isVitaminMode, initialMealType, remainingCalories, onOpenRecipe }: Props) {
   
   const [mode, setMode] = useState<'create' | 'previous' | 'choose-scan-type'>('previous');
   
@@ -32,7 +33,6 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
 
   const handleFoodCreated = async (payload: any) => {
-    // FIX: Wait for the database addition to completely finish BEFORE closing the modal!
     if (payload && payload.mealType !== undefined) {
       await onAdd(payload);
     }
@@ -105,6 +105,7 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
               isVitaminMode={activeVitaminMode}
               initialFood={localInitialFood || undefined}
               initialMealType={initialMealType} 
+              remainingCalories={remainingCalories} // <--- PASS IT DOWN
               onEditRecipe={onOpenRecipe}
               onCreateNew={() => setMode('create')}
               onCreateRecipe={() => onOpenRecipe && onOpenRecipe()}

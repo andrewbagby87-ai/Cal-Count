@@ -68,7 +68,6 @@ export default function FoodLogTab() {
 
   const [viewDate, setViewDate] = useState(new Date());
   
-  // NEW COLOR RECORD TYPE
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
   
   const [selectedLog, setSelectedLog] = useState<FoodLog | null>(null);
@@ -173,6 +172,13 @@ export default function FoodLogTab() {
     setViewDate(next);
   };
 
+  // READ OPTIMIZATION: Fetch user custom foods EXACTLY ONCE on mount
+  useEffect(() => {
+    if (user?.uid) {
+      getUserFoods(user.uid).then(setFoods).catch(console.error);
+    }
+  }, [user?.uid]);
+
   const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
     
@@ -184,8 +190,8 @@ export default function FoodLogTab() {
     try {
       const dateStr = getDateString(viewDate);
       
-      const [userFoods, logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
-        getUserFoods(user.uid),
+      // READ OPTIMIZATION: Removed getUserFoods() from this loop!
+      const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
@@ -193,7 +199,6 @@ export default function FoodLogTab() {
         getDoneLoggingDates(user.uid).catch(() => ({}))
       ]);
       
-      setFoods(userFoods);
       setFoodLogs(logs);
       setDoneLoggingDates(firebaseDoneDates);
 
@@ -233,7 +238,6 @@ export default function FoodLogTab() {
       if (!user) return;
       const datesToFetch = getWeekDates(viewDate);
       
-      // NEW COLOR RECORD TYPE
       const summaries: Record<string, { progress: number, color: string }> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
@@ -268,7 +272,6 @@ export default function FoodLogTab() {
         const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
         
-        // NEW COLOR LOGIC
         let progress = 0;
         let color = '#10b981'; 
         
@@ -317,7 +320,6 @@ export default function FoodLogTab() {
       console.error('Failed to save food items:', err);
     }
 
-    // Triggering this updates the navigator circles instantly!
     window.dispatchEvent(new Event('foodDataChanged'));
 
     setShowAddModal(false);
@@ -575,7 +577,6 @@ export default function FoodLogTab() {
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
               
-              // NEW COLOR RENDER
               const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
               const progress = summary.progress;
               const barColor = summary.color;
@@ -1074,6 +1075,7 @@ export default function FoodLogTab() {
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
           initialMealType={activeAddMealType}
+          remainingCalories={calDiff}
           onOpenRecipe={(foodToEdit?: Food) => {
             setShowAddModal(false);
             if (foodToEdit) {

@@ -135,10 +135,7 @@ export default function DailyStatsTab() {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
-  
-  // NEW COLOR RECORD TYPE
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
-  
   const [loading, setLoading] = useState(true);
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
@@ -258,8 +255,6 @@ export default function DailyStatsTab() {
     const loadNavigatorStats = async () => {
       if (!user?.uid) return;
       const datesToFetch = getWeekDates(viewDate);
-      
-      // NEW COLOR RECORD TYPE
       const summaries: Record<string, { progress: number, color: string }> = {};
 
       const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
@@ -293,19 +288,18 @@ export default function DailyStatsTab() {
         const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
         
-        // NEW COLOR LOGIC
         let progress = 0;
-        let color = '#10b981'; 
+        let color = '#10b981'; // Green (Under budget)
         
         if (budget > 0) {
           progress = consumed / budget;
           const remaining = Math.round(budget - consumed);
           
-          if (remaining < 0) color = '#ef4444'; 
-          else if (remaining === 0 && consumed > 0) color = '#2563eb'; 
+          if (remaining < 0) color = '#ef4444'; // Red (Over budget)
+          else if (remaining === 0 && consumed > 0) color = '#2563eb'; // Blue (Exactly 0 left)
         } else if (consumed > 0) {
           progress = 1;
-          color = '#ef4444'; 
+          color = '#ef4444'; // Over budget if budget is 0
         }
         
         summaries[dStr] = { progress, color };
@@ -482,8 +476,6 @@ export default function DailyStatsTab() {
               const dStr = getDateString(date);
               const isSelected = dStr === viewStr;
               const isActualToday = dStr === todayStr;
-              
-              // NEW COLOR RENDER
               const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
               const progress = summary.progress;
               const barColor = summary.color;

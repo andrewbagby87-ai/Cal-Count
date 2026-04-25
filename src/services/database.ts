@@ -200,6 +200,12 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
   return dailyLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
+// 🚀 OPTIMIZATION: Fetches a date range of foods in 1 single read
+export async function getWeeklyFoodLogs(userId: string, startDate: string, endDate: string): Promise<FoodLog[]> {
+  const allLogs = await getAllFoodLogs(userId);
+  return allLogs.filter((log: any) => log.date >= startDate && log.date <= endDate);
+}
+
 export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
@@ -516,6 +522,27 @@ export async function getDayWorkoutLogs(userId: string, date: string): Promise<W
   return logs.sort((a, b) => b.timestamp - a.timestamp);
 }
 
+// 🚀 OPTIMIZATION: Range query for workouts
+export async function getWeeklyWorkoutLogs(userId: string, startDate: string, endDate: string): Promise<WorkoutLog[]> {
+  const q = query(
+    collection(db, 'workoutLogs'),
+    where('userId', '==', userId),
+    where('date', '>=', startDate),
+    where('date', '<=', endDate)
+  );
+  const querySnapshot = await getDocs(q);
+  const logs = querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data as Omit<WorkoutLog, 'id'>,
+      timestamp: (data.timestamp as Timestamp).toMillis(),
+    };
+  });
+  
+  return logs.sort((a, b) => b.timestamp - a.timestamp);
+}
+
 export async function deleteWorkoutLog(id: string) {
   await deleteDoc(doc(db, 'workoutLogs', id));
 }
@@ -559,6 +586,41 @@ export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
     
   } catch (error) {
     console.error("CRITICAL ERROR fetching weight logs:", error);
+    return []; 
+  }
+}
+
+// 🚀 OPTIMIZATION: Query specifically for a single day
+export async function getWeightLogsForDate(userId: string, date: string): Promise<WeightLog[]> {
+  try {
+    const q = query(
+      collection(db, 'weightLogs'),
+      where('userId', '==', userId),
+      where('date', '==', date)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    const logs = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      let timeInMillis = Date.now();
+      if (data.timestamp) {
+        timeInMillis = typeof data.timestamp.toMillis === 'function' 
+          ? data.timestamp.toMillis() 
+          : data.timestamp; 
+      }
+
+      return {
+        id: doc.id,
+        ...data as Omit<WeightLog, 'id'>,
+        timestamp: timeInMillis,
+      };
+    });
+    
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+    
+  } catch (error) {
+    console.error("CRITICAL ERROR fetching weight logs for date:", error);
     return []; 
   }
 }
