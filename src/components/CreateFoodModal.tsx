@@ -234,8 +234,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     e.preventDefault();
     setError('');
     
-    // Do NOT set loading to true unless it's an ingredient calculation. 
-    // We want the modal to vanish instantly for normal logging.
     if (isRecipeIngredientMode) setLoading(true);
 
     try {
@@ -304,6 +302,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
+      // --- TRIGGER AUTO REFRESH ---
+      window.dispatchEvent(new Event('foodLibraryChanged'));
+
       const calcConsumed = (val: string) => {
         const parsed = parseFloat(val);
         if (isNaN(parsed)) return undefined;
@@ -352,10 +353,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         ...consumedNutrition 
       };
 
-      // 1. Strip out all undefined values so Firebase doesn't crash
       const cleanPayload = JSON.parse(JSON.stringify(payload));
 
-      // 2. Pass the clean payload UP to the instant UI
       if (onCreated) {
          (onCreated as any)(cleanPayload); 
       }

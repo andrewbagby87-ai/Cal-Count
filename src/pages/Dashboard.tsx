@@ -12,6 +12,9 @@ export default function Dashboard() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
   
+  // 1. Tell React to ONLY mount the Daily Stats tab when the app first opens
+  const [bootedTabs, setBootedTabs] = useState<string[]>(['stats']);
+  
   // Bring in the logout function from useAuth
   const { userProfile, loading, logout } = useAuth();
   
@@ -26,6 +29,35 @@ export default function Dashboard() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 2. THE WATERFALL BOOT SEQUENCE
+  // We delay the mounting of hidden tabs so the network isn't choked on startup
+  useEffect(() => {
+    let isMounted = true;
+
+    const runBootSequence = async () => {
+      // Wait 800ms, then silently boot the Food Log
+      await new Promise(r => setTimeout(r, 800));
+      if (!isMounted) return;
+      setBootedTabs(prev => prev.includes('foodlog') ? prev : [...prev, 'foodlog']);
+
+      // Wait another 800ms, then boot Weight
+      await new Promise(r => setTimeout(r, 800));
+      if (!isMounted) return;
+      setBootedTabs(prev => prev.includes('weight') ? prev : [...prev, 'weight']);
+
+      // Wait another 800ms, then boot Workouts
+      await new Promise(r => setTimeout(r, 800));
+      if (!isMounted) return;
+      setBootedTabs(prev => prev.includes('workout') ? prev : [...prev, 'workout']);
+    };
+
+    runBootSequence();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (loading) {
@@ -110,19 +142,32 @@ export default function Dashboard() {
       </nav>
 
       <div className="dashboard-content">
-        {/* Render all tabs, but only display the active one */}
+        
+        {/* 3. STAGGERED TAB RENDER AREA */}
+        {/* Daily Stats is always in the DOM immediately */}
         <div style={{ display: activeTab === 'stats' ? 'block' : 'none', height: '100%' }}>
           <DailyStatsTab />
         </div>
-        <div style={{ display: activeTab === 'foodlog' ? 'block' : 'none', height: '100%' }}>
-          <FoodLogTab />
-        </div>
-        <div style={{ display: activeTab === 'weight' ? 'block' : 'none', height: '100%' }}>
-          <WeightTab />
-        </div>
-        <div style={{ display: activeTab === 'workout' ? 'block' : 'none', height: '100%' }}>
-          <WorkoutTab />
-        </div>
+        
+        {/* Other tabs only exist AFTER the boot sequence reaches them OR if the user clicks them early */}
+        {(bootedTabs.includes('foodlog') || activeTab === 'foodlog') && (
+          <div style={{ display: activeTab === 'foodlog' ? 'block' : 'none', height: '100%' }}>
+            <FoodLogTab />
+          </div>
+        )}
+        
+        {(bootedTabs.includes('weight') || activeTab === 'weight') && (
+          <div style={{ display: activeTab === 'weight' ? 'block' : 'none', height: '100%' }}>
+            <WeightTab />
+          </div>
+        )}
+        
+        {(bootedTabs.includes('workout') || activeTab === 'workout') && (
+          <div style={{ display: activeTab === 'workout' ? 'block' : 'none', height: '100%' }}>
+            <WorkoutTab />
+          </div>
+        )}
+        
       </div>
     </div>
   );

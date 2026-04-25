@@ -105,6 +105,21 @@ export default function FoodLogTab() {
     };
   }, []);
 
+  // --- NEW READ OPTIMIZATION LISTENER ---
+  // Only fetches the massive library on mount, or when a new food is added
+  useEffect(() => {
+    const fetchFoodLibrary = () => {
+      if (user?.uid) {
+        getUserFoods(user.uid).then(setFoods).catch(console.error);
+      }
+    };
+    
+    fetchFoodLibrary(); 
+    
+    window.addEventListener('foodLibraryChanged', fetchFoodLibrary);
+    return () => window.removeEventListener('foodLibraryChanged', fetchFoodLibrary);
+  }, [user?.uid]);
+
   useEffect(() => {
     return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current); };
   }, []);
@@ -172,13 +187,6 @@ export default function FoodLogTab() {
     setViewDate(next);
   };
 
-  // READ OPTIMIZATION: Fetch user custom foods EXACTLY ONCE on mount
-  useEffect(() => {
-    if (user?.uid) {
-      getUserFoods(user.uid).then(setFoods).catch(console.error);
-    }
-  }, [user?.uid]);
-
   const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
     
@@ -190,7 +198,7 @@ export default function FoodLogTab() {
     try {
       const dateStr = getDateString(viewDate);
       
-      // READ OPTIMIZATION: Removed getUserFoods() from this loop!
+      // Removed getUserFoods() to save 20K reads!
       const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
@@ -321,7 +329,6 @@ export default function FoodLogTab() {
     }
 
     window.dispatchEvent(new Event('foodDataChanged'));
-
     setShowAddModal(false);
     showToast('Food logged!');
   };
@@ -1075,7 +1082,6 @@ export default function FoodLogTab() {
           selectedDate={getDateString(viewDate)} 
           isVitaminMode={isVitaminMode}
           initialMealType={activeAddMealType}
-          remainingCalories={calDiff}
           onOpenRecipe={(foodToEdit?: Food) => {
             setShowAddModal(false);
             if (foodToEdit) {

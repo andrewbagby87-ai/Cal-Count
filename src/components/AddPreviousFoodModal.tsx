@@ -62,6 +62,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   // --- FILTER & SORT STATE ---
   const [filters, setFilters] = useState<{
+    showFoods: boolean;
+    showRecipes: boolean;
     highProtein: boolean;
     highFiber: boolean;
     fitsBudget: boolean;
@@ -69,6 +71,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     customLimitValue: string;
     budgetMode: 'serving' | 'last-logged';
   }>({
+    showFoods: true,
+    showRecipes: true,
     highProtein: false,
     highFiber: false,
     fitsBudget: false,
@@ -227,6 +231,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
         deleteFood(food.id)
           .then(() => {
             setLocalFoods(prev => prev.filter(f => f.id !== food.id));
+            window.dispatchEvent(new Event('foodLibraryChanged'));
             if (onFoodDeleted) onFoodDeleted(); 
           })
           .catch(err => {
@@ -388,6 +393,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
       setSelectedFood(updatedFood);
       
+      window.dispatchEvent(new Event('foodLibraryChanged'));
+
       setLogDetails(prev => {
         let safeDetails = { ...prev };
         const isVolMethod = safeDetails.consumptionMethod.startsWith('volume-');
@@ -674,6 +681,11 @@ try {
 
     if (!matchesSearch) return false;
 
+    // Filter by Type (Recipes vs Regular Foods)
+    const isRecipe = (food as any).isRecipe === true;
+    if (!filters.showFoods && !isRecipe) return false;
+    if (!filters.showRecipes && isRecipe) return false;
+
     if (filters.highProtein) {
       const isHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
       if (!isHighProtein) return false;
@@ -729,7 +741,7 @@ try {
     return (b.createdAt || 0) - (a.createdAt || 0); 
   });
 
-  const hasActiveFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
+  const hasActiveFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive || !filters.showFoods || !filters.showRecipes;
 
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
@@ -809,7 +821,7 @@ try {
               <div style={{
                 position: 'absolute', top: '100%', right: 0, zIndex: 20, backgroundColor: '#fff',
                 border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                minWidth: '220px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                minWidth: '240px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden', // <--- minWidth increased to 280px
                 maxHeight: '400px', overflowY: 'auto'
               }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -817,7 +829,7 @@ try {
                   {(hasActiveFilters || sortMode !== 'newest') && (
                     <button 
                       onClick={() => {
-                        setFilters({highProtein: false, highFiber: false, fitsBudget: false, customLimitActive: false, customLimitValue: '', budgetMode: 'serving'});
+                        setFilters({highProtein: false, highFiber: false, fitsBudget: false, customLimitActive: false, customLimitValue: '', budgetMode: 'serving', showFoods: true, showRecipes: true});
                         setSortMode('newest');
                       }} 
                       style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
@@ -826,6 +838,16 @@ try {
                     </button>
                   )}
                 </div>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="checkbox" checked={filters.showFoods} onChange={(e) => setFilters(p => ({...p, showFoods: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>🍎 Regular Foods</span>
+                </label>
+
+                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                  <input type="checkbox" checked={filters.showRecipes} onChange={(e) => setFilters(p => ({...p, showRecipes: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                  <span>🥘 Recipes</span>
+                </label>
 
                 <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
                   <input type="checkbox" checked={filters.highProtein} onChange={(e) => setFilters(p => ({...p, highProtein: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />

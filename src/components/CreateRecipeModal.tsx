@@ -7,6 +7,7 @@ import CreateFoodModal from './CreateFoodModal';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
+import './CreateFoodModal.css'; // <-- Added to pull in the standard form-group styles
 
 interface RecipeIngredient {
   food: Food;
@@ -62,6 +63,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>((sourceFood as any)?.recipeIngredients || []);
   
   const [activeFood, setActiveFood] = useState<Food | null>(null);
+  
+  // State to track which ingredient is being edited
+  const [editingIngredientIndex, setEditingIngredientIndex] = useState<number | null>(null);
+
   const [scannedUpc, setScannedUpc] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -198,6 +203,32 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     }
   };
 
+  // Pre-fills the sizing state based on the ingredient you clicked
+  const handleEditIngredient = (index: number) => {
+    const ing = ingredients[index];
+    setActiveFood(ing.food);
+    
+    if (ing.unit === 'serving') {
+      setConsumptionMethod('serving');
+      setServingsConsumed(ing.amount.toString());
+      setVolumeConsumed('');
+    } else {
+      const volIndex = ing.food.volumes?.findIndex(v => v.unit === ing.unit) ?? -1;
+      if (volIndex >= 0) {
+        setConsumptionMethod(`volume-${volIndex}`);
+        setVolumeConsumed(ing.amount.toString());
+        setServingsConsumed('1'); 
+      } else {
+        setConsumptionMethod('serving');
+        setServingsConsumed('1');
+      }
+    }
+    
+    setEditingIngredientIndex(index);
+    setStep('size-ingredient');
+  };
+
+  // Edits the array index if one exists, otherwise pushes to the end
   const handleSizeExistingFood = () => {
     if (!activeFood) return;
     let multiplier = 1;
@@ -227,7 +258,19 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       sodium: calc(activeFood.sodium), fiber: calc(activeFood.fiber), sugar: calc(activeFood.sugar),
     };
 
-    setIngredients(prev => [...prev, { food: activeFood, amount: finalAmount, unit: finalUnit, macros: calculatedMacros }]);
+    const newIngredient = { food: activeFood, amount: finalAmount, unit: finalUnit, macros: calculatedMacros };
+
+    if (editingIngredientIndex !== null) {
+      setIngredients(prev => {
+        const updated = [...prev];
+        updated[editingIngredientIndex] = newIngredient;
+        return updated;
+      });
+      setEditingIngredientIndex(null);
+    } else {
+      setIngredients(prev => [...prev, newIngredient]);
+    }
+
     setActiveFood(null);
     setStep('builder');
   };
@@ -236,7 +279,6 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Used when editing from "Previous Foods" menu and hitting "Save Updates" (does not log it)
   const handleSaveUpdatesOnly = async () => {
     if (!user) return;
     
@@ -264,6 +306,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       });
       
       await Promise.all(updatePromises);
+
+      // --- TRIGGER AUTO REFRESH ---
+      window.dispatchEvent(new Event('foodDataChanged'));
+      window.dispatchEvent(new Event('foodLibraryChanged'));
 
       onCreated();
     } catch (err) {
@@ -343,6 +389,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         }
       }
       
+      // --- TRIGGER AUTO REFRESH ---
+      window.dispatchEvent(new Event('foodDataChanged'));
+      window.dispatchEvent(new Event('foodLibraryChanged'));
+      
       onCreated();
     } catch(err) {
       console.error(err);
@@ -388,9 +438,16 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
           box-sizing: border-box !important;
           max-width: 100%;
         }
+        .ingredient-row {
+          transition: background-color 0.2s;
+        }
+        .ingredient-row:hover {
+          background-color: #e2e8f0 !important;
+        }
       `}</style>
       
-      <div className="add-food-modal create-recipe-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', overflowX: 'hidden', boxSizing: 'border-box' }}>
+      {/* Added create-food-modal class to inherit standard input styling */}
+      <div className="add-food-modal create-recipe-modal create-food-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', overflowX: 'hidden', boxSizing: 'border-box' }}>
         
         {step === 'builder' && (
           <>
@@ -400,14 +457,14 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Recipe Name</label>
-                  <input type="text" value={recipeName} onChange={e => setRecipeName(e.target.value)} placeholder="e.g. Mom's Chili" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                <div className="form-group">
+                  <label htmlFor="recipeName">Recipe Name *</label>
+                  <input id="recipeName" type="text" value={recipeName} onChange={e => setRecipeName(e.target.value)} placeholder="e.g., Mom's Chili" required />
                 </div>
 
-                <div style={{ position: 'relative' }} ref={iconPickerRef}>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Recipe Icon (Optional)</label>
+                <div className="form-group" style={{ position: 'relative' }} ref={iconPickerRef}>
+                  <label>Recipe Icon (Optional)</label>
                   <div 
                     onClick={() => setShowIconPicker(!showIconPicker)}
                     style={{ 
@@ -448,9 +505,9 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                   )}
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>How many servings does this make total?</label>
-                  <input type="text" inputMode="decimal" value={recipeServings} onChange={e => setRecipeServings(e.target.value)} placeholder="e.g. 4" style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="recipeServings">How many servings does this make total? *</label>
+                  <input id="recipeServings" type="text" inputMode="decimal" value={recipeServings} onChange={e => setRecipeServings(e.target.value)} placeholder="e.g., 4" required />
                 </div>
               </div>
             </div>
@@ -468,7 +525,13 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                     const hasHighFiber = (ing.macros.fiber >= 4);
 
                     return (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem' }}>
+                      <div 
+                        key={i} 
+                        className="ingredient-row"
+                        onClick={() => handleEditIngredient(i)}
+                        title="Click to edit amount"
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', cursor: 'pointer' }}
+                      >
                         <div>
                           <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span style={{ textTransform: 'capitalize' }}>{ing.food.name}</span>
@@ -485,7 +548,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                           <div style={{ fontWeight: 600, color: '#2563eb' }}>{Math.round(ing.macros.calories)} cal</div>
-                          <button onClick={() => removeIngredient(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer', padding: 0 }}>✕</button>
+                          <button onClick={(e) => { e.stopPropagation(); removeIngredient(i); }} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer', padding: 0 }}>✕</button>
                         </div>
                       </div>
                     );
@@ -501,46 +564,49 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 marginBottom: '1rem'
               }}>
                 <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
-                  Total Recipe Nutrition
+                  Nutrition Per Serving
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  {[
-                    { label: 'Calories', value: `${Math.round(totalMacros.calories)} cal`, isHighlight: true, indent: false },
-                    { label: 'Total Fat', value: `${Math.round(totalMacros.fat)}g`, isHighlight: false, indent: false },
-                    { label: 'Saturated Fat', value: `${Math.round(totalMacros.saturatedFat)}g`, isHighlight: false, indent: true },
-                    { label: 'Trans Fat', value: `${Math.round(totalMacros.transFat)}g`, isHighlight: false, indent: true },
-                    { label: 'Cholesterol', value: `${Math.round(totalMacros.cholesterol)}mg`, isHighlight: false, indent: false },
-                    { label: 'Sodium', value: `${Math.round(totalMacros.sodium)}mg`, isHighlight: false, indent: false },
-                    { label: 'Total Carbohydrate', value: `${Math.round(totalMacros.carbs)}g`, isHighlight: false, indent: false },
-                    { label: 'Dietary Fiber', value: `${Math.round(totalMacros.fiber)}g`, isHighlight: false, indent: true },
-                    { label: 'Total Sugars', value: `${Math.round(totalMacros.sugar)}g`, isHighlight: false, indent: true },
-                    { label: 'Protein', value: `${Math.round(totalMacros.protein)}g`, isHighlight: false, indent: false },
-                  ].map((nutrient, idx) => (
-                    <div key={idx} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
-                      paddingBottom: idx !== 9 ? '0.2rem' : '0'
-                    }}>
-                      <span style={{ 
-                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
-                        textTransform: 'uppercase', 
-                        color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                        fontWeight: nutrient.isHighlight ? 700 : 400,
-                        paddingLeft: nutrient.indent ? '0.75rem' : '0' 
+                  {(() => {
+                    const servings = parseFloat(recipeServings) || 1;
+                    return [
+                      { label: 'Calories', value: `${Math.round(totalMacros.calories / servings)} cal`, isHighlight: true, indent: false },
+                      { label: 'Total Fat', value: `${Math.round(totalMacros.fat / servings)}g`, isHighlight: false, indent: false },
+                      { label: 'Saturated Fat', value: `${Math.round(totalMacros.saturatedFat / servings)}g`, isHighlight: false, indent: true },
+                      { label: 'Trans Fat', value: `${Math.round(totalMacros.transFat / servings)}g`, isHighlight: false, indent: true },
+                      { label: 'Cholesterol', value: `${Math.round(totalMacros.cholesterol / servings)}mg`, isHighlight: false, indent: false },
+                      { label: 'Sodium', value: `${Math.round(totalMacros.sodium / servings)}mg`, isHighlight: false, indent: false },
+                      { label: 'Total Carbohydrate', value: `${Math.round(totalMacros.carbs / servings)}g`, isHighlight: false, indent: false },
+                      { label: 'Dietary Fiber', value: `${Math.round(totalMacros.fiber / servings)}g`, isHighlight: false, indent: true },
+                      { label: 'Total Sugars', value: `${Math.round(totalMacros.sugar / servings)}g`, isHighlight: false, indent: true },
+                      { label: 'Protein', value: `${Math.round(totalMacros.protein / servings)}g`, isHighlight: false, indent: false },
+                    ].map((nutrient, idx) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                        paddingBottom: idx !== 9 ? '0.2rem' : '0'
                       }}>
-                        {nutrient.label}
-                      </span>
-                      <span style={{ 
-                        fontWeight: 700, 
-                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
-                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
-                      }}>
-                        {nutrient.value}
-                      </span>
-                    </div>
-                  ))}
+                        <span style={{ 
+                          fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                          textTransform: 'uppercase', 
+                          color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                          fontWeight: nutrient.isHighlight ? 700 : 400,
+                          paddingLeft: nutrient.indent ? '0.75rem' : '0' 
+                        }}>
+                          {nutrient.label}
+                        </span>
+                        <span style={{ 
+                          fontWeight: 700, 
+                          color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                          fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                        }}>
+                          {nutrient.value}
+                        </span>
+                      </div>
+                    ))
+                  })()}
                 </div>
               </div>
             </div>
@@ -691,21 +757,38 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 </div>
 
                 {consumptionMethod === 'serving' ? (
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem' }}>Number of Servings Added</label>
-                    <input type="text" inputMode="decimal" value={servingsConsumed} onChange={e => setServingsConsumed(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label htmlFor="recipeServingsConsumed">Number of Servings Added</label>
+                    <input id="recipeServingsConsumed" type="text" inputMode="decimal" value={servingsConsumed} onChange={e => setServingsConsumed(e.target.value)} placeholder="1" />
                   </div>
                 ) : (
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem' }}>Amount Added</label>
-                    <input type="text" inputMode="decimal" value={volumeConsumed} onChange={e => setVolumeConsumed(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label htmlFor="recipeVolumeConsumed">Amount Added</label>
+                    <div className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input id="recipeVolumeConsumed" type="text" inputMode="decimal" style={{ flex: 1 }} value={volumeConsumed} onChange={e => setVolumeConsumed(e.target.value)} placeholder={`e.g., ${activeFood.volumes?.[parseInt(consumptionMethod.split('-')[1])]?.amount || 100}`} />
+                      <span style={{ padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', borderRadius: '0.5rem', border: '1px solid #cbd5e1', color: '#475569', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '3rem' }}>
+                        {activeFood.volumes?.[parseInt(consumptionMethod.split('-')[1])]?.unit}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', flexShrink: 0, marginTop: '1rem' }}>
-                <button onClick={handleSizeExistingFood} style={{ flex: 1, padding: '0.75rem', backgroundColor: '#2563eb', color: 'white', borderRadius: '0.5rem', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Add to Recipe</button>
-                <button onClick={() => setStep('select-previous')} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSizeExistingFood} style={{ flex: 1, padding: '0.75rem', backgroundColor: '#2563eb', color: 'white', borderRadius: '0.5rem', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                  {editingIngredientIndex !== null ? 'Update Amount' : 'Add to Recipe'}
+                </button>
+                <button onClick={() => { 
+                  if (editingIngredientIndex !== null) {
+                    setStep('builder');
+                    setEditingIngredientIndex(null);
+                  } else {
+                    setStep('select-previous');
+                  }
+                  setActiveFood(null);
+                }} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, border: '1px solid #cbd5e1', cursor: 'pointer' }}>
+                  Cancel
+                </button>
               </div>
           </>
         )}
@@ -715,16 +798,16 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
             <h3 style={{ marginBottom: '1.5rem', flexShrink: 0 }}>{isEditLogMode ? 'Update Recipe Details' : 'Log Your Recipe'}</h3>
             
             <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, paddingRight: '0.25rem' }}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Date</label>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Date</label>
                 <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#1e293b', fontSize: '1.05rem', fontWeight: 600, boxSizing: 'border-box', textAlign: 'center' }}>
                   {formatDateDisplay(logDate)}
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Meal Category *</label>
-                <select value={logMealType} onChange={e => setLogMealType(e.target.value)} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label htmlFor="logMealType">Meal Category *</label>
+                <select id="logMealType" value={logMealType} onChange={e => setLogMealType(e.target.value)} required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}>
                   <option value="" disabled>Select a Category...</option>
                   <option value="Breakfast">🌅 Breakfast</option>
                   <option value="Lunch">☀️ Lunch</option>
@@ -733,10 +816,10 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                 </select>
               </div>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>How many servings did you eat? *</label>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label htmlFor="logServingsConsumed">How many servings did you eat? *</label>
                 <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#64748b' }}>This recipe makes {recipeServings} total servings.</p>
-                <input type="text" inputMode="decimal" value={logServingsConsumed} onChange={e => setLogServingsConsumed(e.target.value)} placeholder="1" required style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                <input id="logServingsConsumed" type="text" inputMode="decimal" value={logServingsConsumed} onChange={e => setLogServingsConsumed(e.target.value)} placeholder="1" required />
               </div>
               
               {/* PLANNED TOGGLE */}

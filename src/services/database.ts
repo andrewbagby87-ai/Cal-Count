@@ -261,19 +261,24 @@ export async function deleteFoodLog(userId: string, id: string) {
   if (docSnap.exists()) {
     const data = docSnap.data();
 
-    // 1. ATOMIC DELETE: Find the exact object and tell the server to remove it
+    // INSTEAD of arrayRemove (which fails on deeply nested recipe objects), 
+    // we filter the array manually and rewrite it to the database.
     if (data.foodData) {
-      const exactLog = data.foodData.find((log: any) => log.id === id);
-      if (exactLog) {
-        await updateDoc(docRef, { foodData: arrayRemove(exactLog) });
+      const originalLength = data.foodData.length;
+      const newFoodData = data.foodData.filter((log: any) => log.id !== id);
+      
+      if (newFoodData.length < originalLength) {
+        await updateDoc(docRef, { foodData: newFoodData });
         return;
       }
     }
 
     if (data.logs) {
-      const exactLog = data.logs.find((log: any) => log.id === id);
-      if (exactLog) {
-        await updateDoc(docRef, { logs: arrayRemove(exactLog) });
+      const originalLength = data.logs.length;
+      const newLogs = data.logs.filter((log: any) => log.id !== id);
+      
+      if (newLogs.length < originalLength) {
+        await updateDoc(docRef, { logs: newLogs });
         return;
       }
     }
