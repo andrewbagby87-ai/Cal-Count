@@ -66,7 +66,11 @@ export interface Food {
   volumeUnit?: string;
   volumes?: { amount: number; unit: string }[];
   createdAt: number;
-  isVitamin?: boolean; // NEW
+  isVitamin?: boolean;
+
+  isRecipe?: boolean;
+  recipeServings?: number;
+  recipeIngredients?: any[];
 }
 
 export interface FoodLog {

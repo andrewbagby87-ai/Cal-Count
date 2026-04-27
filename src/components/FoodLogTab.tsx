@@ -86,7 +86,6 @@ export default function FoodLogTab() {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
-  // AUTO-REFRESH & SYNC LOGIC
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const isBackgroundRefresh = useRef(false);
 
@@ -105,8 +104,6 @@ export default function FoodLogTab() {
     };
   }, []);
 
-  // --- NEW READ OPTIMIZATION LISTENER ---
-  // Only fetches the massive library on mount, or when a new food is added
   useEffect(() => {
     const fetchFoodLibrary = () => {
       if (user?.uid) {
@@ -198,7 +195,6 @@ export default function FoodLogTab() {
     try {
       const dateStr = getDateString(viewDate);
       
-      // Removed getUserFoods() to save 20K reads!
       const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
@@ -818,13 +814,18 @@ export default function FoodLogTab() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div className="drag-handle" title="Drag to reorder">⠿</div>
                             <div className="food-info">
-                              <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
+                              <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
                                 {log.food.icon && (
                                   <div style={{ flexShrink: 0, display: 'flex' }}>
                                     <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
                                   </div>
                                 )}
                                 <span>{log.food.name}</span>
+                                {(log.food as any)?.isRecipe && (
+                                  <span style={{ marginLeft: '0.2rem', fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e' }}>
+                                    RECIPE
+                                  </span>
+                                )}
                               </h4>
                               {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
                               <span className="amount">
@@ -873,6 +874,7 @@ export default function FoodLogTab() {
         </p>
       </div>
 
+      {/* --- UPDATED WITH RECIPE BADGE IN MODAL HEADER --- */}
       {selectedLog && (() => {
         const isQuickAddLog = selectedLog.foodId?.startsWith('quick-add-') || selectedLog.food?.id?.startsWith('quick-add-');
         
@@ -881,9 +883,14 @@ export default function FoodLogTab() {
           <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
             <div className="selected-log-header">
               <div>
-                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
                   {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
                   <span>{selectedLog.food.name}</span>
+                  {(selectedLog.food as any)?.isRecipe && (
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.4rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e', marginLeft: '0.25rem' }}>
+                      RECIPE
+                    </span>
+                  )}
                 </h3>
                 {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.15rem' }}>{selectedLog.food.brand}</span>}
               </div>

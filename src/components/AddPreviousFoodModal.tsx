@@ -60,7 +60,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
-  // --- FILTER & SORT STATE ---
   const [filters, setFilters] = useState<{
     showFoods: boolean;
     showRecipes: boolean;
@@ -86,7 +85,6 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
 
-  // Quick Add Mode States
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddData, setQuickAddData] = useState({ name: '', icon: '', calories: '' });
 
@@ -393,8 +391,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
       setSelectedFood(updatedFood);
       
-      window.dispatchEvent(new Event('foodLibraryChanged'));
-
+      window.dispatchEvent(new Event('foodLibraryChanged')); 
+      
       setLogDetails(prev => {
         let safeDetails = { ...prev };
         const isVolMethod = safeDetails.consumptionMethod.startsWith('volume-');
@@ -821,7 +819,7 @@ try {
               <div style={{
                 position: 'absolute', top: '100%', right: 0, zIndex: 20, backgroundColor: '#fff',
                 border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                minWidth: '240px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden', // <--- minWidth increased to 280px
+                minWidth: '280px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden',
                 maxHeight: '400px', overflowY: 'auto'
               }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1042,6 +1040,7 @@ try {
 
               const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
               const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
+              const isRecipe = (food as any).isRecipe === true;
 
               return (
                 <button
@@ -1054,8 +1053,10 @@ try {
                     ...(isMultiSelectMode && isSelected ? { borderColor: '#2563eb', backgroundColor: '#eff6ff', borderWidth: '2px' } : {})
                   }}
                 >
-                  {(hasHighProtein || hasHighFiber) && (
+                  {/* --- UPDATED WITH RECIPE BADGE --- */}
+                  {(hasHighProtein || hasHighFiber || isRecipe) && (
                     <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
+                      {isRecipe && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Recipe">RECIPE</span>}
                       {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
                       {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber per serving">F</span>}
                     </div>
