@@ -7,6 +7,15 @@ interface UserSettingsProps {
   onBack: () => void;
 }
 
+// --- ADDED DATE HELPER FOR GOAL HISTORY ---
+const getLocalTodayString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function UserSettings({ onBack }: UserSettingsProps) {
   const { user, userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   
@@ -80,6 +89,44 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
     setIsSaving(true);
     setMessage('');
     try {
+      // --- GOAL HISTORY SYSTEM ---
+      const todayStr = getLocalTodayString();
+      let updatedHistory = (userProfile as any).goalHistory ? [...(userProfile as any).goalHistory] : [];
+      
+      // --- CRITICAL FIX: FORCE A PAST BASELINE ---
+      // If the baseline is missing, we must unshift it so future goals don't leak backwards
+      if (updatedHistory.length === 0 || updatedHistory[0].date !== '2000-01-01') {
+        updatedHistory.unshift({
+          date: '2000-01-01', 
+          caloriesBudget: userProfile?.caloriesBudget || 0,
+          fatBudget: userProfile?.fatBudget || 0,
+          saturatedFatBudget: userProfile?.saturatedFatBudget || 0,
+          carbsBudget: userProfile?.carbsBudget || 0,
+          fiberBudget: userProfile?.fiberBudget || 0,
+          sugarBudget: userProfile?.sugarBudget || 0,
+          proteinBudget: userProfile?.proteinBudget || 0,
+        });
+      }
+
+      // Create the new entry for today and the future
+        const newGoalHistoryEntry = {
+        date: todayStr,
+        caloriesBudget: Number(formData.caloriesBudget) || 0,
+        fatBudget: Number(formData.fatBudget) || 0,
+        saturatedFatBudget: Number(formData.saturatedFatBudget) || 0,
+        carbsBudget: Number(formData.carbsBudget) || 0,
+        fiberBudget: Number(formData.fiberBudget) || 0,
+        sugarBudget: Number(formData.sugarBudget) || 0,
+        proteinBudget: Number(formData.proteinBudget) || 0,
+      };
+
+      // Remove any existing entry for TODAY to prevent duplicates if user saves twice in one day
+      updatedHistory = updatedHistory.filter((entry: any) => entry.date !== todayStr);
+      updatedHistory.push(newGoalHistoryEntry);
+
+      // Ensure it's sorted perfectly chronologically
+      updatedHistory.sort((a: any, b: any) => a.date.localeCompare(b.date));
+
       const dataToSave = {
         ...formData,
         caloriesBudget: Number(formData.caloriesBudget) || 0,
@@ -89,6 +136,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
         fiberBudget: Number(formData.fiberBudget) || 0,
         sugarBudget: Number(formData.sugarBudget) || 0,
         proteinBudget: Number(formData.proteinBudget) || 0,
+        goalHistory: updatedHistory // <--- Save the history array!
       };
 
       await updateUserProfile(dataToSave);
@@ -209,7 +257,6 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
               </div>
             </section>
 
-            {/* ADDED style={{ marginTop: '2.5rem' }} HERE FOR EXTRA SEPARATION */}
             <section className="settings-section" style={{ marginTop: '2.5rem' }}>
               <h2>Budget Settings</h2>
               <div className="form-group">

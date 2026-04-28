@@ -530,15 +530,22 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                           <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span style={{ textTransform: 'capitalize' }}>{ing.food.name}</span>
                             
-                          {/* --- UPDATED WITH RECIPE BADGE --- */}
-                          {(hasHighProtein || hasHighFiber || (ing.food as any)?.isRecipe) && (
-                            <div style={{ display: 'flex', gap: '0.35rem', marginLeft: '0.5rem' }}>
-                              {(ing.food as any)?.isRecipe && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Recipe">RECIPE</span>}
-                              {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
-                              {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber consumed">F</span>}
-                            </div>
-                          )}
+                            {(hasHighProtein || hasHighFiber) && (
+                              <div style={{ display: 'flex', gap: '0.35rem', marginLeft: '0.5rem' }}>
+                                {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
+                                {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber consumed">F</span>}
+                              </div>
+                            )}
                           </div>
+                          {ing.food.brand ? (
+                          <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', marginTop: '0.1rem', marginBottom: '0.15rem' }}>{ing.food.brand}</div>
+                          ) : (ing.food as any)?.isRecipe ? (
+                            <div style={{ marginTop: '0.15rem', marginBottom: '0.15rem', display: 'flex' }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                                RECIPE
+                              </span>
+                            </div>
+                          ) : null}
                           <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{ing.amount} {ing.unit}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -703,21 +710,27 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
                         position: 'relative' 
                       }}
                     >
-                        {/* --- UPDATED WITH RECIPE BADGE --- */}
-                        {(hasHighProtein || hasHighFiber || isRecipe) && (
-                          <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
-                            {isRecipe && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Recipe">RECIPE</span>}
-                            {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
-                            {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber per serving">F</span>}
-                          </div>
-                        )}
+                      {(hasHighProtein || hasHighFiber) && (
+                        <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
+                          {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
+                          {hasHighFiber && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="4g+ of fiber per serving">F</span>}
+                        </div>
+                      )}
 
                       <div style={{ flex: 1, paddingRight: '2rem' }}>
                         <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
                           {food.icon && <Icon icon={food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />}
                           <span>{food.name}</span>
                         </div>
-                        {food.brand && <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>}
+                        {food.brand ? (
+                        <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>
+                        ) : isRecipe ? (
+                          <div style={{ marginBottom: '0.25rem', display: 'flex' }}>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                              RECIPE
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
                           {food.servingSize} {food.servingUnit} - {food.calories} cal
                         </div>

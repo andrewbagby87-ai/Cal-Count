@@ -33,6 +33,27 @@ const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   return `${year}-${month}-${day}` === targetDateStr;
 };
 
+// --- TIME MACHINE BUDGET LOOKUP ---
+const getActiveBudgets = (userProfile: any, targetDateStr: string) => {
+  if (!userProfile) return null;
+  if (!userProfile.goalHistory || userProfile.goalHistory.length === 0) return userProfile;
+
+  let activeGoals = null; 
+  for (const entry of userProfile.goalHistory) {
+    if (entry.date <= targetDateStr) {
+      activeGoals = entry;
+    } else {
+      break; 
+    }
+  }
+  
+  if (!activeGoals) {
+    activeGoals = userProfile.goalHistory[0];
+  }
+  
+  return { ...userProfile, ...activeGoals };
+};
+
 // --- Main Component ---
 export default function FoodLogTab() {
   const { user, userProfile } = useAuth();
@@ -274,7 +295,10 @@ export default function FoodLogTab() {
         }
 
         const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-        const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
+        
+        // --- USE TIME MACHINE FOR NAVIGATOR BARS ---
+        const activeDayProfile = getActiveBudgets(userProfile, dStr);
+        const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
         
         let progress = 0;
         let color = '#10b981'; 
@@ -297,7 +321,7 @@ export default function FoodLogTab() {
     };
 
     loadNavigatorStats();
-  }, [user?.uid, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
+  }, [user?.uid, viewDate, userProfile, refreshTrigger]);
 
   const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
@@ -518,7 +542,10 @@ export default function FoodLogTab() {
     );
   }
 
-  const adjustedBudget = (userProfile?.caloriesBudget || 0) + burnedCalories;
+  // --- USE TIME MACHINE FOR MAIN DIARY BUDGETS ---
+  const activeProfile = getActiveBudgets(userProfile, viewStr);
+  const adjustedBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories;
+  
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
   const calDiff = adjustedBudget - totalCalories;
   
@@ -530,17 +557,17 @@ export default function FoodLogTab() {
   const proteinConsumed = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
 
   const trackedMacros = [];
-  if (userProfile?.trackFat) trackedMacros.push({ label: 'Fat', total: fatConsumed, budget: userProfile.fatBudget, unit: 'g', color: '#f59e0b' });
-  if (userProfile?.trackSaturatedFat) trackedMacros.push({ label: 'Sat Fat', total: saturatedFatConsumed, budget: userProfile.saturatedFatBudget, unit: 'g', color: '#dc2626' });
-  if (userProfile?.trackCarbs) trackedMacros.push({ label: 'Carbs', total: carbsConsumed, budget: userProfile.carbsBudget, unit: 'g', color: '#10b981' });
-  if (userProfile?.trackFiber) trackedMacros.push({ label: 'Fiber', total: fiberConsumed, budget: userProfile.fiberBudget, unit: 'g', color: '#8b5cf6' });
-  if (userProfile?.trackSugar) trackedMacros.push({ label: 'Sugar', total: sugarConsumed, budget: userProfile.sugarBudget, unit: 'g', color: '#ec4899' });
-  if (userProfile?.trackProtein) trackedMacros.push({ label: 'Protein', total: proteinConsumed, budget: userProfile.proteinBudget, unit: 'g', color: '#3b82f6' });
+  if (activeProfile?.trackFat) trackedMacros.push({ label: 'Fat', total: fatConsumed, budget: activeProfile.fatBudget, unit: 'g', color: '#f59e0b' });
+  if (activeProfile?.trackSaturatedFat) trackedMacros.push({ label: 'Sat Fat', total: saturatedFatConsumed, budget: activeProfile.saturatedFatBudget, unit: 'g', color: '#dc2626' });
+  if (activeProfile?.trackCarbs) trackedMacros.push({ label: 'Carbs', total: carbsConsumed, budget: activeProfile.carbsBudget, unit: 'g', color: '#10b981' });
+  if (activeProfile?.trackFiber) trackedMacros.push({ label: 'Fiber', total: fiberConsumed, budget: activeProfile.fiberBudget, unit: 'g', color: '#8b5cf6' });
+  if (activeProfile?.trackSugar) trackedMacros.push({ label: 'Sugar', total: sugarConsumed, budget: activeProfile.sugarBudget, unit: 'g', color: '#ec4899' });
+  if (activeProfile?.trackProtein) trackedMacros.push({ label: 'Protein', total: proteinConsumed, budget: activeProfile.proteinBudget, unit: 'g', color: '#3b82f6' });
 
   const hasVitaminsLogs = foodLogs.some(log => log.mealType === 'Vitamins');
   const mealCategories = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Uncategorized'];
   
-  if (userProfile?.trackVitamins || hasVitaminsLogs) {
+  if (activeProfile?.trackVitamins || hasVitaminsLogs) {
     mealCategories.unshift('Vitamins');
   }
 
@@ -622,7 +649,7 @@ export default function FoodLogTab() {
         >
           <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: calDiff < 0 && isShowingRemaining('Calories') ? '#ef4444' : '#2563eb', display: 'flex', alignItems: 'center' }}>
-            {userProfile?.caloriesBudget ? (
+            {activeProfile?.caloriesBudget ? (
               isShowingRemaining('Calories') ? (
                 `${Math.abs(calDiff)} cal ${calDiff >= 0 ? 'left' : 'over'}`
               ) : (
@@ -639,7 +666,7 @@ export default function FoodLogTab() {
           </span>
         </div>
         
-        {userProfile?.caloriesBudget && (
+        {activeProfile?.caloriesBudget && (
           <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
             <div 
               className="progress-fill" 
@@ -755,12 +782,12 @@ export default function FoodLogTab() {
           const mealProtein = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
 
           const mealMacros = [];
-          if (userProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
-          if (userProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
-          if (userProfile?.trackFat) mealMacros.push({ label: 'Fat', value: mealFat, color: '#b45309', bg: '#fef3c7' });
-          if (userProfile?.trackSaturatedFat) mealMacros.push({ label: 'Sat Fat', value: mealSatFat, color: '#991b1b', bg: '#fee2e2' });
-          if (userProfile?.trackFiber) mealMacros.push({ label: 'Fiber', value: mealFiber, color: '#5b21b6', bg: '#ede9fe' });
-          if (userProfile?.trackSugar) mealMacros.push({ label: 'Sugar', value: mealSugar, color: '#be185d', bg: '#fce7f3' });
+          if (activeProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
+          if (activeProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
+          if (activeProfile?.trackFat) mealMacros.push({ label: 'Fat', value: mealFat, color: '#b45309', bg: '#fef3c7' });
+          if (activeProfile?.trackSaturatedFat) mealMacros.push({ label: 'Sat Fat', value: mealSatFat, color: '#991b1b', bg: '#fee2e2' });
+          if (activeProfile?.trackFiber) mealMacros.push({ label: 'Fiber', value: mealFiber, color: '#5b21b6', bg: '#ede9fe' });
+          if (activeProfile?.trackSugar) mealMacros.push({ label: 'Sugar', value: mealSugar, color: '#be185d', bg: '#fce7f3' });
 
           return (
             <div 
@@ -821,13 +848,16 @@ export default function FoodLogTab() {
                                   </div>
                                 )}
                                 <span>{log.food.name}</span>
-                                {(log.food as any)?.isRecipe && (
-                                  <span style={{ marginLeft: '0.2rem', fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e' }}>
+                              </h4>
+                              {log.food.brand ? (
+                                <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>
+                              ) : (log.food as any)?.isRecipe ? (
+                                <span style={{ display: 'inline-block', marginTop: '0.2rem', marginBottom: '0.1rem' }}>
+                                  <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
                                     RECIPE
                                   </span>
-                                )}
-                              </h4>
-                              {log.food.brand && <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>}
+                                </span>
+                              ) : null}
                               <span className="amount">
                                 {log.amount} {log.unit}
                                 {log.isPlanned && <span style={{ marginLeft: '0.5rem', color: '#8b5cf6', fontWeight: 700, fontSize: '0.7rem', backgroundColor: '#f3e8ff', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', border: '1px solid #e9d5ff' }}>PLANNED</span>}
@@ -874,7 +904,6 @@ export default function FoodLogTab() {
         </p>
       </div>
 
-      {/* --- UPDATED WITH RECIPE BADGE IN MODAL HEADER --- */}
       {selectedLog && (() => {
         const isQuickAddLog = selectedLog.foodId?.startsWith('quick-add-') || selectedLog.food?.id?.startsWith('quick-add-');
         
@@ -886,13 +915,16 @@ export default function FoodLogTab() {
                 <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
                   {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
                   <span>{selectedLog.food.name}</span>
-                  {(selectedLog.food as any)?.isRecipe && (
-                    <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.4rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', border: '1px solid #0f766e', marginLeft: '0.25rem' }}>
+                </h3>
+                {selectedLog.food.brand ? (
+                  <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.2rem' }}>{selectedLog.food.brand}</span>
+                ) : (selectedLog.food as any)?.isRecipe ? (
+                  <span style={{ display: 'block', marginTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
                       RECIPE
                     </span>
-                  )}
-                </h3>
-                {selectedLog.food.brand && <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.15rem' }}>{selectedLog.food.brand}</span>}
+                  </span>
+                ) : null}
               </div>
             </div>
 

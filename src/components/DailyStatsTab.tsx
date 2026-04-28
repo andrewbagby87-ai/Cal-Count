@@ -74,6 +74,27 @@ const isWorkoutOnDate = (rawDate: any, targetDateStr: string) => {
   return `${year}-${month}-${day}` === targetDateStr;
 };
 
+// --- TIME MACHINE BUDGET LOOKUP ---
+const getActiveBudgets = (userProfile: any, targetDateStr: string) => {
+  if (!userProfile) return null;
+  if (!userProfile.goalHistory || userProfile.goalHistory.length === 0) return userProfile;
+
+  let activeGoals = null; 
+  for (const entry of userProfile.goalHistory) {
+    if (entry.date <= targetDateStr) {
+      activeGoals = entry;
+    } else {
+      break; 
+    }
+  }
+  
+  if (!activeGoals) {
+    activeGoals = userProfile.goalHistory[0];
+  }
+  
+  return { ...userProfile, ...activeGoals };
+};
+
 // --- Sub-Components ---
 
 const NutrientCircle = ({ label, consumed, budget, unit, color = "#2563eb" }: { label: string, consumed: number, budget: number, unit: string, color?: string }) => {
@@ -140,11 +161,9 @@ export default function DailyStatsTab() {
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
 
-  // Auto-refresh trigger & silent load guard
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const isBackgroundRefresh = useRef(false);
   
-  // Swipe navigation states
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   
@@ -180,7 +199,6 @@ export default function DailyStatsTab() {
 
   const handleGoToToday = () => setViewDate(new Date());
 
-  // Swipe and desktop arrow logic
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
@@ -215,7 +233,6 @@ export default function DailyStatsTab() {
     setViewDate(next);
   };
 
-  // Calculate Streak
   useEffect(() => {
     const fetchStreak = async () => {
       if (!user?.uid) return;
@@ -250,7 +267,6 @@ export default function DailyStatsTab() {
     fetchStreak();
   }, [user?.uid, viewDate, refreshTrigger]); 
 
-  // Load Weekly Navigator Stats
   useEffect(() => {
     const loadNavigatorStats = async () => {
       if (!user?.uid) return;
@@ -286,20 +302,23 @@ export default function DailyStatsTab() {
         dailyBurned += manualBurned;
 
         const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-        const budget = (userProfile?.caloriesBudget || 0) + dailyBurned;
+        
+        // --- USE TIME MACHINE FOR NAVIGATOR BARS ---
+        const activeDayProfile = getActiveBudgets(userProfile, dStr);
+        const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
         
         let progress = 0;
-        let color = '#10b981'; // Green (Under budget)
+        let color = '#10b981'; 
         
         if (budget > 0) {
           progress = consumed / budget;
           const remaining = Math.round(budget - consumed);
           
-          if (remaining < 0) color = '#ef4444'; // Red (Over budget)
-          else if (remaining === 0 && consumed > 0) color = '#2563eb'; // Blue (Exactly 0 left)
+          if (remaining < 0) color = '#ef4444'; 
+          else if (remaining === 0 && consumed > 0) color = '#2563eb'; 
         } else if (consumed > 0) {
           progress = 1;
-          color = '#ef4444'; // Over budget if budget is 0
+          color = '#ef4444'; 
         }
         
         summaries[dStr] = { progress, color };
@@ -309,9 +328,8 @@ export default function DailyStatsTab() {
     };
 
     loadNavigatorStats();
-  }, [user?.uid, viewDate, userProfile?.caloriesBudget, refreshTrigger]);
+  }, [user?.uid, viewDate, userProfile, refreshTrigger]);
 
-  // Load Main Daily Data
   useEffect(() => {
     const loadData = async () => {
       if (!user?.uid) return;
@@ -430,7 +448,10 @@ export default function DailyStatsTab() {
   }, 0);
   const caloriesBurned = manualBurned + healthBurned;
 
-  const totalBudget = (userProfile?.caloriesBudget || 0) + caloriesBurned;
+  // --- USE TIME MACHINE FOR MAIN DASHBOARD BUDGETS ---
+  const activeProfile = getActiveBudgets(userProfile, viewStr);
+  const totalBudget = (activeProfile?.caloriesBudget || 0) + caloriesBurned;
+  
   const remaining = totalBudget - caloriesConsumed;
   const percentage = Math.round((caloriesConsumed / (totalBudget || 1)) * 100);
 
@@ -584,12 +605,12 @@ export default function DailyStatsTab() {
             </div>
 
             <div className="nutrients-grid">
-              {userProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={userProfile.fatBudget || 0} unit="g" color="#f59e0b" />}
-              {userProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={userProfile.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
-              {userProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={userProfile.carbsBudget || 0} unit="g" color="#10b981" />}
-              {userProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={userProfile.fiberBudget || 0} unit="g" color="#8b5cf6" />}
-              {userProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={userProfile.sugarBudget || 0} unit="g" color="#ec4899" />}
-              {userProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={userProfile.proteinBudget || 0} unit="g" color="#3b82f6" />}
+              {activeProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={activeProfile?.fatBudget || 0} unit="g" color="#f59e0b" />}
+              {activeProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={activeProfile?.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
+              {activeProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={activeProfile?.carbsBudget || 0} unit="g" color="#10b981" />}
+              {activeProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={activeProfile?.fiberBudget || 0} unit="g" color="#8b5cf6" />}
+              {activeProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={activeProfile?.sugarBudget || 0} unit="g" color="#ec4899" />}
+              {activeProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={activeProfile?.proteinBudget || 0} unit="g" color="#3b82f6" />}
             </div>
           </div>
 
