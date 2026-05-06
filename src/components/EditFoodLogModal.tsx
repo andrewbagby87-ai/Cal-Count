@@ -365,6 +365,11 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       setError('');
       await processLogSave(updatedFood, safeDetails, false);
 
+      // --- ADD THESE TWO LINES ---
+      // Force background menus and lists to sync instantly while modal is still open
+      window.dispatchEvent(new Event('foodLibraryChanged'));
+      window.dispatchEvent(new Event('foodDataChanged'));
+
     } catch (err) {
       console.error("Failed to update food label:", err);
       setError(err instanceof Error ? err.message : "Failed to save changes to database.");

@@ -368,10 +368,28 @@ export default function FoodLogTab() {
     }
   };
 
-  const handleEditLog = async (updates: any) => {
+const handleEditLog = async (updates: any) => {
     if (!editingLog || !user) return;
+    
+    // 1. Save original state for a potential rollback
+    const targetId = editingLog.id;
+    const originalLogs = [...foodLogs];
+    
+    // 2. Optimistic UI Update: Pre-display the change immediately
+    setFoodLogs(prev => prev.map(log => {
+      if (log.id === targetId) {
+        return { ...log, ...updates }; 
+      }
+      return log;
+    }));
+
+    // 3. Close the modal instantly so the app feels snappy
+    setShowEditModal(false);
+    setEditingLog(null);
+    
     try {
-      await updateFoodLog(user.uid, editingLog.id, updates);
+      // 4. Perform the database update in the background
+      await updateFoodLog(user.uid, targetId, updates);
 
       const isQuickAddLog = updates.food?.id?.startsWith('quick-add-');
       if (updates.food && updates.food.id && !isQuickAddLog) {
@@ -398,15 +416,19 @@ export default function FoodLogTab() {
         );
         
         await updateFood(updates.food.id, cleanBaseFoodUpdates);
+        
+        // --- ADDED THIS LINE ---
+        // Tells the Add/Previous food menus to refresh their data instantly
+        window.dispatchEvent(new Event('foodLibraryChanged'));
       }
-
-      setShowEditModal(false);
-      setEditingLog(null);
       
       window.dispatchEvent(new Event('foodDataChanged')); 
       showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
+      // 5. Rollback if the database fails
+      setFoodLogs(originalLogs);
+      alert("Network error: Failed to save changes.");
     }
   };
 
