@@ -41,6 +41,17 @@ const formatDateDisplay = (dateString: string) => {
 };
 
 export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLabelSaved }: Props) {
+  
+  useEffect(() => {
+    // Lock background scrolling when modal mounts
+    document.body.style.overflow = 'hidden';
+    
+    // Restore scrolling when modal unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   const { user } = useAuth();
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
 
@@ -365,7 +376,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       setError('');
       await processLogSave(updatedFood, safeDetails, false);
 
-      // --- ADD THESE TWO LINES ---
       // Force background menus and lists to sync instantly while modal is still open
       window.dispatchEvent(new Event('foodLibraryChanged'));
       window.dispatchEvent(new Event('foodDataChanged'));
@@ -449,7 +459,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', boxSizing: 'border-box' }}>
+    <div className="modal-overlay" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem', boxSizing: 'border-box' }}>
       
       <style>{`
         .edit-log-modal-container * {
@@ -753,14 +763,17 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
               <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.75rem', marginTop: 0 }}>
                 When did you {localFood.isVitamin ? 'take' : 'eat'} <strong style={{ textTransform: 'capitalize' }}>{localFood.name}</strong>, and how much?
               </p>
-              <button
-                type="button" 
-                className="btn btn-secondary btn-sm" 
-                onClick={handleEditClick}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', margin: 0 }}
-              >
-                ✏️ Edit Label
-              </button>
+              
+              {!(localFood as any).isRecipe && (
+                <button
+                  type="button" 
+                  className="btn btn-secondary btn-sm" 
+                  onClick={handleEditClick}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', margin: 0 }}
+                >
+                  ✏️ Edit Label
+                </button>
+              )}
               {error && <div className="error" style={{ marginTop: '1rem', marginBottom: 0 }}>{error}</div>}
             </div>
 

@@ -50,6 +50,17 @@ const formatDateDisplay = (dateString: string) => {
 };
 
 export default function CreateRecipeModal({ foods, onClose, onCreated, selectedDate, editLog, editFood, initialMealType, isDoneDay }: Props) {
+  
+  useEffect(() => {
+    // Lock background scrolling when modal mounts
+    document.body.style.overflow = 'hidden';
+    
+    // Restore scrolling when modal unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   const { user } = useAuth();
   const isEditLogMode = !!editLog;
   const isEditFoodMode = !!editFood;

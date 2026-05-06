@@ -1086,49 +1086,66 @@ const handleEditLog = async (updates: any) => {
                 )
               )}
 
-              <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-                <button 
-                  className="btn btn-primary" 
-                  style={{ 
-                    flex: '1 1 0', 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center', 
-                    fontSize: '1rem', 
-                    padding: '0.75rem',
-                    margin: 0,
-                    boxSizing: 'border-box'
-                  }}
-                  onClick={() => {
-                    if ((selectedLog.food as any).isRecipe) {
-                      setEditingRecipeLog(selectedLog);
-                      setShowRecipeModal(true);
-                    } else {
+              {/* Replace the bottom Edit/Cancel buttons with this block */}
+              {(selectedLog.food as any).isRecipe ? (
+                <>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ 
+                      width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', 
+                      fontSize: '1rem', padding: '0.75rem', margin: '0 0 0.5rem 0', boxSizing: 'border-box'
+                    }}
+                    onClick={() => {
                       setEditingLog(selectedLog);
                       setShowEditModal(true);
-                    }
-                    setSelectedLog(null);
-                  }}
-                >
-                  ✏️ Edit
-                </button>
-                <button 
-                  className="btn btn-secondary" 
-                  style={{ 
-                    flex: '1 1 0', 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center', 
-                    fontSize: '1rem', 
-                    padding: '0.75rem',
-                    margin: 0,
-                    boxSizing: 'border-box'
-                  }}
-                  onClick={() => setSelectedLog(null)}
-                >
-                  Cancel
-                </button>
-              </div>
+                      setSelectedLog(null);
+                    }}
+                  >
+                    Edit Amount Eaten
+                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                      onClick={() => {
+                        setEditingRecipeLog(selectedLog);
+                        setShowRecipeModal(true);
+                        setSelectedLog(null);
+                      }}
+                    >
+                      Edit Recipe
+                    </button>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                      onClick={() => setSelectedLog(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                    onClick={() => {
+                      setEditingLog(selectedLog);
+                      setShowEditModal(true);
+                      setSelectedLog(null);
+                    }}
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                    onClick={() => setSelectedLog(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

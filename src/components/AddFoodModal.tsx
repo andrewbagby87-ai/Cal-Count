@@ -1,5 +1,5 @@
 // src/components/AddFoodModal.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Food } from '../types';
 import CreateFoodModal from './CreateFoodModal';
 import AddPreviousFoodModal from './AddPreviousFoodModal';
@@ -14,7 +14,7 @@ interface Props {
   selectedDate?: string; 
   isVitaminMode?: boolean; 
   initialMealType?: string; 
-  remainingCalories?: number; // <--- NEW
+  remainingCalories?: number; 
   onOpenRecipe?: (foodToEdit?: Food) => void;
 }
 
@@ -28,6 +28,16 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [localInitialFood, setLocalInitialFood] = useState<Food | null>(null);
   const [localInitialUpc, setLocalInitialUpc] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Lock background scrolling when modal mounts
+    document.body.style.overflow = 'hidden';
+    
+    // Restore scrolling when modal unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const activeVitaminMode = scanVitaminMode !== undefined ? scanVitaminMode : !!isVitaminMode;
   const filteredFoods = foods.filter(f => activeVitaminMode ? f.isVitamin : !f.isVitamin);
@@ -57,7 +67,7 @@ export default function AddFoodModal({ foods, onAdd, onClose, onFoodDeleted, sel
 
   return (
     <>
-      <div className="modal-overlay" onClick={mode === 'create' ? undefined : onClose}>
+      <div className="modal-overlay">
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
           
           {mode === 'choose-scan-type' && (

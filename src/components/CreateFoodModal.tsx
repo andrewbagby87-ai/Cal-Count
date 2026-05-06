@@ -45,6 +45,16 @@ const formatDateDisplay = (dateString: string) => {
 };
 
 export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType, foods = [] }: Props) {
+  useEffect(() => {
+    // Lock background scrolling when modal mounts
+    document.body.style.overflow = 'hidden';
+    
+    // Restore scrolling when modal unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+  
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
   

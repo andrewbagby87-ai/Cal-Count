@@ -88,6 +88,16 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddData, setQuickAddData] = useState({ name: '', icon: '', calories: '' });
 
+    useEffect(() => {
+    // Lock background scrolling when modal mounts
+    document.body.style.overflow = 'hidden';
+    
+    // Restore scrolling when modal unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   useEffect(() => { setLocalFoods(foods); }, [foods]);
 
   useEffect(() => {
