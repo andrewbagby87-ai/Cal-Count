@@ -223,13 +223,19 @@ export default function DailyStatsTab() {
 
   const handlePrevWeek = () => {
     const prev = new Date(viewDate);
+    // 1. Jump back 7 days to get into the previous week
     prev.setDate(prev.getDate() - 7);
+    // 2. Snap to Saturday (Day 6) of that week
+    prev.setDate(prev.getDate() + (6 - prev.getDay())); 
     setViewDate(prev);
   };
 
   const handleNextWeek = () => {
     const next = new Date(viewDate);
+    // 1. Jump forward 7 days to get into the next week
     next.setDate(next.getDate() + 7);
+    // 2. Snap to Sunday (Day 0) of that week
+    next.setDate(next.getDate() - next.getDay()); 
     setViewDate(next);
   };
 
@@ -303,7 +309,6 @@ export default function DailyStatsTab() {
 
         const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         
-        // --- USE TIME MACHINE FOR NAVIGATOR BARS ---
         const activeDayProfile = getActiveBudgets(userProfile, dStr);
         const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
         
@@ -448,7 +453,6 @@ export default function DailyStatsTab() {
   }, 0);
   const caloriesBurned = manualBurned + healthBurned;
 
-  // --- USE TIME MACHINE FOR MAIN DASHBOARD BUDGETS ---
   const activeProfile = getActiveBudgets(userProfile, viewStr);
   const totalBudget = (activeProfile?.caloriesBudget || 0) + caloriesBurned;
   
@@ -463,191 +467,194 @@ export default function DailyStatsTab() {
   const proteinConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? log.protein ?? 0), 0);
 
   return (
-    <div className="daily-stats">
-      
-      <div ref={topRef} />
-      
-      <div className="date-navigator">
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
-          <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
-          <p className="date">
-            {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+    <>
+      {loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', backgroundColor: '#e2e8f0', zIndex: 9999, overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%', backgroundColor: '#2563eb', animation: 'loadingSweep 1.5s infinite ease-in-out' }} />
+          <style>{`@keyframes loadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
         </div>
-      </div>
+      )}
 
-      <div className="weekly-nav-wrapper">
-        <button 
-          className="nav-btn desktop-arrow" 
-          onClick={handlePrevWeek} 
-          style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-        >
-          ←
-        </button>
-
-        <div 
-          className="navigator-container weekly-view"
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          style={{ margin: 0 }} 
-        >
-          <div className="navigator-grid">
-            {getWeekDates(viewDate).map((date) => {
-              const dStr = getDateString(date);
-              const isSelected = dStr === viewStr;
-              const isActualToday = dStr === todayStr;
-              const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
-              const progress = summary.progress;
-              const barColor = summary.color;
-              
-              return (
-                <button 
-                  key={dStr} 
-                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
-                  onClick={() => setViewDate(date)}
-                >
-                  <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-                  <div className="day-circle">
-                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
-                     <span className="day-number">{date.getDate()}</span>
-                  </div>
-                </button>
-              );
-            })}
+      <div className="daily-stats" style={{ opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s ease-in-out', pointerEvents: loading ? 'none' : 'auto' }}>
+        
+        <div ref={topRef} />
+        
+        <div className="date-navigator">
+          <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
+            <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
+            <p className="date">
+              {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
           </div>
         </div>
 
-        <button 
-          className="nav-btn desktop-arrow" 
-          onClick={handleNextWeek} 
-          style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-        >
-          →
-        </button>
-      </div>
+        <div className="weekly-nav-wrapper">
+          <button 
+            className="nav-btn desktop-arrow" 
+            onClick={handlePrevWeek} 
+            style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+          >
+            ←
+          </button>
 
-      {loading ? (
-        <div className="loading">Loading stats...</div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
-            <div style={{ 
-              background: streak > 0 ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' : '#f1f5f9', 
-              color: streak > 0 ? 'white' : '#64748b', 
-              padding: '0.6rem 1.5rem', 
-              borderRadius: '2rem',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              boxShadow: streak > 0 ? '0 4px 6px -1px rgba(234, 88, 12, 0.3)' : 'none',
-              transition: 'all 0.3s ease'
-            }}>
-              {streak > 0 ? '🔥' : '⏳'} {streak} Day Streak
+          <div 
+            className="navigator-container weekly-view"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{ margin: 0 }} 
+          >
+            <div className="navigator-grid">
+              {getWeekDates(viewDate).map((date) => {
+                const dStr = getDateString(date);
+                const isSelected = dStr === viewStr;
+                const isActualToday = dStr === todayStr;
+                const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
+                const progress = summary.progress;
+                const barColor = summary.color;
+                
+                return (
+                  <button 
+                    key={dStr} 
+                    className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
+                    onClick={() => setViewDate(date)}
+                  >
+                    <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                    <div className="day-circle">
+                       <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
+                       <span className="day-number">{date.getDate()}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="stats-card">
-            <div className="stat-item hero-stat" onClick={() => setShowCalRemaining(!showCalRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
-              <div className="stat-header-row">
-                <span className="stat-label">Calories</span>
-                <span 
-                  className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}
-                  style={Math.round(remaining) === 0 ? { color: '#94a3b8' } : {}}
-                >
-                  {showCalRemaining ? (
-                     `${Math.round(caloriesConsumed)} eaten`
-                  ) : (
-                     Math.round(remaining) === 0 
-                       ? '0 left' 
-                       : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))} ${remaining < 0 ? 'over' : 'remaining'}`
-                  )}
-                </span>
-              </div>
-              
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
-                  style={{ 
-                    width: `${Math.min(percentage, 100)}%`, 
-                    background: '#16a34a' 
-                  }}
-                ></div>
-              </div>
-              
-              <div className="stat-value full-width">
+          <button 
+            className="nav-btn desktop-arrow" 
+            onClick={handleNextWeek} 
+            style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+          >
+            →
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
+          <div style={{ 
+            background: streak > 0 ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' : '#f1f5f9', 
+            color: streak > 0 ? 'white' : '#64748b', 
+            padding: '0.6rem 1.5rem', 
+            borderRadius: '2rem',
+            fontWeight: 700,
+            fontSize: '0.95rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            boxShadow: streak > 0 ? '0 4px 6px -1px rgba(234, 88, 12, 0.3)' : 'none',
+            transition: 'all 0.3s ease'
+          }}>
+            {streak > 0 ? '🔥' : '⏳'} {streak} Day Streak
+          </div>
+        </div>
+
+        <div className="stats-card">
+          <div className="stat-item hero-stat" onClick={() => setShowCalRemaining(!showCalRemaining)} style={{ cursor: 'pointer' }} title="Click to toggle text">
+            <div className="stat-header-row">
+              <span className="stat-label">Calories</span>
+              <span 
+                className={`remaining ${remaining >= 0 ? 'positive' : 'negative'}`}
+                style={Math.round(remaining) === 0 ? { color: '#94a3b8' } : {}}
+              >
                 {showCalRemaining ? (
-                   <>
-                     <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
-                       {Math.round(remaining) === 0 ? '0' : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))}`} <span style={{ fontSize: '1.25rem' }}>kcal</span>
-                     </span>
-                     {Math.round(remaining) !== 0 && (
-                       <span className="budget" style={{ color: remaining < 0 ? '#ef4444' : undefined }}> {remaining < 0 ? 'over' : 'left'}</span>
-                     )}
-                   </>
+                   `${Math.round(caloriesConsumed)} eaten`
                 ) : (
-                   <>
-                     <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
-                       {Math.round(caloriesConsumed)} <span style={{ fontSize: '1.25rem' }}>kcal</span>
-                     </span>
-                     <span className="separator" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>/</span>
-                     <span className="budget" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>
-                       {totalBudget} kcal
-                       {caloriesBurned > 0 && (
-                         <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
-                       )}
-                     </span>
-                   </>
+                   Math.round(remaining) === 0 
+                     ? '0 left' 
+                     : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))} ${remaining < 0 ? 'over' : 'remaining'}`
                 )}
-              </div>
+              </span>
             </div>
-
-            <div className="nutrients-grid">
-              {activeProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={activeProfile?.fatBudget || 0} unit="g" color="#f59e0b" />}
-              {activeProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={activeProfile?.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
-              {activeProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={activeProfile?.carbsBudget || 0} unit="g" color="#10b981" />}
-              {activeProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={activeProfile?.fiberBudget || 0} unit="g" color="#8b5cf6" />}
-              {activeProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={activeProfile?.sugarBudget || 0} unit="g" color="#ec4899" />}
-              {activeProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={activeProfile?.proteinBudget || 0} unit="g" color="#3b82f6" />}
+            
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ 
+                  width: `${Math.min(percentage, 100)}%`, 
+                  background: '#16a34a' 
+                }}
+              ></div>
+            </div>
+            
+            <div className="stat-value full-width">
+              {showCalRemaining ? (
+                 <>
+                   <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
+                     {Math.round(remaining) === 0 ? '0' : `${remaining > 0 ? '+' : ''}${Math.abs(Math.round(remaining))}`} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                   </span>
+                   {Math.round(remaining) !== 0 && (
+                     <span className="budget" style={{ color: remaining < 0 ? '#ef4444' : undefined }}> {remaining < 0 ? 'over' : 'left'}</span>
+                   )}
+                 </>
+              ) : (
+                 <>
+                   <span className="consumed" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : (remaining < 0 ? '#ef4444' : undefined) }}>
+                     {Math.round(caloriesConsumed)} <span style={{ fontSize: '1.25rem' }}>kcal</span>
+                   </span>
+                   <span className="separator" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>/</span>
+                   <span className="budget" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>
+                     {totalBudget} kcal
+                     {caloriesBurned > 0 && (
+                       <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
+                     )}
+                   </span>
+                 </>
+              )}
             </div>
           </div>
 
-          <div className="dashboard-bottom-row">
+          <div className="nutrients-grid">
+            {activeProfile?.trackFat && <NutrientCircle label="Fat" consumed={fatConsumed} budget={activeProfile?.fatBudget || 0} unit="g" color="#f59e0b" />}
+            {activeProfile?.trackSaturatedFat && <NutrientCircle label="Sat Fat" consumed={saturatedFatConsumed} budget={activeProfile?.saturatedFatBudget || 0} unit="g" color="#dc2626" />}
+            {activeProfile?.trackCarbs && <NutrientCircle label="Carbs" consumed={carbsConsumed} budget={activeProfile?.carbsBudget || 0} unit="g" color="#10b981" />}
+            {activeProfile?.trackFiber && <NutrientCircle label="Fiber" consumed={fiberConsumed} budget={activeProfile?.fiberBudget || 0} unit="g" color="#8b5cf6" />}
+            {activeProfile?.trackSugar && <NutrientCircle label="Sugar" consumed={sugarConsumed} budget={activeProfile?.sugarBudget || 0} unit="g" color="#ec4899" />}
+            {activeProfile?.trackProtein && <NutrientCircle label="Protein" consumed={proteinConsumed} budget={activeProfile?.proteinBudget || 0} unit="g" color="#3b82f6" />}
+          </div>
+        </div>
+
+        <div className="dashboard-bottom-row">
+          <div className="stats-card half-width-card">
+            <div className="stat-item">
+              <span className="stat-label">Weight</span>
+              {todayWeight ? (
+                <div className="weight-highlight">
+                  <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
+                  <span className="weight-unit">{todayWeight.unit}</span>
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
+                    at {formatTime12Hour(todayWeight.time)}
+                  </span>
+                </div>
+              ) : (
+                <div className="empty-weight"><span>No weight logged</span></div>
+              )}
+            </div>
+          </div>
+
+          {caloriesBurned > 0 && (
             <div className="stats-card half-width-card">
               <div className="stat-item">
-                <span className="stat-label">Weight</span>
-                {todayWeight ? (
-                  <div className="weight-highlight">
-                    <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
-                    <span className="weight-unit">{todayWeight.unit}</span>
-                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
-                      at {formatTime12Hour(todayWeight.time)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="empty-weight"><span>No weight logged</span></div>
-                )}
-              </div>
-            </div>
-
-            {caloriesBurned > 0 && (
-              <div className="stats-card half-width-card">
-                <div className="stat-item">
-                  <span className="stat-label">Calories Burned</span>
-                  <div className="weight-highlight">
-                    <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
-                      {caloriesBurned}
-                    </span>
-                    <span className="weight-unit">kcal</span>
-                  </div>
+                <span className="stat-label">Calories Burned</span>
+                <div className="weight-highlight">
+                  <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
+                    {caloriesBurned}
+                  </span>
+                  <span className="weight-unit">kcal</span>
                 </div>
               </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

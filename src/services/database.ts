@@ -13,7 +13,8 @@ import {
   deleteDoc,
   addDoc,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -137,7 +138,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      else if (data.logs) allLogs.push(...data.logs);
+      if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
     console.warn("Could not fetch all foodLogs array:", e);
@@ -170,7 +171,7 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      else if (data.logs) allLogs.push(...data.logs);
+      if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
     console.warn("Could not fetch exact foodLogs doc:", e);
@@ -208,88 +209,97 @@ export async function getWeeklyFoodLogs(userId: string, startDate: string, endDa
 
 export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
   const docRef = doc(db, 'foodLogs', userId);
-  const docSnap = await getDoc(docRef);
-
   // Strip any undefined values to prevent Firebase from silently crashing
   const cleanUpdates = JSON.parse(JSON.stringify(updates));
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    let updated = false;
-    
-    if (data.foodData) {
-      const newFoodData = data.foodData.map((log: any) => {
-        if (log.id === id) {
-          updated = true;
-          return { ...log, ...cleanUpdates };
-        }
-        return log;
-      });
-      if (updated) {
-        await updateDoc(docRef, { foodData: newFoodData });
-        return;
-      }
-    }
-    
-    if (data.logs && !updated) {
-      const newLogs = data.logs.map((log: any) => {
-        if (log.id === id) {
-          updated = true;
-          return { ...log, ...cleanUpdates };
-        }
-        return log;
-      });
-      if (updated) {
-        await updateDoc(docRef, { logs: newLogs });
-        return;
-      }
-    }
-  }
-
   try {
-    const fallbackRef = doc(db, 'foodLogs', id);
-    await updateDoc(fallbackRef, cleanUpdates);
-  } catch (e) {
-    console.warn("Could not update multi-doc format fallback:", e);
+    // A transaction strictly queues updates so rapid clicks don't overwrite each other
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        let updated = false;
+        
+        if (data.foodData) {
+          const newFoodData = data.foodData.map((log: any) => {
+            if (log.id === id) {
+              updated = true;
+              return { ...log, ...cleanUpdates };
+            }
+            return log;
+          });
+          if (updated) {
+            transaction.update(docRef, { foodData: newFoodData });
+            return;
+          }
+        }
+        
+        if (data.logs && !updated) {
+          const newLogs = data.logs.map((log: any) => {
+            if (log.id === id) {
+              updated = true;
+              return { ...log, ...cleanUpdates };
+            }
+            return log;
+          });
+          if (updated) {
+            transaction.update(docRef, { logs: newLogs });
+            return;
+          }
+        }
+      }
+    });
+  } catch (error) {
+    // Fallback if transaction fails
+    try {
+      const fallbackRef = doc(db, 'foodLogs', id);
+      await updateDoc(fallbackRef, cleanUpdates);
+    } catch (e) {
+      console.warn("Could not update multi-doc format fallback:", e);
+    }
   }
 }
 
 export async function deleteFoodLog(userId: string, id: string) {
   const docRef = doc(db, 'foodLogs', userId);
-  const docSnap = await getDoc(docRef);
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-
-    // INSTEAD of arrayRemove (which fails on deeply nested recipe objects), 
-    // we filter the array manually and rewrite it to the database.
-    if (data.foodData) {
-      const originalLength = data.foodData.length;
-      const newFoodData = data.foodData.filter((log: any) => log.id !== id);
-      
-      if (newFoodData.length < originalLength) {
-        await updateDoc(docRef, { foodData: newFoodData });
-        return;
-      }
-    }
-
-    if (data.logs) {
-      const originalLength = data.logs.length;
-      const newLogs = data.logs.filter((log: any) => log.id !== id);
-      
-      if (newLogs.length < originalLength) {
-        await updateDoc(docRef, { logs: newLogs });
-        return;
-      }
-    }
-  }
-
-  // Fallback for older data structures
   try {
-    const fallbackRef = doc(db, 'foodLogs', id);
-    await deleteDoc(fallbackRef);
-  } catch (e) {
-    console.warn("Could not delete multi-doc format fallback:", e);
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+
+        if (data.foodData) {
+          const originalLength = data.foodData.length;
+          const newFoodData = data.foodData.filter((log: any) => log.id !== id);
+          
+          if (newFoodData.length < originalLength) {
+            transaction.update(docRef, { foodData: newFoodData });
+            return;
+          }
+        }
+
+        if (data.logs) {
+          const originalLength = data.logs.length;
+          const newLogs = data.logs.filter((log: any) => log.id !== id);
+          
+          if (newLogs.length < originalLength) {
+            transaction.update(docRef, { logs: newLogs });
+            return;
+          }
+        }
+      }
+    });
+  } catch (error) {
+    // Fallback for older data structures
+    try {
+      const fallbackRef = doc(db, 'foodLogs', id);
+      await deleteDoc(fallbackRef);
+    } catch (e) {
+      console.warn("Could not delete multi-doc format fallback:", e);
+    }
   }
 }
 
@@ -485,12 +495,16 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     return log;
   };
 
-  if (data.foodData) {
+ if (data.foodData) {
+    updated = false;
     const newFoodData = data.foodData.map(recalculateLog);
     if (updated) {
       await updateDoc(docRef, { foodData: newFoodData });
     }
-  } else if (data.logs) {
+  } 
+  
+  if (data.logs) {
+    updated = false;
     const newLogs = data.logs.map(recalculateLog);
     if (updated) {
       await updateDoc(docRef, { logs: newLogs });

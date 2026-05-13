@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "firebase": "^10.8.0",
+    "firebase": "^10.14.1",
     "firebase-admin": "^13.6.1",
     "firebase-functions": "^7.0.5",
     "html5-qrcode": "^2.3.8",

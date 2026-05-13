@@ -195,13 +195,19 @@ export default function FoodLogTab() {
 
   const handlePrevWeek = () => {
     const prev = new Date(viewDate);
+    // 1. Jump back 7 days to get into the previous week
     prev.setDate(prev.getDate() - 7);
+    // 2. Snap to Saturday (Day 6) of that week
+    prev.setDate(prev.getDate() + (6 - prev.getDay())); 
     setViewDate(prev);
   };
 
   const handleNextWeek = () => {
     const next = new Date(viewDate);
+    // 1. Jump forward 7 days to get into the next week
     next.setDate(next.getDate() + 7);
+    // 2. Snap to Sunday (Day 0) of that week
+    next.setDate(next.getDate() - next.getDay()); 
     setViewDate(next);
   };
 
@@ -210,7 +216,6 @@ export default function FoodLogTab() {
     
     if (showLoadingScreen) {
       setLoading(true);
-      setFoodLogs([]);
     }
     
     try {
@@ -296,7 +301,6 @@ export default function FoodLogTab() {
 
         const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         
-        // --- USE TIME MACHINE FOR NAVIGATOR BARS ---
         const activeDayProfile = getActiveBudgets(userProfile, dStr);
         const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
         
@@ -417,8 +421,6 @@ const handleEditLog = async (updates: any) => {
         
         await updateFood(updates.food.id, cleanBaseFoodUpdates);
         
-        // --- ADDED THIS LINE ---
-        // Tells the Add/Previous food menus to refresh their data instantly
         window.dispatchEvent(new Event('foodLibraryChanged'));
       }
       
@@ -426,7 +428,6 @@ const handleEditLog = async (updates: any) => {
       showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
-      // 5. Rollback if the database fails
       setFoodLogs(originalLogs);
       alert("Network error: Failed to save changes.");
     }
@@ -555,16 +556,6 @@ const handleEditLog = async (updates: any) => {
     }
   };
 
-  if (loading && foodLogs.length === 0) {
-    return (
-      <div className="food-log-tab">
-        <div ref={topRef} />
-        <div className="loading" style={{ marginTop: '2rem' }}>Loading foods...</div>
-      </div>
-    );
-  }
-
-  // --- USE TIME MACHINE FOR MAIN DIARY BUDGETS ---
   const activeProfile = getActiveBudgets(userProfile, viewStr);
   const adjustedBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories;
   
@@ -594,486 +585,480 @@ const handleEditLog = async (updates: any) => {
   }
 
   return (
-    <div className="food-log-tab">
-      
-      <div ref={topRef} />
-      
-      <div className="date-navigator">
-        <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
-          <h2>{isToday ? "Today's Food" : "Food Log"}</h2>
-          <p className="date">
-            {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+    <>
+      {loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', backgroundColor: '#e2e8f0', zIndex: 9999, overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%', backgroundColor: '#2563eb', animation: 'loadingSweep 1.5s infinite ease-in-out' }} />
+          <style>{`@keyframes loadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
         </div>
-      </div>
+      )}
 
-      <div className="weekly-nav-wrapper">
-        <button 
-          className="nav-btn desktop-arrow" 
-          onClick={handlePrevWeek} 
-          style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-        >
-          ←
-        </button>
-
-        <div 
-          className="navigator-container weekly-view"
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          style={{ margin: 0 }} 
-        >
-          <div className="navigator-grid">
-            {getWeekDates(viewDate).map((date) => {
-              const dStr = getDateString(date);
-              const isSelected = dStr === viewStr;
-              const isActualToday = dStr === todayStr;
-              
-              const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
-              const progress = summary.progress;
-              const barColor = summary.color;
-              
-              return (
-                <button 
-                  key={dStr} 
-                  className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
-                  onClick={() => setViewDate(date)}
-                >
-                  <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-                  <div className="day-circle">
-                     <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
-                     <span className="day-number">{date.getDate()}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <button 
-          className="nav-btn desktop-arrow" 
-          onClick={handleNextWeek} 
-          style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-        >
-          →
-        </button>
-      </div>
-
-      <div className="tab-header">
-        <h2>{isToday ? "Today's Foods" : "Logged Foods"}</h2>
-      </div>
-
-      <div className="food-summary">
-        <div 
-          onClick={() => toggleSummaryMode('Calories')} 
-          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}
-          title="Click to toggle between consumed and remaining"
-        >
-          <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
-          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: calDiff < 0 && isShowingRemaining('Calories') ? '#ef4444' : '#2563eb', display: 'flex', alignItems: 'center' }}>
-            {activeProfile?.caloriesBudget ? (
-              isShowingRemaining('Calories') ? (
-                `${Math.abs(calDiff)} cal ${calDiff >= 0 ? 'left' : 'over'}`
-              ) : (
-                <>
-                  {totalCalories} / {adjustedBudget} cal
-                  {burnedCalories > 0 && (
-                    <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
-                  )}
-                </>
-              )
-            ) : (
-              `${totalCalories} cal`
-            )}
-          </span>
-        </div>
+      <div className="food-log-tab" style={{ opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s ease-in-out', pointerEvents: loading ? 'none' : 'auto' }}>
         
-        {activeProfile?.caloriesBudget && (
-          <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
-            <div 
-              className="progress-fill" 
-              style={{ 
-                width: `${Math.min((totalCalories / adjustedBudget) * 100, 100)}%`, 
-                background: totalCalories > adjustedBudget ? '#ef4444' : '#10b981' 
-              }} 
-            />
+        <div ref={topRef} />
+        
+        <div className="date-navigator">
+          <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
+            <h2>{isToday ? "Today's Food" : "Food Log"}</h2>
+            <p className="date">
+              {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
           </div>
-        )}
+        </div>
 
-        {trackedMacros.length > 0 && (
-          <div className="macros-grid">
-            {trackedMacros.map(macro => {
-              const mDiff = Math.round((macro.budget || 0) - macro.total);
-              
-              return (
-                <div 
-                  key={macro.label} 
-                  className="macro-item" 
-                  onClick={() => toggleSummaryMode(macro.label)} 
-                  style={{ cursor: 'pointer' }}
-                  title={`Click to toggle ${macro.label} text`}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
-                    
-                    <span style={{ 
-                      color: mDiff < 0 && isShowingRemaining(macro.label) 
-                        ? (macro.label === 'Protein' || macro.label === 'Fiber' ? '#10b981' : '#ef4444') 
-                        : '#64748b', 
-                      fontWeight: 600, 
-                      fontSize: '0.85rem' 
-                    }}>
-                      {macro.budget ? (
-                        isShowingRemaining(macro.label) ? (
-                          `${Math.abs(mDiff)}${macro.unit} ${mDiff >= 0 ? 'left' : 'over'}`
-                        ) : (
-                          `${macro.total}${macro.unit} / ${macro.budget}${macro.unit}`
-                        )
-                      ) : (
-                        `${macro.total}${macro.unit}`
-                      )}
-                    </span>
-                  </div>
-                  <div className="progress-bg">
-                    <div 
-                      className="progress-fill" 
-                      style={{ 
-                        background: macro.color, 
-                        width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
-                      }} 
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        <div className="weekly-nav-wrapper">
+          <button 
+            className="nav-btn desktop-arrow" 
+            onClick={handlePrevWeek} 
+            style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+          >
+            ←
+          </button>
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-        <button
-          onClick={() => {
-            const hasPlannedFoods = foodLogs.some(log => log.isPlanned);
-            if (!isDoneLogging && hasPlannedFoods) {
-              alert("You cannot mark the day as done while you still have planned foods. Please edit them to mark them as eaten, or delete them.");
-              return;
-            }
-            toggleDoneLogging();
-          }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.6rem 1.25rem', borderRadius: '2rem', border: 'none',
-            backgroundColor: isDoneLogging ? '#10b981' : (foodLogs.some(log => log.isPlanned) ? '#e2e8f0' : '#f1f5f9'),
-            color: isDoneLogging ? '#fff' : (foodLogs.some(log => log.isPlanned) ? '#94a3b8' : '#64748b'),
-            fontWeight: 700, fontSize: '0.95rem', 
-            cursor: (!isDoneLogging && foodLogs.some(log => log.isPlanned)) ? 'not-allowed' : 'pointer',
-            boxShadow: isDoneLogging ? '0 4px 6px -1px rgba(16, 185, 129, 0.3)' : 'none',
-            transition: 'all 0.2s ease-in-out'
-          }}
-        >
-          {isDoneLogging ? (
-            <>🔥 Done Logging</>
-          ) : (
-            <><span style={{ filter: 'grayscale(100%)', opacity: 0.6 }}>🔥</span> Mark Day as Done</>
-          )}
-        </button>
-        {!isDoneLogging && foodLogs.some(log => log.isPlanned) && (
-          <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>
-            * Unmark planned foods to finish day
-          </span>
-        )}
-      </div>
-
-      <div className="daily-diary">
-        {mealCategories.map(mealName => {
-          const logsForMeal = foodLogs.filter((log: any) => {
-            if (mealName === 'Uncategorized') {
-              return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Vitamins'].includes(log.mealType);
-            }
-            return log.mealType === mealName;
-          }).sort((a, b) => a.timestamp - b.timestamp);
-
-          if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
-
-          const mealCalories = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
-          const mealFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
-          const mealSatFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
-          const mealCarbs = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.carbs ?? (log as any).carbs ?? 0), 0));
-          const mealFiber = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fiber ?? (log as any).fiber ?? 0), 0));
-          const mealSugar = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.sugar ?? (log as any).sugar ?? 0), 0));
-          const mealProtein = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
-
-          const mealMacros = [];
-          if (activeProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
-          if (activeProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
-          if (activeProfile?.trackFat) mealMacros.push({ label: 'Fat', value: mealFat, color: '#b45309', bg: '#fef3c7' });
-          if (activeProfile?.trackSaturatedFat) mealMacros.push({ label: 'Sat Fat', value: mealSatFat, color: '#991b1b', bg: '#fee2e2' });
-          if (activeProfile?.trackFiber) mealMacros.push({ label: 'Fiber', value: mealFiber, color: '#5b21b6', bg: '#ede9fe' });
-          if (activeProfile?.trackSugar) mealMacros.push({ label: 'Sugar', value: mealSugar, color: '#be185d', bg: '#fce7f3' });
-
-          return (
-            <div 
-              key={mealName} 
-              className={`meal-section ${dragOverLogId === `meal-${mealName}` ? 'drag-over-meal' : ''}`}
-              onDragOver={(e) => handleDragOverMeal(e, mealName)}
-              onDragLeave={handleDragLeaveMeal}
-              onDrop={(e) => handleDrop(e, mealName)}
-            >
-              <div className="meal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0 }}>{mealName}</h3>
-
-                  {mealMacros.length > 0 && logsForMeal.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                      {mealMacros.map((macro, idx) => (
-                        <span key={idx} style={{ 
-                          fontSize: '0.7rem', color: macro.color, backgroundColor: macro.bg,
-                          padding: '0.15rem 0.4rem', borderRadius: '0.25rem', fontWeight: 600
-                        }}>
-                          {macro.label}: {macro.value}g
-                        </span>
-                      ))}
+          <div 
+            className="navigator-container weekly-view"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{ margin: 0 }} 
+          >
+            <div className="navigator-grid">
+              {getWeekDates(viewDate).map((date) => {
+                const dStr = getDateString(date);
+                const isSelected = dStr === viewStr;
+                const isActualToday = dStr === todayStr;
+                
+                const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
+                const progress = summary.progress;
+                const barColor = summary.color;
+                
+                return (
+                  <button 
+                    key={dStr} 
+                    className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
+                    onClick={() => setViewDate(date)}
+                  >
+                    <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                    <div className="day-circle">
+                       <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
+                       <span className="day-number">{date.getDate()}</span>
                     </div>
-                  )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button 
+            className="nav-btn desktop-arrow" 
+            onClick={handleNextWeek} 
+            style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
+          >
+            →
+          </button>
+        </div>
+
+        <div className="tab-header">
+          <h2>{isToday ? "Today's Foods" : "Logged Foods"}</h2>
+        </div>
+
+        <div className="food-summary">
+          <div 
+            onClick={() => toggleSummaryMode('Calories')} 
+            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}
+            title="Click to toggle between consumed and remaining"
+          >
+            <span style={{ fontSize: '1.2rem', color: '#000', fontWeight: 700 }}>Calories</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: calDiff < 0 && isShowingRemaining('Calories') ? '#ef4444' : '#2563eb', display: 'flex', alignItems: 'center' }}>
+              {activeProfile?.caloriesBudget ? (
+                isShowingRemaining('Calories') ? (
+                  `${Math.abs(calDiff)} cal ${calDiff >= 0 ? 'left' : 'over'}`
+                ) : (
+                  <>
+                    {totalCalories} / {adjustedBudget} cal
+                    {burnedCalories > 0 && (
+                      <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
+                    )}
+                  </>
+                )
+              ) : (
+                `${totalCalories} cal`
+              )}
+            </span>
+          </div>
+          
+          {activeProfile?.caloriesBudget && (
+            <div className="progress-bg" style={{ marginBottom: trackedMacros.length > 0 ? '1.5rem' : '0', height: '10px' }}>
+              <div 
+                className="progress-fill" 
+                style={{ 
+                  width: `${Math.min((totalCalories / adjustedBudget) * 100, 100)}%`, 
+                  background: totalCalories > adjustedBudget ? '#ef4444' : '#10b981' 
+                }} 
+              />
+            </div>
+          )}
+
+          {trackedMacros.length > 0 && (
+            <div className="macros-grid">
+              {trackedMacros.map(macro => {
+                const mDiff = Math.round((macro.budget || 0) - macro.total);
+                
+                return (
+                  <div 
+                    key={macro.label} 
+                    className="macro-item" 
+                    onClick={() => toggleSummaryMode(macro.label)} 
+                    style={{ cursor: 'pointer' }}
+                    title={`Click to toggle ${macro.label} text`}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <span style={{ color: '#000', fontWeight: 700, fontSize: '0.85rem' }}>{macro.label}</span>
+                      
+                      <span style={{ 
+                        color: mDiff < 0 && isShowingRemaining(macro.label) 
+                          ? (macro.label === 'Protein' || macro.label === 'Fiber' ? '#10b981' : '#ef4444') 
+                          : '#64748b', 
+                        fontWeight: 600, 
+                        fontSize: '0.85rem' 
+                      }}>
+                        {macro.budget ? (
+                          isShowingRemaining(macro.label) ? (
+                            `${Math.abs(mDiff)}${macro.unit} ${mDiff >= 0 ? 'left' : 'over'}`
+                          ) : (
+                            `${macro.total}${macro.unit} / ${macro.budget}${macro.unit}`
+                          )
+                        ) : (
+                          `${macro.total}${macro.unit}`
+                        )}
+                      </span>
+                    </div>
+                    <div className="progress-bg">
+                      <div 
+                        className="progress-fill" 
+                        style={{ 
+                          background: macro.color, 
+                          width: macro.budget ? `${Math.min((macro.total / macro.budget) * 100, 100)}%` : (macro.total > 0 ? '100%' : '0%')
+                        }} 
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={() => {
+              const hasPlannedFoods = foodLogs.some(log => log.isPlanned);
+              if (!isDoneLogging && hasPlannedFoods) {
+                alert("You cannot mark the day as done while you still have planned foods. Please edit them to mark them as eaten, or delete them.");
+                return;
+              }
+              toggleDoneLogging();
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.6rem 1.25rem', borderRadius: '2rem', border: 'none',
+              backgroundColor: isDoneLogging ? '#10b981' : (foodLogs.some(log => log.isPlanned) ? '#e2e8f0' : '#f1f5f9'),
+              color: isDoneLogging ? '#fff' : (foodLogs.some(log => log.isPlanned) ? '#94a3b8' : '#64748b'),
+              fontWeight: 700, fontSize: '0.95rem', 
+              cursor: (!isDoneLogging && foodLogs.some(log => log.isPlanned)) ? 'not-allowed' : 'pointer',
+              boxShadow: isDoneLogging ? '0 4px 6px -1px rgba(16, 185, 129, 0.3)' : 'none',
+              transition: 'all 0.2s ease-in-out'
+            }}
+          >
+            {isDoneLogging ? (
+              <>🔥 Done Logging</>
+            ) : (
+              <><span style={{ filter: 'grayscale(100%)', opacity: 0.6 }}>🔥</span> Mark Day as Done</>
+            )}
+          </button>
+          {!isDoneLogging && foodLogs.some(log => log.isPlanned) && (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.4rem',
+              fontSize: '0.8rem', 
+              color: '#b91c1c', 
+              backgroundColor: '#fef2f2',
+              padding: '0.4rem 0.8rem',
+              borderRadius: '0.5rem',
+              border: '1px solid #fecaca',
+              fontWeight: 600,
+              marginTop: '0.2rem',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}>
+              <span style={{ fontSize: '0.9rem' }}>⚠️</span> Unmark planned foods to finish day
+            </div>
+          )}
+        </div>
+
+        <div className="daily-diary">
+          {mealCategories.map(mealName => {
+            const logsForMeal = foodLogs.filter((log: any) => {
+              if (mealName === 'Uncategorized') {
+                return !log.mealType || !['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Vitamins'].includes(log.mealType);
+              }
+              return log.mealType === mealName;
+            }).sort((a, b) => a.timestamp - b.timestamp);
+
+            if (mealName === 'Uncategorized' && logsForMeal.length === 0) return null;
+
+            const mealCalories = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
+            const mealFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fat ?? (log as any).fat ?? 0), 0));
+            const mealSatFat = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.saturatedFat ?? (log as any).saturatedFat ?? 0), 0));
+            const mealCarbs = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.carbs ?? (log as any).carbs ?? 0), 0));
+            const mealFiber = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.fiber ?? (log as any).fiber ?? 0), 0));
+            const mealSugar = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.sugar ?? (log as any).sugar ?? 0), 0));
+            const mealProtein = Math.round(logsForMeal.reduce((sum, log) => sum + (log.editedNutrition?.protein ?? (log as any).protein ?? 0), 0));
+
+            const mealMacros = [];
+            if (activeProfile?.trackProtein) mealMacros.push({ label: 'Protein', value: mealProtein, color: '#1d4ed8', bg: '#dbeafe' });
+            if (activeProfile?.trackCarbs) mealMacros.push({ label: 'Carbs', value: mealCarbs, color: '#047857', bg: '#d1fae5' });
+            if (activeProfile?.trackFat) mealMacros.push({ label: 'Fat', value: mealFat, color: '#b45309', bg: '#fef3c7' });
+            if (activeProfile?.trackSaturatedFat) mealMacros.push({ label: 'Sat Fat', value: mealSatFat, color: '#991b1b', bg: '#fee2e2' });
+            if (activeProfile?.trackFiber) mealMacros.push({ label: 'Fiber', value: mealFiber, color: '#5b21b6', bg: '#ede9fe' });
+            if (activeProfile?.trackSugar) mealMacros.push({ label: 'Sugar', value: mealSugar, color: '#be185d', bg: '#fce7f3' });
+
+            return (
+              <div 
+                key={mealName} 
+                className={`meal-section ${dragOverLogId === `meal-${mealName}` ? 'drag-over-meal' : ''}`}
+                onDragOver={(e) => handleDragOverMeal(e, mealName)}
+                onDragLeave={handleDragLeaveMeal}
+                onDrop={(e) => handleDrop(e, mealName)}
+              >
+                <div className="meal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0 }}>{mealName}</h3>
+
+                    {mealMacros.length > 0 && logsForMeal.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                        {mealMacros.map((macro, idx) => (
+                          <span key={idx} style={{ 
+                            fontSize: '0.7rem', color: macro.color, backgroundColor: macro.bg,
+                            padding: '0.15rem 0.4rem', borderRadius: '0.25rem', fontWeight: 600
+                          }}>
+                            {macro.label}: {macro.value}g
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <span className="meal-calories" style={{ margin: 0 }}>{mealCalories} cal</span>
                 </div>
                 
-                <span className="meal-calories" style={{ margin: 0 }}>{mealCalories} cal</span>
-              </div>
-              
-              {logsForMeal.length === 0 ? (
-                <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Drop {mealName === 'Vitamins' ? 'vitamins' : 'foods'} here.</div>
-              ) : (
-                <div className="food-logs-list">
-                  {logsForMeal.map((log) => {
-                    const isDragging = draggedLog?.id === log.id;
-                    const isDragOver = dragOverLogId === log.id;
+                {logsForMeal.length === 0 ? (
+                  <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Drop {mealName === 'Vitamins' ? 'vitamins' : 'foods'} here.</div>
+                ) : (
+                  <div className="food-logs-list">
+                    {logsForMeal.map((log) => {
+                      const isDragging = draggedLog?.id === log.id;
+                      const isDragOver = dragOverLogId === log.id;
 
-                    return (
-                      <div 
-                        key={log.id} 
-                        className={`food-log-item ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'drag-over' : ''} ${log.isPlanned ? 'is-planned' : ''}`}
-                        onClick={(e) => handleItemInteraction(e, log)}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, log)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => handleDragOverItem(e, log.id)}
-                        onDrop={(e) => handleDropItem(e, mealName, log.id)}
-                      >
-                        <div className="food-log-summary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div className="drag-handle" title="Drag to reorder">⠿</div>
-                            <div className="food-info">
-                              <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
-                                {log.food.icon && (
-                                  <div style={{ flexShrink: 0, display: 'flex' }}>
-                                    <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
-                                  </div>
-                                )}
-                                <span>{log.food.name}</span>
-                              </h4>
-                              {log.food.brand ? (
-                                <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>
-                              ) : (log.food as any)?.isRecipe ? (
-                                <span style={{ display: 'inline-block', marginTop: '0.2rem', marginBottom: '0.1rem' }}>
-                                  <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
-                                    RECIPE
+                      return (
+                        <div 
+                          key={log.id} 
+                          className={`food-log-item ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'drag-over' : ''} ${log.isPlanned ? 'is-planned' : ''}`}
+                          onClick={(e) => handleItemInteraction(e, log)}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, log)}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={(e) => handleDragOverItem(e, log.id)}
+                          onDrop={(e) => handleDropItem(e, mealName, log.id)}
+                        >
+                          <div className="food-log-summary">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div className="drag-handle" title="Drag to reorder">⠿</div>
+                              <div className="food-info">
+                                <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                  {log.food.icon && (
+                                    <div style={{ flexShrink: 0, display: 'flex' }}>
+                                      <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
+                                    </div>
+                                  )}
+                                  <span>{log.food.name}</span>
+                                </h4>
+                                {log.food.brand ? (
+                                  <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>
+                                ) : (log.food as any)?.isRecipe ? (
+                                  <span style={{ display: 'inline-block', marginTop: '0.2rem', marginBottom: '0.1rem' }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                                      RECIPE
+                                    </span>
                                   </span>
+                                ) : null}
+                                <span className="amount">
+                                  {log.amount} {log.unit}
+                                  {log.isPlanned && <span style={{ marginLeft: '0.5rem', color: '#8b5cf6', fontWeight: 700, fontSize: '0.7rem', backgroundColor: '#f3e8ff', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', border: '1px solid #e9d5ff' }}>PLANNED</span>}
                                 </span>
-                              ) : null}
-                              <span className="amount">
-                                {log.amount} {log.unit}
-                                {log.isPlanned && <span style={{ marginLeft: '0.5rem', color: '#8b5cf6', fontWeight: 700, fontSize: '0.7rem', backgroundColor: '#f3e8ff', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', border: '1px solid #e9d5ff' }}>PLANNED</span>}
-                              </span>
+                              </div>
+                            </div>
+                            <div className="food-calories">
+                              <span className="calories">{Math.round(log.editedNutrition?.calories ?? log.calories)} cal</span>
                             </div>
                           </div>
-                          <div className="food-calories">
-                            <span className="calories">{Math.round(log.editedNutrition?.calories ?? log.calories)} cal</span>
-                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {!isDoneLogging && (
-                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
-                  <button
-                    className="btn btn-primary"
-                    style={{
-                      width: '25%', 
-                      padding: '0.6rem 0', 
-                      fontSize: '1rem',
-                      ...(mealName === 'Vitamins' ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {})
-                    }}
-                    onClick={() => {
-                      setActiveAddMealType(mealName === 'Uncategorized' ? '' : mealName);
-                      setIsVitaminMode(mealName === 'Vitamins');
-                      setShowAddModal(true);
-                    }}
-                  >
-                    + Add
-                  </button>
-                </div>
-              )}
-
-            </div>
-          );
-        })}
-        
-        <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem', fontStyle: 'italic' }}>
-          * Double-tap an item to delete it.
-        </p>
-      </div>
-
-      {selectedLog && (() => {
-        const isQuickAddLog = selectedLog.foodId?.startsWith('quick-add-') || selectedLog.food?.id?.startsWith('quick-add-');
-        
-        return (
-        <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
-          <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="selected-log-header">
-              <div>
-                <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
-                  {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
-                  <span>{selectedLog.food.name}</span>
-                </h3>
-                {selectedLog.food.brand ? (
-                  <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.2rem' }}>{selectedLog.food.brand}</span>
-                ) : (selectedLog.food as any)?.isRecipe ? (
-                  <span style={{ display: 'block', marginTop: '0.25rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
-                      RECIPE
-                    </span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.65rem', marginBottom: '1rem' }}>
-                <h4 style={{ margin: 0, color: '#1e293b' }}>
-                  Nutrition Logged
-                </h4>
-                {!isQuickAddLog && (
-                  <span style={{ fontSize: '0.85rem', color: '#2563eb', fontWeight: 700, backgroundColor: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #bfdbfe' }}>
-                    {selectedLog.amount} {selectedLog.unit}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {isQuickAddLog ? (
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ 
-                      fontSize: '0.75rem', 
-                      textTransform: 'uppercase', 
-                      color: '#475569',
-                      fontWeight: 700
-                    }}>
-                      Calories
-                    </span>
-                    <span style={{ 
-                      fontWeight: 700, 
-                      color: '#2563eb', 
-                      fontSize: '1rem' 
-                    }}>
-                      {selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal
-                    </span>
+                      );
+                    })}
                   </div>
-                ) : (
-                  [
-                    { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
-                    { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
-                    { label: 'Saturated Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false, indent: true },
-                    { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false, indent: true },
-                    { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false, indent: false },
-                    { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false, indent: false },
-                    { label: 'Total Carbohydrate', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false, indent: false },
-                    { label: 'Dietary Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false, indent: true },
-                    { label: 'Total Sugars', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false, indent: true },
-                    { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false, indent: false },
-                  ].map((nutrient, idx) => (
-                    <div key={idx} style={{ 
+                )}
+
+                {!isDoneLogging && (
+                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+                    <button
+                      className="btn btn-primary"
+                      style={{
+                        width: '25%', 
+                        padding: '0.6rem 0', 
+                        fontSize: '1rem',
+                        ...(mealName === 'Vitamins' ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {})
+                      }}
+                      onClick={() => {
+                        setActiveAddMealType(mealName === 'Uncategorized' ? '' : mealName);
+                        setIsVitaminMode(mealName === 'Vitamins');
+                        setShowAddModal(true);
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                )}
+
+              </div>
+            );
+          })}
+          
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem', fontStyle: 'italic' }}>
+            * Double-tap an item to delete it.
+          </p>
+        </div>
+
+        {selectedLog && (() => {
+          const isQuickAddLog = selectedLog.foodId?.startsWith('quick-add-') || selectedLog.food?.id?.startsWith('quick-add-');
+          
+          return (
+          <div className="selected-log-overlay" onClick={() => setSelectedLog(null)}>
+            <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="selected-log-header">
+                <div>
+                  <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+                    {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
+                    <span>{selectedLog.food.name}</span>
+                  </h3>
+                  {selectedLog.food.brand ? (
+                    <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.2rem' }}>{selectedLog.food.brand}</span>
+                  ) : (selectedLog.food as any)?.isRecipe ? (
+                    <span style={{ display: 'block', marginTop: '0.25rem' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                        RECIPE
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.65rem', marginBottom: '1rem' }}>
+                  <h4 style={{ margin: 0, color: '#1e293b' }}>
+                    Nutrition Logged
+                  </h4>
+                  {!isQuickAddLog && (
+                    <span style={{ fontSize: '0.85rem', color: '#2563eb', fontWeight: 700, backgroundColor: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #bfdbfe' }}>
+                      {selectedLog.amount} {selectedLog.unit}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {isQuickAddLog ? (
+                    <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
-                      paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                      alignItems: 'center'
                     }}>
                       <span style={{ 
-                        fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                        fontSize: '0.75rem', 
                         textTransform: 'uppercase', 
-                        color: nutrient.isHighlight ? '#475569' : '#94a3b8',
-                        fontWeight: nutrient.isHighlight ? 700 : 400,
-                        paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                        color: '#475569',
+                        fontWeight: 700
                       }}>
-                        {nutrient.label}
+                        Calories
                       </span>
                       <span style={{ 
                         fontWeight: 700, 
-                        color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
-                        fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                        color: '#2563eb', 
+                        fontSize: '1rem' 
                       }}>
-                        {nutrient.value}
+                        {selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal
                       </span>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    [
+                      { label: 'Calories', value: `${selectedLog.editedNutrition?.calories ?? selectedLog.calories} cal`, isHighlight: true, indent: false },
+                      { label: 'Total Fat', value: `${selectedLog.editedNutrition?.fat ?? selectedLog.fat ?? 0}g`, isHighlight: false, indent: false },
+                      { label: 'Saturated Fat', value: `${selectedLog.editedNutrition?.saturatedFat ?? selectedLog.saturatedFat ?? 0}g`, isHighlight: false, indent: true },
+                      { label: 'Trans Fat', value: `${(selectedLog as any).editedNutrition?.transFat ?? (selectedLog as any).transFat ?? (selectedLog.food as any).transFat ?? 0}g`, isHighlight: false, indent: true },
+                      { label: 'Cholesterol', value: `${(selectedLog as any).editedNutrition?.cholesterol ?? (selectedLog as any).cholesterol ?? (selectedLog.food as any).cholesterol ?? 0}mg`, isHighlight: false, indent: false },
+                      { label: 'Sodium', value: `${(selectedLog as any).editedNutrition?.sodium ?? (selectedLog as any).sodium ?? (selectedLog.food as any).sodium ?? 0}mg`, isHighlight: false, indent: false },
+                      { label: 'Total Carbohydrate', value: `${selectedLog.editedNutrition?.carbs ?? selectedLog.carbs ?? 0}g`, isHighlight: false, indent: false },
+                      { label: 'Dietary Fiber', value: `${selectedLog.editedNutrition?.fiber ?? selectedLog.fiber ?? 0}g`, isHighlight: false, indent: true },
+                      { label: 'Total Sugars', value: `${selectedLog.editedNutrition?.sugar ?? selectedLog.sugar ?? 0}g`, isHighlight: false, indent: true },
+                      { label: 'Protein', value: `${selectedLog.editedNutrition?.protein ?? selectedLog.protein ?? 0}g`, isHighlight: false, indent: false },
+                    ].map((nutrient, idx) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', 
+                        paddingBottom: idx !== 9 ? '0.2rem' : '0'
+                      }}>
+                        <span style={{ 
+                          fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', 
+                          textTransform: 'uppercase', 
+                          color: nutrient.isHighlight ? '#475569' : '#94a3b8',
+                          fontWeight: nutrient.isHighlight ? 700 : 400,
+                          paddingLeft: nutrient.indent ? '0.75rem' : '0'
+                        }}>
+                          {nutrient.label}
+                        </span>
+                        <span style={{ 
+                          fontWeight: 700, 
+                          color: nutrient.isHighlight ? '#2563eb' : '#1e293b', 
+                          fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' 
+                        }}>
+                          {nutrient.value}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
-              
-              {selectedLog.isPlanned ? (
-                <button 
-                  className="btn btn-primary" 
-                  style={{ backgroundColor: '#10b981', borderColor: '#10b981', width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', borderRadius: '0.5rem', color: '#fff', fontWeight: 'bold' }}
-                  onClick={async () => {
-                    if (!user) return;
-                    
-                    const targetId = selectedLog.id;
-                    const originalLogs = [...foodLogs]; 
-                    
-                    setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: false } : log));
-                    setSelectedLog(null);
-                    
-                    try {
-                      await updateFoodLog(user.uid, targetId, { isPlanned: false });
-                      window.dispatchEvent(new Event('foodDataChanged'));
-                      showToast('Confirmed as eaten!');
-                    } catch (err) {
-                      console.error('Failed to update planned status:', err);
-                      setFoodLogs(originalLogs);
-                      alert("Network error: Failed to save to database.");
-                    }
-                  }}
-                >
-                  ✅ Confirm as Eaten
-                </button>
-              ) : (
-                !isDoneLogging && (
+              <div className="selected-log-actions" style={{ display: 'flex', gap: '0.75rem', width: '100%', flexDirection: 'column' }}>
+                
+                {selectedLog.isPlanned ? (
                   <button 
-                    className="btn btn-secondary" 
-                    style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
+                    className="btn btn-primary" 
+                    style={{ backgroundColor: '#10b981', borderColor: '#10b981', width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', borderRadius: '0.5rem', color: '#fff', fontWeight: 'bold' }}
                     onClick={async () => {
                       if (!user) return;
                       
                       const targetId = selectedLog.id;
                       const originalLogs = [...foodLogs]; 
                       
-                      setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: true } : log));
+                      setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: false } : log));
                       setSelectedLog(null);
                       
                       try {
-                        await updateFoodLog(user.uid, targetId, { isPlanned: true });
+                        await updateFoodLog(user.uid, targetId, { isPlanned: false });
                         window.dispatchEvent(new Event('foodDataChanged'));
-                        showToast('Marked as planned!');
+                        showToast('Confirmed as eaten!');
                       } catch (err) {
                         console.error('Failed to update planned status:', err);
                         setFoodLogs(originalLogs);
@@ -1081,39 +1066,87 @@ const handleEditLog = async (updates: any) => {
                       }
                     }}
                   >
-                    🗓️ Mark as Planned
+                    ✅ Confirm as Eaten
                   </button>
-                )
-              )}
-
-              {/* Replace the bottom Edit/Cancel buttons with this block */}
-              {(selectedLog.food as any).isRecipe ? (
-                <>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ 
-                      width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', 
-                      fontSize: '1rem', padding: '0.75rem', margin: '0 0 0.5rem 0', boxSizing: 'border-box'
-                    }}
-                    onClick={() => {
-                      setEditingLog(selectedLog);
-                      setShowEditModal(true);
-                      setSelectedLog(null);
-                    }}
-                  >
-                    Edit Amount Eaten
-                  </button>
-                  <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                ) : (
+                  !isDoneLogging && (
                     <button 
                       className="btn btn-secondary" 
-                      style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', margin: '0 0 0.5rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', fontWeight: 600, borderRadius: '0.5rem', cursor: 'pointer' }}
+                      onClick={async () => {
+                        if (!user) return;
+                        
+                        const targetId = selectedLog.id;
+                        const originalLogs = [...foodLogs]; 
+                        
+                        setFoodLogs(prev => prev.map(log => log.id === targetId ? { ...log, isPlanned: true } : log));
+                        setSelectedLog(null);
+                        
+                        try {
+                          await updateFoodLog(user.uid, targetId, { isPlanned: true });
+                          window.dispatchEvent(new Event('foodDataChanged'));
+                          showToast('Marked as planned!');
+                        } catch (err) {
+                          console.error('Failed to update planned status:', err);
+                          setFoodLogs(originalLogs);
+                          alert("Network error: Failed to save to database.");
+                        }
+                      }}
+                    >
+                      🗓️ Mark as Planned
+                    </button>
+                  )
+                )}
+
+                {(selectedLog.food as any).isRecipe ? (
+                  <>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ 
+                        width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', 
+                        fontSize: '1rem', padding: '0.75rem', margin: '0 0 0.5rem 0', boxSizing: 'border-box'
+                      }}
                       onClick={() => {
-                        setEditingRecipeLog(selectedLog);
-                        setShowRecipeModal(true);
+                        setEditingLog(selectedLog);
+                        setShowEditModal(true);
                         setSelectedLog(null);
                       }}
                     >
-                      Edit Recipe
+                      ⚖️ Edit Amount Eaten
+                    </button>
+                    <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                        onClick={() => {
+                          setEditingRecipeLog(selectedLog);
+                          setShowRecipeModal(true);
+                          setSelectedLog(null);
+                        }}
+                      >
+                        🍲 Edit Recipe
+                      </button>
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                        onClick={() => setSelectedLog(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
+                      onClick={() => {
+                        setEditingLog(selectedLog);
+                        setShowEditModal(true);
+                        setSelectedLog(null);
+                      }}
+                    >
+                      ✏️ Edit
                     </button>
                     <button 
                       className="btn btn-secondary" 
@@ -1123,109 +1156,88 @@ const handleEditLog = async (updates: any) => {
                       Cancel
                     </button>
                   </div>
-                </>
-              ) : (
-                <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
-                    onClick={() => {
-                      setEditingLog(selectedLog);
-                      setShowEditModal(true);
-                      setSelectedLog(null);
-                    }}
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1rem', padding: '0.75rem', margin: 0, boxSizing: 'border-box' }}
-                    onClick={() => setSelectedLog(null)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        );
-      })()}
+          );
+        })()}
 
-      {showAddModal && (
-        <AddFoodModal 
-          foods={foods} 
-          onAdd={handleAddFood} 
-          onClose={() => setShowAddModal(false)} 
-          selectedDate={getDateString(viewDate)} 
-          isVitaminMode={isVitaminMode}
-          initialMealType={activeAddMealType}
-          onOpenRecipe={(foodToEdit?: Food) => {
-            setShowAddModal(false);
-            if (foodToEdit) {
-              setEditingRecipeFood(foodToEdit);
-            } else {
+        {showAddModal && (
+          <AddFoodModal 
+            foods={foods} 
+            onAdd={handleAddFood} 
+            onClose={() => setShowAddModal(false)} 
+            selectedDate={getDateString(viewDate)} 
+            isVitaminMode={isVitaminMode}
+            initialMealType={activeAddMealType}
+            onOpenRecipe={(foodToEdit?: Food) => {
+              setShowAddModal(false);
+              if (foodToEdit) {
+                setEditingRecipeFood(foodToEdit);
+              } else {
+                setEditingRecipeFood(null);
+              }
+              setEditingRecipeLog(null); 
+              setShowRecipeModal(true);
+            }}
+          />
+        )}
+        
+        {showRecipeModal && (
+          <CreateRecipeModal 
+            foods={foods}
+            editLog={editingRecipeLog} 
+            editFood={editingRecipeFood}
+            initialMealType={activeAddMealType}
+            isDoneDay={isDoneLogging}
+            onClose={() => {
+              setShowRecipeModal(false);
+              setEditingRecipeLog(null);
               setEditingRecipeFood(null);
-            }
-            setEditingRecipeLog(null); 
-            setShowRecipeModal(true);
-          }}
-        />
-      )}
-      
-      {showRecipeModal && (
-        <CreateRecipeModal 
-          foods={foods}
-          editLog={editingRecipeLog} 
-          editFood={editingRecipeFood}
-          initialMealType={activeAddMealType}
-          isDoneDay={isDoneLogging}
-          onClose={() => {
-            setShowRecipeModal(false);
-            setEditingRecipeLog(null);
-            setEditingRecipeFood(null);
-          }}
-          onCreated={() => {
-            setShowRecipeModal(false);
-            setEditingRecipeLog(null);
-            setEditingRecipeFood(null);
-          }}
-          selectedDate={getDateString(viewDate)}
-        />
-      )}
+            }}
+            onCreated={() => {
+              setShowRecipeModal(false);
+              setEditingRecipeLog(null);
+              setEditingRecipeFood(null);
+            }}
+            selectedDate={getDateString(viewDate)}
+          />
+        )}
 
-      {showEditModal && editingLog && (
-        <EditFoodLogModal 
-          log={editingLog} 
-          onSave={handleEditLog} 
-          onClose={() => setShowEditModal(false)} 
-          isDoneDay={isDoneLogging}
-        />
-      )}
+        {showEditModal && editingLog && (
+          <EditFoodLogModal 
+            log={editingLog} 
+            onSave={handleEditLog} 
+            onClose={() => setShowEditModal(false)} 
+            isDoneDay={isDoneLogging}
+          />
+        )}
 
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '100px', 
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: '#1e293b',
-          color: '#ffffff',
-          padding: '0.75rem 1.5rem',
-          borderRadius: '2rem',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 10px 15px -3px rgba(0,0,0,0.1)',
-          zIndex: 9999,
-          fontSize: '0.95rem',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          pointerEvents: 'none',
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
-          {toastMessage}
-        </div>
-      )}
-    </div>
+        {toastMessage && (
+          <div style={{
+            position: 'fixed',
+            bottom: '100px', 
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#1e293b',
+            color: '#ffffff',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '2rem',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 10px 15px -3px rgba(0,0,0,0.1)',
+            zIndex: 9999,
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            pointerEvents: 'none',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            {toastMessage}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
