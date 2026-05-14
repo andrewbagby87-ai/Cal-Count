@@ -1084,9 +1084,9 @@ try {
                   )}
                   
                   <div style={{ flex: 1, paddingRight: '2rem' }}>
-                    <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
-                      {food.icon && <Icon icon={food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />}
-                      <span>{food.name}</span>
+                    <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+                      {food.icon && <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.4rem' }}><Icon icon={food.icon} size="1.2rem" /></div>}
+                      <span style={{ wordBreak: 'break-word' }}>{food.name}</span>
                     </div>
                     {food.brand ? (
                       <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>

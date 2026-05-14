@@ -875,7 +875,7 @@ const handleEditLog = async (updates: any) => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <div className="drag-handle" title="Drag to reorder">⠿</div>
                               <div className="food-info">
-                                <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                <h4 style={{ margin: 0, textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.4rem' }}>
                                   {log.food.icon && (
                                     <div style={{ flexShrink: 0, display: 'flex' }}>
                                       <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
@@ -946,7 +946,7 @@ const handleEditLog = async (updates: any) => {
             <div className="selected-log-modal" onClick={(e) => e.stopPropagation()}>
               <div className="selected-log-header">
                 <div>
-                  <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.4rem' }}>
                     {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
                     <span>{selectedLog.food.name}</span>
                   </h3>

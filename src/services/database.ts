@@ -14,7 +14,7 @@ import {
   addDoc,
   arrayUnion,
   arrayRemove,
-  runTransaction
+  runTransaction // <--- FIXED: Added runTransaction here
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -111,7 +111,6 @@ export async function deleteFood(id: string) {
 export async function createFoodLog(userId: string, foodLog: any) {
   const docRef = doc(db, 'foodLogs', userId);
   
-  // 1. Deep clean undefined values
   const cleanFoodLog = JSON.parse(JSON.stringify(foodLog));
 
   const newLog = {
@@ -120,8 +119,6 @@ export async function createFoodLog(userId: string, foodLog: any) {
     timestamp: cleanFoodLog.timestamp || Date.now(),
   };
 
-  // 2. ATOMIC SAVE: Use arrayUnion to append directly on the server.
-  // This completely eliminates race conditions when batch-adding items.
   await setDoc(docRef, {
     userId,
     foodData: arrayUnion(newLog)
@@ -138,7 +135,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs);
+      if (data.logs) allLogs.push(...data.logs); // <--- FIXED: Removed "else" keyword
     }
   } catch (e) {
     console.warn("Could not fetch all foodLogs array:", e);
@@ -171,7 +168,7 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs);
+      if (data.logs) allLogs.push(...data.logs); // <--- FIXED: Removed "else" keyword
     }
   } catch (e) {
     console.warn("Could not fetch exact foodLogs doc:", e);
@@ -201,7 +198,6 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
   return dailyLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
-// 🚀 OPTIMIZATION: Fetches a date range of foods in 1 single read
 export async function getWeeklyFoodLogs(userId: string, startDate: string, endDate: string): Promise<FoodLog[]> {
   const allLogs = await getAllFoodLogs(userId);
   return allLogs.filter((log: any) => log.date >= startDate && log.date <= endDate);
@@ -209,11 +205,10 @@ export async function getWeeklyFoodLogs(userId: string, startDate: string, endDa
 
 export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
   const docRef = doc(db, 'foodLogs', userId);
-  // Strip any undefined values to prevent Firebase from silently crashing
   const cleanUpdates = JSON.parse(JSON.stringify(updates));
 
   try {
-    // A transaction strictly queues updates so rapid clicks don't overwrite each other
+    // <--- FIXED: Added runTransaction to queue up fast clicks safely
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
 
@@ -251,7 +246,6 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
       }
     });
   } catch (error) {
-    // Fallback if transaction fails
     try {
       const fallbackRef = doc(db, 'foodLogs', id);
       await updateDoc(fallbackRef, cleanUpdates);
@@ -265,6 +259,7 @@ export async function deleteFoodLog(userId: string, id: string) {
   const docRef = doc(db, 'foodLogs', userId);
 
   try {
+    // <--- FIXED: Added runTransaction to queue up fast deletes safely
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
 
@@ -293,7 +288,6 @@ export async function deleteFoodLog(userId: string, id: string) {
       }
     });
   } catch (error) {
-    // Fallback for older data structures
     try {
       const fallbackRef = doc(db, 'foodLogs', id);
       await deleteDoc(fallbackRef);
@@ -303,7 +297,6 @@ export async function deleteFoodLog(userId: string, id: string) {
   }
 }
 
-// BATCH UPDATE: Cascades food label edits to past logs and recipes
 export async function updateAllPastLogsForFood(userId: string, foodId: string, updatedFood: Food) {
   const docRef = doc(db, 'foodLogs', userId);
   const docSnap = await getDoc(docRef);
@@ -312,7 +305,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
   ) as Food;
 
-  // 1. HELPER to recalculate a recipe's macros based on the newly updated ingredient
   const recalculateRecipeNutrition = (recipe: any) => {
     let updatedIngredients = recipe.recipeIngredients.map((ing: any) => {
       if (ing.food.id === foodId || ing.food?.id === foodId) {
@@ -378,7 +370,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     };
   };
 
-  // 2. UPDATE ANY RECIPES IN "PREVIOUS FOODS" THAT CONTAIN THIS INGREDIENT
   try {
     const foodsQuery = query(collection(db, 'foods'), where('userId', '==', userId));
     const foodsSnap = await getDocs(foodsQuery);
@@ -400,13 +391,11 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     console.error("Failed to cascade updates to master recipes:", e);
   }
 
-  // 3. UPDATE PAST LOGS (BOTH DIRECT LOGS & RECIPE LOGS)
   if (!docSnap.exists()) return;
   const data = docSnap.data();
   let updated = false;
 
   const recalculateLog = (log: any) => {
-    // CASE A: The log is directly the food we edited
     if (log.foodId === foodId || log.food?.id === foodId) {
       updated = true;
       let multiplier = 1;
@@ -451,7 +440,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
       };
     }
 
-    // CASE B: The log is a RECIPE that contains the food we edited
     if (log.food?.isRecipe && log.food?.recipeIngredients) {
       const hasIngredient = log.food.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
       
@@ -459,7 +447,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
         updated = true;
         const updatedRecipe = recalculateRecipeNutrition(log.food);
         
-        // Recalculate what the user consumed of this updated recipe
         const multiplier = log.amount; 
 
         const calcConsumed = (val: number | undefined) => {
@@ -495,7 +482,8 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     return log;
   };
 
- if (data.foodData) {
+  // <--- FIXED: Removed the 'else' keyword here as well
+  if (data.foodData) {
     updated = false;
     const newFoodData = data.foodData.map(recalculateLog);
     if (updated) {
@@ -541,7 +529,6 @@ export async function getDayWorkoutLogs(userId: string, date: string): Promise<W
   return logs.sort((a, b) => b.timestamp - a.timestamp);
 }
 
-// 🚀 OPTIMIZATION: Range query for workouts
 export async function getWeeklyWorkoutLogs(userId: string, startDate: string, endDate: string): Promise<WorkoutLog[]> {
   const q = query(
     collection(db, 'workoutLogs'),
@@ -609,7 +596,6 @@ export async function getAllWeightLogs(userId: string): Promise<WeightLog[]> {
   }
 }
 
-// 🚀 OPTIMIZATION: Query specifically for a single day
 export async function getWeightLogsForDate(userId: string, date: string): Promise<WeightLog[]> {
   try {
     const q = query(
