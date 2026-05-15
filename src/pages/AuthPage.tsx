@@ -4,9 +4,9 @@ import {
   signUp, 
   signIn, 
   resetPassword, 
-  sendCrossDeviceMagicLink, // <--- This matches the new auth.ts
+  sendCrossDeviceMagicLink,
   completePasswordlessLogin,
-  listenForRemoteApproval   // <--- This listens for the phone!
+  listenForRemoteApproval
 } from '../services/auth'; 
 import './AuthPage.css';
 
@@ -25,6 +25,7 @@ export default function AuthPage() {
   // Magic Link States
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [showMagicModal, setShowMagicModal] = useState(false);
+  const [isRemoteApprovalSuccess, setIsRemoteApprovalSuccess] = useState(false);
 
   // Simple real-time format validation
   useEffect(() => {
@@ -41,9 +42,13 @@ export default function AuthPage() {
       if (window.location.href.includes('apiKey=') && window.location.href.includes('oobCode=')) {
         setLoading(true);
         const result = await completePasswordlessLogin();
-        if (!result.success && result.error) {
+        
+        if (result.success && result.isRemoteApproval) {
+          setIsRemoteApprovalSuccess(true);
+        } else if (!result.success && result.error) {
           setError(result.error);
         }
+        
         setLoading(false);
       }
     };
@@ -149,6 +154,21 @@ export default function AuthPage() {
     }
     processMagicLink(email);
   };
+
+  // RENDER: Remote Approval Success View
+  if (isRemoteApprovalSuccess) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>✅</div>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.5rem' }}>Login Approved!</h3>
+          <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.5' }}>
+            You have successfully authorized your original device. You can safely close this window.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // RENDER: Forgot Password View
   if (isResettingPassword) {

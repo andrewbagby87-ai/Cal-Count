@@ -15,12 +15,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
         try {
+          // 1. Await the profile FIRST
           const profile = await getUserProfile(currentUser.uid);
+          
+          // 2. Set them both together so React batches the update
           setUserProfile(profile);
+          setUser(currentUser);
         } catch (error) {
           console.error('Error fetching user profile:', error);
+          // Fallback just in case the profile fetch completely fails
+          setUser(currentUser); 
         }
       } else {
         setUser(null);
@@ -31,7 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return unsubscribe;
   }, []);
-
+  
   const logout = async () => {
     try {
       await signOut(auth);
