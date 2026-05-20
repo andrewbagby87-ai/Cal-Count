@@ -46,10 +46,7 @@ const formatDateDisplay = (dateString: string) => {
 
 export default function CreateFoodModal({ onCreated, onClose, initialDate, isVitaminMode, initialUpc, isRecipeIngredientMode, onIngredientCalculated, initialMealType, foods = [] }: Props) {
   useEffect(() => {
-    // Lock background scrolling when modal mounts
     document.body.style.overflow = 'hidden';
-    
-    // Restore scrolling when modal unmounts
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -59,7 +56,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [step, setStep] = useState<'form' | 'meal'>('form');
   
   const [formData, setFormData] = useState({
-    name: '', brand: '', icon: '', upc: initialUpc || '', calories: '', fat: '', saturatedFat: '',
+    name: '', brand: '', icon: '', 
+    upcs: initialUpc ? [initialUpc] : [''], 
+    calories: '', fat: '', saturatedFat: '',
     transFat: '', cholesterol: '', sodium: '', carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
     labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
@@ -99,11 +98,35 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
+  // Array Handlers with adjusted limits (allow up to 13 for EAN-13 barcodes)
+  const handleUpcChange = (index: number, value: string) => {
+    if (value !== '' && !/^\d*$/.test(value)) return;
+    if (value.length > 13) return; 
+    setFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs[index] = value;
+      return { ...prev, upcs: newUpcs };
+    });
+  };
+
+  const addUpcInput = () => {
+    setFormData(prev => ({ ...prev, upcs: [...prev.upcs, ''] }));
+  };
+
+  const removeUpcInput = (index: number) => {
+    setFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs.splice(index, 1);
+      if (newUpcs.length === 0) newUpcs.push('');
+      return { ...prev, upcs: newUpcs };
+    });
+  };
+
   const handleScanSuccess = async (code: string) => {
     if (!user) return;
     try {
       const existingFoods = await getUserFoods(user.uid);
-      const isDuplicate = existingFoods.some(f => f.upc === code);
+      const isDuplicate = existingFoods.some(f => f.upc === code || f.upcs?.includes(code));
 
       if (isDuplicate) {
         setError('A food with this barcode already exists in your database!');
@@ -111,21 +134,27 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         return;
       }
 
-      setFormData(prev => ({ ...prev, upc: code }));
+      setFormData(prev => {
+        const newUpcs = [...prev.upcs];
+        const emptyIdx = newUpcs.findIndex(u => u.trim() === '');
+        if (emptyIdx >= 0) {
+          newUpcs[emptyIdx] = code;
+        } else {
+          newUpcs.push(code);
+        }
+        return { ...prev, upcs: newUpcs };
+      });
       setError(''); 
       setIsScannerOpen(false); 
     } catch (err) {
       console.error("Failed to verify UPC:", err);
-      setFormData(prev => ({ ...prev, upc: code }));
       setIsScannerOpen(false); 
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
-    if (name === 'upc' && value.length > 12) return; 
-    if (name !== 'name' && name !== 'brand' && name !== 'upc' && name !== 'icon' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
+    if (name !== 'name' && name !== 'brand' && name !== 'icon' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -159,7 +188,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     const target = e.target as HTMLInputElement;
     const name = target.name;
     
-    // Handle Checkbox
     if (target.type === 'checkbox') {
       setLogDetails(prev => ({ ...prev, [name]: target.checked }));
       return;
@@ -170,7 +198,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     
     setLogDetails(prev => {
       const updates: any = { [name]: value };
-      // Auto-plan if the date selected is in the future
       if (name === 'date') {
         updates.isPlanned = value > getLocalTodayString();
       }
@@ -189,15 +216,17 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
     
-    const upcLength = formData.upc.trim().length;
-    if (formData.upc.trim() && upcLength !== 8 && upcLength !== 12) { 
-      setError('UPC must be exactly 8 or 12 digits'); 
-      return; 
-    }
-    
-    if (formData.upc.trim() && foods.some(f => f.upc === formData.upc.trim())) { 
-      setError('This UPC is already used by another item in your database.'); 
-      return; 
+    // UPDATED VALIDATION LOGIC
+    const validUpcs = formData.upcs.map(u => u.trim()).filter(u => u !== '');
+    for (const upc of validUpcs) {
+      if (upc.length !== 8 && upc.length !== 12 && upc.length !== 13) {
+        setError('UPCs must be exactly 8, 12, or 13 digits');
+        return;
+      }
+      if (foods.some(f => f.upc === upc || f.upcs?.includes(upc))) {
+        setError('One of the UPCs is already used by another item in your database.');
+        return;
+      }
     }
     
     if (!formData.calories) { setError('Calories is required'); return; }
@@ -278,12 +307,15 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       const validVolumes = formData.labelVolumes
         .filter(v => v.amount.trim() !== '' && !isNaN(parseFloat(v.amount)))
         .map(v => ({ amount: Number(parseFloat(v.amount).toFixed(2)), unit: v.unit }));
+        
+      const validUpcs = formData.upcs.map(u => u.trim()).filter(u => u !== '');
 
       const baseNutrition: any = {
         name: formData.name.trim(),
         brand: formData.brand.trim() || undefined,
         icon: formData.icon.trim() || undefined, 
-        upc: formData.upc.trim() || undefined,
+        upcs: validUpcs.length > 0 ? validUpcs : undefined,
+        upc: validUpcs.length > 0 ? validUpcs[0] : undefined, // Compatibility
         calories: safeParse(formData.calories) || 0,
         fat: safeParse(formData.fat),
         saturatedFat: safeParse(formData.saturatedFat),
@@ -305,14 +337,11 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         baseNutrition.volumeUnit = validVolumes[0].unit;
       }
 
-      // If we are NOT calculating a recipe ingredient, instantly close the 
-      // modal to free the user's screen while we do database work
       if (!isRecipeIngredientMode) onClose();
 
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
       const newFoodId = await createFood(user.uid, cleanBaseNutrition);
 
-      // --- TRIGGER AUTO REFRESH ---
       window.dispatchEvent(new Event('foodLibraryChanged'));
 
       const calcConsumed = (val: string) => {
@@ -497,16 +526,23 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
             </div>
 
             <div className="form-group">
-              <label htmlFor="upc">UPC / Barcode (Optional)</label>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-                <input 
-                  id="upc" type="text" name="upc" value={formData.upc} onChange={handleChange} placeholder="e.g., 012345678901" style={{ flex: 1, margin: 0 }} 
-                />
-                <button 
-                  type="button" className="btn btn-secondary" onClick={() => setIsScannerOpen(true)}
-                  style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}
-                  title="Scan Barcode"
-                >
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>UPC / Barcodes (Optional)</label>
+              {formData.upcs.map((upc, index) => (
+                <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch', marginBottom: '0.5rem' }}>
+                  <input 
+                    type="text" value={upc} onChange={(e) => handleUpcChange(index, e.target.value)} 
+                    placeholder="e.g., 012345678901" style={{ flex: 1, margin: 0 }} 
+                  />
+                  {formData.upcs.length > 1 && (
+                     <button type="button" onClick={() => removeUpcInput(index)} style={{ padding: '0 1rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>X</button>
+                  )}
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={addUpcInput} style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem' }}>
+                  + Add UPC
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsScannerOpen(true)} style={{ padding: '0 1rem', fontSize: '1.2rem', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Scan Barcode">
                   📷
                 </button>
               </div>

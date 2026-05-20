@@ -14,7 +14,8 @@ import {
   addDoc,
   arrayUnion,
   arrayRemove,
-  runTransaction // <--- FIXED: Added runTransaction here
+  runTransaction, 
+  deleteField // <--- NEW: Added deleteField here
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -100,7 +101,16 @@ export async function getUserFoods(userId: string): Promise<Food[]> {
 
 export async function updateFood(id: string, updates: Partial<Food>) {
   const docRef = doc(db, 'foods', id);
-  await updateDoc(docRef, updates);
+  
+  // Convert explicit nulls to deleteField() so Firebase actually deletes the field instead of ignoring it
+  const processedUpdates: any = { ...updates };
+  Object.keys(processedUpdates).forEach(key => {
+    if (processedUpdates[key] === null) {
+      processedUpdates[key] = deleteField();
+    }
+  });
+
+  await updateDoc(docRef, processedUpdates);
 }
 
 export async function deleteFood(id: string) {
@@ -135,7 +145,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs); // <--- FIXED: Removed "else" keyword
+      if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
     console.warn("Could not fetch all foodLogs array:", e);
@@ -168,7 +178,7 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
     if (exactDoc.exists()) {
       const data = exactDoc.data();
       if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs); // <--- FIXED: Removed "else" keyword
+      if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
     console.warn("Could not fetch exact foodLogs doc:", e);
@@ -208,7 +218,6 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
   const cleanUpdates = JSON.parse(JSON.stringify(updates));
 
   try {
-    // <--- FIXED: Added runTransaction to queue up fast clicks safely
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
 
@@ -259,7 +268,6 @@ export async function deleteFoodLog(userId: string, id: string) {
   const docRef = doc(db, 'foodLogs', userId);
 
   try {
-    // <--- FIXED: Added runTransaction to queue up fast deletes safely
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
 
@@ -482,7 +490,6 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     return log;
   };
 
-  // <--- FIXED: Removed the 'else' keyword here as well
   if (data.foodData) {
     updated = false;
     const newFoodData = data.foodData.map(recalculateLog);

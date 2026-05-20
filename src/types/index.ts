@@ -1,3 +1,4 @@
+// src/types/index.ts
 export interface User {
   uid: string;
   email: string;
@@ -25,7 +26,7 @@ export interface UserProfile {
   trackSaturatedFat?: boolean;
   trackCarbs?: boolean;
   trackSugar?: boolean;
-  trackVitamins?: boolean; // NEW
+  trackVitamins?: boolean; 
   
   createdAt: Date | number | string;
   updatedAt?: Date | number | string;
@@ -50,6 +51,7 @@ export interface Food {
   brand?: string;
   icon?: string;
   upc?: string;
+  upcs?: string[]; // <--- NEW: Support for multiple UPCs
   calories: number;
   protein?: number;
   fiber?: number;

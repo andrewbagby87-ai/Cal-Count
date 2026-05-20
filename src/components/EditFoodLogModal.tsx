@@ -43,10 +43,7 @@ const formatDateDisplay = (dateString: string) => {
 export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLabelSaved }: Props) {
   
   useEffect(() => {
-    // Lock background scrolling when modal mounts
     document.body.style.overflow = 'hidden';
-    
-    // Restore scrolling when modal unmounts
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -55,17 +52,20 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const { user } = useAuth();
   const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
 
-  // Detect if this is a "Quick Add Calories" log
   const isQuickAddLog = log.foodId?.startsWith('quick-add-') || log.food?.id?.startsWith('quick-add-');
 
   const [localFood, setLocalFood] = useState<Food>(log.food as any);
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
+  
+  const initialUpcs = (localFood.upcs && localFood.upcs.length > 0) 
+    ? [...localFood.upcs] 
+    : (localFood.upc ? [localFood.upc] : ['']);
 
   const [editFormData, setEditFormData] = useState({
     name: localFood.name || '',
     brand: localFood.brand || '',
     icon: localFood.icon || '',
-    upc: (localFood as any).upc || '',
+    upcs: initialUpcs, 
     labelServings: toStr(localFood.servingSize ?? 1),
     labelVolumes: (localFood.volumes && localFood.volumes.length > 0) 
       ? localFood.volumes.map((v: any) => ({ amount: toStr(v.amount), unit: v.unit })) 
@@ -126,7 +126,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const originalDate = log.date || getLocalTodayString();
   const isCurrentDateDone = isDoneDay && logDetails.date === originalDate;
 
-// --- Handlers for "Quick Add" Edit View ---
+  // --- Handlers for "Quick Add" Edit View ---
   const handleQuickAddSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -140,16 +140,14 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
     setLoading(true);
     try {
-      const updatedFood = {
+      const updatedFood: any = {
         ...localFood,
         name: editFormData.name.trim(),
-        icon: editFormData.icon || undefined,
+        icon: editFormData.icon.trim() === '' ? null : editFormData.icon.trim(),
         calories: cals
       };
 
-      // By completely omitting 'editedNutrition' here, we satisfy both
-      // TypeScript (because it's a Partial) and Firebase (no undefined values)
-      const cleanFirebasePayload: Partial<FoodLog> = {
+      const rawFirebasePayload: any = {
         date: logDetails.date,
         mealType: logDetails.mealType,
         isPlanned: logDetails.isPlanned,
@@ -157,13 +155,16 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
         calories: cals
       };
 
+      const cleanFirebasePayload = Object.fromEntries(
+        Object.entries(rawFirebasePayload).filter(([_, v]) => v !== undefined)
+      );
+
       onSave(cleanFirebasePayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }
   };
-
 
   // --- Reusable Logic for Saving normal Log Details to DB ---
   const processLogSave = async (foodObj: Food, details: typeof logDetails, shouldClose: boolean = true) => {
@@ -194,8 +195,8 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       finalUnit = selectedVol.unit; 
     }
 
-    const calcConsumed = (val: number | undefined) => {
-      if (val === undefined || isNaN(val)) return undefined;
+    const calcConsumed = (val: number | undefined | null) => {
+      if (val === undefined || val === null || isNaN(val)) return null;
       return Number((val * multiplier).toFixed(2));
     };
 
@@ -212,7 +213,9 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       protein: calcConsumed(foodObj.protein),
     };
 
-    const cleanConsumedNutrition = Object.fromEntries(Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined));
+    const cleanConsumedNutrition = Object.fromEntries(
+      Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
+    );
 
     const rawPayload: any = {
       date: details.date,
@@ -245,11 +248,15 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   };
 
   const handleEditClick = () => {
+    const currentUpcs = (localFood.upcs && localFood.upcs.length > 0) 
+      ? [...localFood.upcs] 
+      : (localFood.upc ? [localFood.upc] : ['']);
+      
     setEditFormData({
       name: localFood.name || '',
       brand: localFood.brand || '',
       icon: localFood.icon || '',
-      upc: (localFood as any).upc || '',
+      upcs: currentUpcs,
       calories: localFood.calories?.toString() || '',
       fat: localFood.fat?.toString() || '',
       saturatedFat: localFood.saturatedFat?.toString() || '',
@@ -270,12 +277,33 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
-    if (name === 'upc' && value.length > 12) return; 
-    if (name !== 'name' && name !== 'brand' && name !== 'upc' && name !== 'icon') {
+    if (name !== 'name' && name !== 'brand' && name !== 'icon') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setEditFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleUpcChange = (index: number, value: string) => {
+    if (value !== '' && !/^\d*$/.test(value)) return;
+    if (value.length > 13) return;
+    setEditFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs[index] = value;
+      return { ...prev, upcs: newUpcs };
+    });
+  };
+
+  const addUpcInput = () => {
+    setEditFormData(prev => ({ ...prev, upcs: [...prev.upcs, ''] }));
+  };
+
+  const removeUpcInput = (index: number) => {
+    setEditFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs.splice(index, 1);
+      if (newUpcs.length === 0) newUpcs.push('');
+      return { ...prev, upcs: newUpcs };
+    });
   };
 
   const handleEditVolumeChange = (index: number, field: 'amount' | 'unit', value: string) => {
@@ -312,24 +340,38 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     setError('');
 
     if (!editFormData.name.trim()) { setError('Name is required'); return; }
+    
+    const validUpcs = editFormData.upcs.map(u => u.trim()).filter(u => u !== '');
+    for (const upc of validUpcs) {
+      if (upc.length !== 8 && upc.length !== 12 && upc.length !== 13) {
+        setError('UPCs must be exactly 8, 12, or 13 digits');
+        return;
+      }
+    }
+
     if (!editFormData.calories) { setError('Calories is required'); return; }
 
     const safeParse = (val: string) => {
-      if (!val) return undefined;
+      if (!val || val.trim() === '') return null;
       const parsed = parseFloat(val);
-      return isNaN(parsed) ? undefined : Number(parsed.toFixed(2));
+      return isNaN(parsed) ? null : Number(parsed.toFixed(2));
     };
 
     const validVolumes = editFormData.labelVolumes
-      .filter(v => v.amount.trim() !== '')
-      .map(v => ({ amount: safeParse(v.amount)!, unit: v.unit }));
-
-    const updatedFood: Food = {
+      .filter(v => {
+        const parsed = parseFloat(v.amount);
+        return v.amount.trim() !== '' && !isNaN(parsed);
+      })
+      .map(v => ({ amount: parseFloat(v.amount), unit: v.unit }));
+      
+    // Set explicit nulls so updateDoc converts them to deleteField()
+    const updatedFood: any = {
       ...localFood,
-      name: editFormData.name.trim() || localFood.name,
-      brand: editFormData.brand.trim() || localFood.brand,
-      icon: editFormData.icon.trim() || undefined,
-      upc: editFormData.upc.trim() || undefined,
+      name: editFormData.name.trim(),
+      brand: editFormData.brand.trim() === '' ? null : editFormData.brand.trim(),
+      icon: editFormData.icon.trim() === '' ? null : editFormData.icon.trim(),
+      upcs: validUpcs.length > 0 ? validUpcs : null,
+      upc: validUpcs.length > 0 ? validUpcs[0] : null,
       calories: safeParse(editFormData.calories) || 0,
       fat: safeParse(editFormData.fat),
       saturatedFat: safeParse(editFormData.saturatedFat),
@@ -341,13 +383,14 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       sugar: safeParse(editFormData.sugar),
       protein: safeParse(editFormData.protein),
       servingSize: parseFloat(editFormData.labelServings) || 1,
-      volumes: validVolumes.length > 0 ? validVolumes : undefined,
+      volumes: validVolumes.length > 0 ? validVolumes : null,
     };
 
     if (!user) return;
 
     try {
       setLoading(true);
+      
       const cleanFirebasePayload = Object.fromEntries(
         Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
       );
@@ -376,7 +419,6 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       setError('');
       await processLogSave(updatedFood, safeDetails, false);
 
-      // Force background menus and lists to sync instantly while modal is still open
       window.dispatchEvent(new Event('foodLibraryChanged'));
       window.dispatchEvent(new Event('foodDataChanged'));
 
@@ -429,8 +471,8 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       }
     }
 
-    const calc = (val: number | undefined) => {
-      if (val === undefined || isNaN(val)) return 0;
+    const calc = (val: number | undefined | null) => {
+      if (val === undefined || val === null || isNaN(val)) return 0;
       return Number((val * multiplier).toFixed(1));
     };
 
@@ -674,10 +716,25 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label htmlFor="upc" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>UPC / Barcode (Optional)</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-                    <input id="upc" type="text" name="upc" value={editFormData.upc} onChange={handleEditChange} style={{ flex: 1, minWidth: 0, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
-                    <button type="button" className="btn btn-secondary" onClick={() => setIsEditScannerOpen(true)} style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}>📷</button>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>UPC / Barcodes (Optional)</label>
+                  {editFormData.upcs.map((upc, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch', marginBottom: '0.5rem' }}>
+                      <input 
+                        type="text" value={upc} onChange={(e) => handleUpcChange(index, e.target.value)} 
+                        style={{ flex: 1, minWidth: 0, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} 
+                      />
+                      {editFormData.upcs.length > 1 && (
+                         <button type="button" onClick={() => removeUpcInput(index)} style={{ padding: '0 1rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>X</button>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={addUpcInput} style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem', margin: 0 }}>
+                      + Add UPC
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsEditScannerOpen(true)} style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}>
+                      📷
+                    </button>
                   </div>
                 </div>
 
@@ -748,7 +805,19 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
             </form>
 
             {isEditScannerOpen && (
-              <BarcodeScanner onClose={() => setIsEditScannerOpen(false)} onScanSuccess={(code) => { setEditFormData(prev => ({ ...prev, upc: code })); setIsEditScannerOpen(false); }} />
+              <BarcodeScanner 
+                onClose={() => setIsEditScannerOpen(false)} 
+                onScanSuccess={(code) => { 
+                  setEditFormData(prev => {
+                    const newUpcs = [...prev.upcs];
+                    const emptyIdx = newUpcs.findIndex(u => u.trim() === '');
+                    if (emptyIdx >= 0) newUpcs[emptyIdx] = code;
+                    else newUpcs.push(code);
+                    return { ...prev, upcs: newUpcs };
+                  });
+                  setIsEditScannerOpen(false); 
+                }} 
+              />
             )}
           </div>
         ) : (
