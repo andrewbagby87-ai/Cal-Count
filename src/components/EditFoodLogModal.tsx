@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { FoodLog, Food } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import { useAuth } from '../contexts/AuthContext';
-import { updateAllPastLogsForFood, updateFood, updateFoodLog } from '../services/database';
+import { updateAllPastLogsForFood, updateFood, updateFoodLog, getUserFoods } from '../services/database';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
 import './CreateFoodModal.css';
@@ -56,6 +56,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
   const [localFood, setLocalFood] = useState<Food>(log.food as any);
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
+  const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
   
   const initialUpcs = (localFood.upcs && localFood.upcs.length > 0) 
     ? [...localFood.upcs] 
@@ -63,6 +64,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
   const [editFormData, setEditFormData] = useState({
     name: localFood.name || '',
+    flavor: localFood.flavor || '',
     brand: localFood.brand || '',
     icon: localFood.icon || '',
     upcs: initialUpcs, 
@@ -86,6 +88,18 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
   const [iconSearch, setIconSearch] = useState('');
   const iconPickerRef = useRef<HTMLDivElement>(null);
   const [isEditScannerOpen, setIsEditScannerOpen] = useState(false);
+
+  // Auto-complete States
+  const [allFoods, setAllFoods] = useState<Food[]>([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<Food | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      getUserFoods(user.uid).then(setAllFoods).catch(console.error);
+    }
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -254,6 +268,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       
     setEditFormData({
       name: localFood.name || '',
+      flavor: localFood.flavor || '',
       brand: localFood.brand || '',
       icon: localFood.icon || '',
       upcs: currentUpcs,
@@ -277,7 +292,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name !== 'name' && name !== 'brand' && name !== 'icon') {
+    if (name !== 'name' && name !== 'brand' && name !== 'icon' && name !== 'flavor') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setEditFormData(prev => ({ ...prev, [name]: value }));
@@ -364,10 +379,10 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       })
       .map(v => ({ amount: parseFloat(v.amount), unit: v.unit }));
       
-    // Set explicit nulls so updateDoc converts them to deleteField()
     const updatedFood: any = {
       ...localFood,
       name: editFormData.name.trim(),
+      flavor: editFormData.flavor.trim() === '' ? null : editFormData.flavor.trim(),
       brand: editFormData.brand.trim() === '' ? null : editFormData.brand.trim(),
       icon: editFormData.icon.trim() === '' ? null : editFormData.icon.trim(),
       upcs: validUpcs.length > 0 ? validUpcs : null,
@@ -492,6 +507,43 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
+  };
+
+  // Auto-complete Logic
+  const nameSuggestions = editFormData.name.length > 1
+    ? allFoods.filter(f => f.name.toLowerCase().includes(editFormData.name.toLowerCase()) && f.id !== localFood.id).slice(0, 5)
+    : [];
+
+  const uniqueBrands = Array.from(new Set(allFoods.map(f => f.brand).filter(b => b && b.trim() !== '')));
+  const brandSuggestions = editFormData.brand.length > 0
+    ? uniqueBrands.filter(b => b && b.toLowerCase().includes(editFormData.brand.toLowerCase())).slice(0, 5)
+    : [];
+
+  const uniqueFlavors = Array.from(new Set(allFoods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
+  const flavorSuggestions = editFormData.flavor.length > 0
+    ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(editFormData.flavor.toLowerCase())).slice(0, 5)
+    : [];
+
+  const processSelection = (action: 'swap' | 'copy') => {
+    if (!pendingSelection) return;
+    const food = pendingSelection;
+
+    if (action === 'swap') {
+      setLocalFood(food);
+      setIsEditingNutrition(false); // Go back to log details to swap it
+    } else {
+      const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
+      setEditFormData(prev => ({
+        ...prev,
+        name: food.name, brand: food.brand || '', icon: food.icon || '',
+        calories: toStr(food.calories), fat: toStr(food.fat), saturatedFat: toStr(food.saturatedFat),
+        transFat: toStr(food.transFat), cholesterol: toStr(food.cholesterol), sodium: toStr(food.sodium),
+        carbs: toStr(food.carbs), fiber: toStr(food.fiber), sugar: toStr(food.sugar), protein: toStr(food.protein),
+        labelServings: toStr(food.servingSize || 1),
+        labelVolumes: (food.volumes && food.volumes.length > 0) ? food.volumes.map(v => ({ amount: toStr(v.amount), unit: v.unit })) : [{ amount: '', unit: 'g' }]
+      }));
+    }
+    setPendingSelection(null);
   };
 
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
@@ -661,14 +713,83 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
             {/* Scrollable Form Body with Sticky Footer wrapper */}
             <form onSubmit={handleSaveNutritionForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', overflowX: 'hidden' }}>
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                
+            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
                   <label htmlFor="name" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>{localFood.isVitamin ? 'Vitamin Name *' : 'Food Name *'}</label>
-                  <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required />
+                  <input 
+                    id="name" type="text" name="name" value={editFormData.name} 
+                    onChange={(e) => { handleEditChange(e); setShowNameSuggestions(true); }} 
+                    onFocus={() => setShowNameSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
+                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required 
+                    autoComplete="off"
+                  />
+                  {showNameSuggestions && nameSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                      {nameSuggestions.map(f => (
+                        <div 
+                          key={f.id} 
+                          onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
+                          style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {f.icon && <Icon icon={f.icon} size="1.2rem" />}
+                            <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>{f.name}</span>
+                          </div>
+                          {f.brand ? (
+                            <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{f.brand}</span>
+                          ) : (f as any).isRecipe ? (
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                              RECIPE
+                            </span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
+                  <label htmlFor="flavor" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Flavor / Type (Optional)</label>
+                  <input 
+                    id="flavor" type="text" name="flavor" value={editFormData.flavor} 
+                    onChange={(e) => { handleEditChange(e); setShowFlavorSuggestions(true); }} 
+                    onFocus={() => setShowFlavorSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowFlavorSuggestions(false), 200)}
+                    placeholder="e.g., Chocolate, Spicy, Roasted"
+                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} 
+                    autoComplete="off"
+                  />
+                  {showFlavorSuggestions && flavorSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                      {flavorSuggestions.map((f, i) => (
+                        <div key={i} onClick={() => { setEditFormData(prev => ({...prev, flavor: f as string})); setShowFlavorSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b', textTransform: 'capitalize' }}>
+                          {f}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
                   <label htmlFor="brand" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Brand (Optional)</label>
-                  <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                  <input 
+                    id="brand" type="text" name="brand" value={editFormData.brand} 
+                    onChange={(e) => { handleEditChange(e); setShowBrandSuggestions(true); }} 
+                    onFocus={() => setShowBrandSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowBrandSuggestions(false), 200)}
+                    style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} 
+                    autoComplete="off"
+                  />
+                  {showBrandSuggestions && brandSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                      {brandSuggestions.map((b, i) => (
+                        <div key={i} onClick={() => { setEditFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b' }}>
+                          {b}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }} ref={iconPickerRef}>
@@ -1030,6 +1151,38 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
           </div>
         )}
       </div>
+
+      {/* NEW: Custom Auto-Suggest Modal Overlay */}
+      {pendingSelection && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 10000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem',
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '400px', backgroundColor: '#fff',
+            borderRadius: '1rem', padding: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', color: '#1e293b', fontSize: '1.25rem' }}>Food Already Exists</h3>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', margin: '0 0 1.5rem 0', lineHeight: '1.5' }}>
+              <strong>"{pendingSelection.name}"</strong> is already in your database. What would you like to do?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button type="button" onClick={() => processSelection('swap')} style={{ padding: '0.85rem', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Swap to Existing Food
+              </button>
+              <button type="button" onClick={() => processSelection('copy')} style={{ padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Copy Nutrition Instead
+              </button>
+              <button type="button" onClick={() => setPendingSelection(null)} style={{ padding: '0.85rem', background: 'none', color: '#94a3b8', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

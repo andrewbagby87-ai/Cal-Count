@@ -54,6 +54,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [localFoods, setLocalFoods] = useState<Food[]>([]);
   const [selectedFood, setSelectedFood] = useState<Food | null>(initialFood || null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
+  const [flavorSearch, setFlavorSearch] = useState('');
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -84,6 +87,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<Food | null>(null);
 
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddData, setQuickAddData] = useState({ name: '', icon: '', calories: '' });
@@ -157,7 +163,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const [isEditingNutrition, setIsEditingNutrition] = useState(false);
   const [editFormData, setEditFormData] = useState({
-    name: '', brand: '', icon: '', upc: '', calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
+    name: '', flavor: '', brand: '', icon: '', upcs: [''], calories: '', fat: '', saturatedFat: '', transFat: '', cholesterol: '', sodium: '',
     carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
     labelVolumes: [{ amount: '', unit: 'g' }] as { amount: string, unit: string }[],
   });
@@ -287,11 +293,17 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       onEditRecipe(selectedFood);
       return;
     }
+    
+    const currentUpcs = (selectedFood.upcs && selectedFood.upcs.length > 0) 
+      ? [...selectedFood.upcs] 
+      : (selectedFood.upc ? [selectedFood.upc] : ['']);
+
     setEditFormData({
       name: selectedFood.name || '',
+      flavor: selectedFood.flavor || '',
       brand: selectedFood.brand || '',
       icon: selectedFood.icon || '',
-      upc: (selectedFood as any).upc || '',
+      upcs: currentUpcs,
       calories: selectedFood.calories?.toString() || '',
       fat: selectedFood.fat?.toString() || '',
       saturatedFat: selectedFood.saturatedFat?.toString() || '',
@@ -312,12 +324,33 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'upc' && value !== '' && !/^\d*$/.test(value)) return;
-    if (name === 'upc' && value.length > 12) return; 
-    if (name !== 'name' && name !== 'brand' && name !== 'upc' && name !== 'icon') {
+    if (name !== 'name' && name !== 'brand' && name !== 'icon' && name !== 'flavor') {
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     }
     setEditFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleUpcChange = (index: number, value: string) => {
+    if (value !== '' && !/^\d*$/.test(value)) return;
+    if (value.length > 13) return;
+    setEditFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs[index] = value;
+      return { ...prev, upcs: newUpcs };
+    });
+  };
+
+  const addUpcInput = () => {
+    setEditFormData(prev => ({ ...prev, upcs: [...prev.upcs, ''] }));
+  };
+
+  const removeUpcInput = (index: number) => {
+    setEditFormData(prev => {
+      const newUpcs = [...prev.upcs];
+      newUpcs.splice(index, 1);
+      if (newUpcs.length === 0) newUpcs.push('');
+      return { ...prev, upcs: newUpcs };
+    });
   };
 
   const handleEditVolumeChange = (index: number, field: 'amount' | 'unit', value: string) => {
@@ -355,6 +388,15 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setError('');
 
     if (!editFormData.name.trim()) { setError('Name is required'); return; }
+    
+    const validUpcs = editFormData.upcs.map(u => u.trim()).filter(u => u !== '');
+    for (const upc of validUpcs) {
+      if (upc.length !== 8 && upc.length !== 12 && upc.length !== 13) {
+        setError('UPCs must be exactly 8, 12, or 13 digits');
+        return;
+      }
+    }
+
     if (!editFormData.calories) { setError('Calories is required'); return; }
 
     const safeParse = (val: string) => {
@@ -367,12 +409,14 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       .filter(v => v.amount.trim() !== '')
       .map(v => ({ amount: safeParse(v.amount)!, unit: v.unit }));
 
-    const updatedFood: Food = {
+    const updatedFood: any = {
       ...selectedFood,
-      name: editFormData.name.trim() || selectedFood.name,
-      brand: editFormData.brand.trim() || selectedFood.brand,
-      icon: editFormData.icon.trim() || undefined,
-      upc: editFormData.upc.trim() || undefined,
+      name: editFormData.name.trim(),
+      flavor: editFormData.flavor.trim() === '' ? null : editFormData.flavor.trim(),
+      brand: editFormData.brand.trim() === '' ? null : editFormData.brand.trim(),
+      icon: editFormData.icon.trim() === '' ? null : editFormData.icon.trim(),
+      upcs: validUpcs.length > 0 ? validUpcs : null,
+      upc: validUpcs.length > 0 ? validUpcs[0] : null, // Fallback for backwards compatibility
       calories: safeParse(editFormData.calories) || 0,
       fat: safeParse(editFormData.fat),
       saturatedFat: safeParse(editFormData.saturatedFat),
@@ -384,7 +428,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       sugar: safeParse(editFormData.sugar),
       protein: safeParse(editFormData.protein),
       servingSize: parseFloat(editFormData.labelServings) || 1,
-      volumes: validVolumes.length > 0 ? validVolumes : undefined,
+      volumes: validVolumes.length > 0 ? validVolumes : null,
     };
 
     try {
@@ -678,6 +722,44 @@ try {
   };
 
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
+
+  // Auto-complete Logic
+  const uniqueBrands = Array.from(new Set(localFoods.map(f => f.brand).filter(b => b && b.trim() !== '')));
+  const brandSuggestions = editFormData.brand.length > 0
+    ? uniqueBrands.filter(b => b && b.toLowerCase().includes(editFormData.brand.toLowerCase())).slice(0, 5)
+    : [];
+
+  const uniqueFlavors = Array.from(new Set(localFoods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
+  const flavorSuggestions = editFormData.flavor.length > 0
+    ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(editFormData.flavor.toLowerCase())).slice(0, 5)
+    : [];
+
+  // Auto-complete Logic for Names & Duplicate Checking
+  const nameSuggestions = editFormData.name.length > 1
+    ? localFoods.filter(f => f.name.toLowerCase().includes(editFormData.name.toLowerCase()) && f.id !== selectedFood?.id).slice(0, 5)
+    : [];
+
+  const processSelection = (action: 'swap' | 'copy') => {
+    if (!pendingSelection) return;
+    const food = pendingSelection;
+
+    if (action === 'swap') {
+      setSelectedFood(food);
+      setIsEditingNutrition(false); // Go back to log details to swap it
+    } else {
+      const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
+      setEditFormData(prev => ({
+        ...prev,
+        name: food.name, flavor: food.flavor || '', brand: food.brand || '', icon: food.icon || '',
+        calories: toStr(food.calories), fat: toStr(food.fat), saturatedFat: toStr(food.saturatedFat),
+        transFat: toStr((food as any).transFat), cholesterol: toStr((food as any).cholesterol), sodium: toStr((food as any).sodium),
+        carbs: toStr(food.carbs), fiber: toStr(food.fiber), sugar: toStr(food.sugar), protein: toStr(food.protein),
+        labelServings: toStr(food.servingSize || 1),
+        labelVolumes: (food.volumes && food.volumes.length > 0) ? food.volumes.map(v => ({ amount: toStr(v.amount), unit: v.unit })) : [{ amount: '', unit: 'g' }]
+      }));
+    }
+    setPendingSelection(null);
+  };
 
   // --- FILTER & SORT LOGIC ---
   const processedFoods = localFoods.filter(food => {
@@ -1086,7 +1168,10 @@ try {
                   <div style={{ flex: 1, paddingRight: '2rem' }}>
                     <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
                       {food.icon && <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.4rem' }}><Icon icon={food.icon} size="1.2rem" /></div>}
-                      <span style={{ wordBreak: 'break-word' }}>{food.name}</span>
+                      <span style={{ wordBreak: 'break-word' }}>
+                        {food.name}
+                        {food.flavor && <span style={{ textTransform: 'capitalize', color: '#64748b', fontWeight: 400 }}> - {food.flavor}</span>}
+                      </span>
                     </div>
                     {food.brand ? (
                       <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>
@@ -1266,134 +1351,232 @@ try {
 
         {error && <div className="error">{error}</div>}
         
-        <form onSubmit={handleSaveNutritionForm}>
-          <div className="form-group">
-            <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
-            <input id="name" type="text" name="name" value={editFormData.name} onChange={handleEditChange} required />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="brand">Brand (Optional)</label>
-            <input id="brand" type="text" name="brand" value={editFormData.brand} onChange={handleEditChange} />
-          </div>
-
-          <div className="form-group" style={{ position: 'relative' }} ref={editIconPickerRef}>
-            <label htmlFor="icon">Icon / Emoji (Optional)</label>
-            <div 
-              onClick={() => setShowIconPicker(!showIconPicker)}
-              style={{ 
-                padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', color: editFormData.icon ? '#000' : '#94a3b8'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {editFormData.icon ? (
-                  <>
-                    <Icon icon={editFormData.icon} size="1.2rem" />
-                    <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span>
-                  </>
-                ) : "Select an Icon..."}
-              </div>
-              <span>▼</span>
-            </div>
-
-            {showIconPicker && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff',
-                border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                maxHeight: '250px', display: 'flex', flexDirection: 'column'
-              }}>
-                <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
-                  <input type="text" placeholder="Search icons..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ width: '100%', padding: '0.5rem', margin: 0, boxSizing: 'border-box' }} />
-                </div>
-                <div style={{ overflowY: 'auto', flex: 1 }}>
-                  <div onClick={() => { setEditFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
-                  {filteredIcons.map(item => (
-                    <div key={item.title} onClick={() => { setEditFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: editFormData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
-                      <Icon icon={item.icon} size="1.4rem" />
-                      <span>{item.title}</span>
+        <form onSubmit={handleSaveNutritionForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingRight: '0.25rem', overflowX: 'hidden' }}>
+            
+            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
+              <label htmlFor="name" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
+              <input 
+                id="name" type="text" name="name" value={editFormData.name} 
+                onChange={(e) => { handleEditChange(e); setShowNameSuggestions(true); }} 
+                onFocus={() => setShowNameSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
+                style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required 
+                autoComplete="off"
+              />
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {nameSuggestions.map(f => (
+                    <div 
+                      key={f.id} 
+                      onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
+                      style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {f.icon && <Icon icon={f.icon} size="1.2rem" />}
+                        <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>{f.name}</span>
+                      </div>
+                      {f.brand ? (
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{f.brand}</span>
+                      ) : (f as any).isRecipe ? (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                          RECIPE
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="upc">UPC / Barcode (Optional)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-              <input id="upc" type="text" name="upc" value={editFormData.upc} onChange={handleEditChange} style={{ flex: 1, margin: 0 }} />
-              <button type="button" className="btn btn-secondary" onClick={() => setIsEditScannerOpen(true)} style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}>📷</button>
+              )}
             </div>
-          </div>
 
-          <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
+            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
+              <label htmlFor="flavor" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Flavor / Type (Optional)</label>
+              <input 
+                id="flavor" type="text" name="flavor" value={editFormData.flavor} 
+                onChange={(e) => { handleEditChange(e); setShowFlavorSuggestions(true); }} 
+                onFocus={() => setShowFlavorSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowFlavorSuggestions(false), 200)}
+                placeholder="e.g., Chocolate, Spicy, Roasted"
+                style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} 
+                autoComplete="off"
+              />
+              {showFlavorSuggestions && flavorSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {flavorSuggestions.map((f, i) => (
+                    <div key={i} onClick={() => { setEditFormData(prev => ({...prev, flavor: f as string})); setShowFlavorSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b', textTransform: 'capitalize' }}>
+                      {f}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="labelServings">Number of Servings on Label *</label>
-            <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} required />
-          </div>
+            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
+              <label htmlFor="brand" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Brand (Optional)</label>
+              <input 
+                id="brand" type="text" name="brand" value={editFormData.brand} 
+                onChange={(e) => { handleEditChange(e); setShowBrandSuggestions(true); }} 
+                onFocus={() => setShowBrandSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowBrandSuggestions(false), 200)}
+                style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} 
+                autoComplete="off"
+              />
+              {showBrandSuggestions && brandSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {brandSuggestions.map((b, i) => (
+                    <div key={i} onClick={() => { setEditFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b' }}>
+                      {b}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <div className="form-group">
-            <label>Volume/Weight/Amount on Label (Optional)</label>
-            {editFormData.labelVolumes.map((vol, index) => {
-              const usedUnits = editFormData.labelVolumes.map(v => v.unit);
-              return (
-                <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    style={{ flex: 1 }}
-                    value={vol.amount}
-                    onChange={(e) => handleEditVolumeChange(index, 'amount', e.target.value)}
+            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }} ref={editIconPickerRef}>
+              <label htmlFor="icon" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Icon / Emoji (Optional)</label>
+              <div 
+                onClick={() => setShowIconPicker(!showIconPicker)}
+                style={{ 
+                  padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', color: editFormData.icon ? '#000' : '#94a3b8'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {editFormData.icon ? (
+                    <>
+                      <Icon icon={editFormData.icon} size="1.2rem" />
+                      <span style={{ color: '#000' }}>{FOOD_ICONS.find(i => i.icon === editFormData.icon)?.title || 'Custom Icon'}</span>
+                    </>
+                  ) : "Select an Icon..."}
+                </div>
+                <span>▼</span>
+              </div>
+
+              {showIconPicker && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff',
+                  border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  maxHeight: '250px', display: 'flex', flexDirection: 'column'
+                }}>
+                  <div style={{ padding: '8px', borderBottom: '1px solid #e2e8f0' }}>
+                    <input type="text" placeholder="Search icons..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ width: '100%', padding: '0.5rem', margin: 0, boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ overflowY: 'auto', flex: 1 }}>
+                    <div onClick={() => { setEditFormData(prev => ({...prev, icon: ''})); setShowIconPicker(false); }} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>❌ None</div>
+                    {filteredIcons.map(item => (
+                      <div key={item.title} onClick={() => { setEditFormData(prev => ({...prev, icon: item.icon})); setShowIconPicker(false); setIconSearch(''); }} style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: editFormData.icon === item.icon ? '#f1f5f9' : 'transparent' }}>
+                        <Icon icon={item.icon} size="1.4rem" />
+                        <span>{item.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>UPC / Barcodes (Optional)</label>
+              {editFormData.upcs.map((upc, index) => (
+                <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch', marginBottom: '0.5rem' }}>
+                  <input 
+                    type="text" value={upc} onChange={(e) => handleUpcChange(index, e.target.value)} 
+                    style={{ flex: 1, minWidth: 0, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} 
                   />
-                  <select
-                    style={{ width: 'auto', padding: '0.75rem' }}
-                    value={vol.unit}
-                    onChange={(e) => handleEditVolumeChange(index, 'unit', e.target.value)}
-                  >
-                    <option value="g" disabled={usedUnits.includes('g') && vol.unit !== 'g'}>Grams (g)</option>
-                    <option value="oz" disabled={usedUnits.includes('oz') && vol.unit !== 'oz'}>Ounces (oz)</option>
-                    <option value="cup" disabled={usedUnits.includes('cup') && vol.unit !== 'cup'}>Cup(s)</option>
-                    <option value="ml" disabled={usedUnits.includes('ml') && vol.unit !== 'ml'}>Milliliters (ml)</option>
-                    <option value="each" disabled={usedUnits.includes('each') && vol.unit !== 'each'}>Each</option>
-                  </select>
-                  {editFormData.labelVolumes.length > 1 && (
-                    <button type="button" onClick={() => removeEditVolume(index)} style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}>X</button>
+                  {editFormData.upcs.length > 1 && (
+                     <button type="button" onClick={() => removeUpcInput(index)} style={{ padding: '0 1rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>X</button>
                   )}
                 </div>
-              );
-            })}
-            {editFormData.labelVolumes.length < ALL_UNITS.length && (
-              <button type="button" onClick={addEditVolume} style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}>+ Add Another Option</button>
-            )}
+              ))}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={addUpcInput} style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem', margin: 0 }}>
+                  + Add UPC
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsEditScannerOpen(true)} style={{ padding: '0', width: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0, margin: 0 }}>
+                  📷
+                </button>
+              </div>
+            </div>
+
+            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
+
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label htmlFor="labelServings" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Number of Servings on Label *</label>
+              <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem' }}>Volume/Weight/Amount on Label (Optional)</label>
+              {editFormData.labelVolumes.map((vol, index) => {
+                const usedUnits = editFormData.labelVolumes.map(v => v.unit);
+                return (
+                  <div key={index} className="form-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      style={{ flex: 1, minWidth: 0, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                      value={vol.amount}
+                      onChange={(e) => handleEditVolumeChange(index, 'amount', e.target.value)}
+                    />
+                    <select
+                      style={{ width: 'auto', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}
+                      value={vol.unit}
+                      onChange={(e) => handleEditVolumeChange(index, 'unit', e.target.value)}
+                    >
+                      <option value="g" disabled={usedUnits.includes('g') && vol.unit !== 'g'}>Grams (g)</option>
+                      <option value="oz" disabled={usedUnits.includes('oz') && vol.unit !== 'oz'}>Ounces (oz)</option>
+                      <option value="cup" disabled={usedUnits.includes('cup') && vol.unit !== 'cup'}>Cup(s)</option>
+                      <option value="ml" disabled={usedUnits.includes('ml') && vol.unit !== 'ml'}>Milliliters (ml)</option>
+                      <option value="each" disabled={usedUnits.includes('each') && vol.unit !== 'each'}>Each</option>
+                    </select>
+                    {editFormData.labelVolumes.length > 1 && (
+                      <button type="button" onClick={() => removeEditVolume(index)} style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', flexShrink: 0 }}>X</button>
+                    )}
+                  </div>
+                );
+              })}
+              {editFormData.labelVolumes.length < ALL_UNITS.length && (
+                <button type="button" onClick={addEditVolume} style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '0.5rem', borderRadius: '0.5rem', color: '#64748b', cursor: 'pointer', width: '100%', marginTop: '5px' }}>+ Add Another Option</button>
+              )}
+            </div>
+
+            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
+
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="calories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="fat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="saturatedFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="transFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="cholesterol" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Cholesterol (mg)</label><input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={editFormData.cholesterol} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="sodium" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Sodium (mg)</label><input id="sodium" type="text" inputMode="decimal" name="sodium" value={editFormData.sodium} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="carbs" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Carbs (g)</label><input id="carbs" type="text" inputMode="decimal" name="carbs" value={editFormData.carbs} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="fiber" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Fiber (g)</label><input id="fiber" type="text" inputMode="decimal" name="fiber" value={editFormData.fiber} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="sugar" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Sugar (g)</label><input id="sugar" type="text" inputMode="decimal" name="sugar" value={editFormData.sugar} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="protein" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={editFormData.protein} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
           </div>
 
-          <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
-
-          <div className="form-group"><label htmlFor="calories">Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} required /></div>
-          <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="cholesterol">Cholesterol (mg)</label><input id="cholesterol" type="text" inputMode="decimal" name="cholesterol" value={editFormData.cholesterol} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="sodium">Sodium (mg)</label><input id="sodium" type="text" inputMode="decimal" name="sodium" value={editFormData.sodium} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="carbs">Carbs (g)</label><input id="carbs" type="text" inputMode="decimal" name="carbs" value={editFormData.carbs} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="fiber">Fiber (g)</label><input id="fiber" type="text" inputMode="decimal" name="fiber" value={editFormData.fiber} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="sugar">Sugar (g)</label><input id="sugar" type="text" inputMode="decimal" name="sugar" value={editFormData.sugar} onChange={handleEditChange} /></div>
-          <div className="form-group"><label htmlFor="protein">Protein (g)</label><input id="protein" type="text" inputMode="decimal" name="protein" value={editFormData.protein} onChange={handleEditChange} /></div>
-
-          <div className="form-actions" style={{ marginTop: '2rem' }}>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+          <div className="form-actions" style={{ padding: '1rem 0 0 0', backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', gap: '0.75rem', marginTop: 'auto' }}>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ margin: 0, flex: '1 1 0' }}>
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsEditingNutrition(false)} disabled={loading}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditingNutrition(false)} disabled={loading} style={{ margin: 0, flex: '1 1 0' }}>
               Cancel
             </button>
           </div>
         </form>
 
         {isEditScannerOpen && (
-          <BarcodeScanner onClose={() => setIsEditScannerOpen(false)} onScanSuccess={(code) => { setEditFormData(prev => ({ ...prev, upc: code })); setIsEditScannerOpen(false); }} />
+          <BarcodeScanner 
+            onClose={() => setIsEditScannerOpen(false)} 
+            onScanSuccess={(code) => { 
+              setEditFormData(prev => {
+                const newUpcs = [...prev.upcs];
+                const emptyIdx = newUpcs.findIndex(u => u.trim() === '');
+                if (emptyIdx >= 0) newUpcs[emptyIdx] = code;
+                else newUpcs.push(code);
+                return { ...prev, upcs: newUpcs };
+              });
+              setIsEditScannerOpen(false); 
+            }} 
+          />
         )}
       </div>
 
@@ -1599,6 +1782,37 @@ try {
           </>
         )}
       </div>
+      {/* NEW: Custom Auto-Suggest Modal Overlay */}
+      {pendingSelection && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 10000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem',
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '400px', backgroundColor: '#fff',
+            borderRadius: '1rem', padding: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', color: '#1e293b', fontSize: '1.25rem' }}>Food Already Exists</h3>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', margin: '0 0 1.5rem 0', lineHeight: '1.5' }}>
+              <strong>"{pendingSelection.name}"</strong> is already in your database. What would you like to do?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button type="button" onClick={() => processSelection('swap')} style={{ padding: '0.85rem', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Swap to Existing Food
+              </button>
+              <button type="button" onClick={() => processSelection('copy')} style={{ padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Copy Nutrition Instead
+              </button>
+              <button type="button" onClick={() => setPendingSelection(null)} style={{ padding: '0.85rem', background: 'none', color: '#94a3b8', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

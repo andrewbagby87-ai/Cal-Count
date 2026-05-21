@@ -881,7 +881,7 @@ const handleEditLog = async (updates: any) => {
                                       <Icon icon={log.food.icon} size="1.2rem" style={{ marginRight: '0.3rem' }} />
                                     </div>
                                   )}
-                                  <span>{log.food.name}</span>
+                                  <span>{log.food.name}{log.food.flavor && <span style={{ textTransform: 'capitalize' }}> - {log.food.flavor}</span>}</span>
                                 </h4>
                                 {log.food.brand ? (
                                   <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>
@@ -948,7 +948,7 @@ const handleEditLog = async (updates: any) => {
                 <div>
                   <h3 style={{ margin: 0, color: '#1e293b', textTransform: 'capitalize', display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.4rem' }}>
                     {selectedLog.food.icon && <Icon icon={selectedLog.food.icon} size="1.5rem" style={{ marginRight: '0.4rem' }} />}
-                    <span>{selectedLog.food.name}</span>
+                    <span>{selectedLog.food.name}{selectedLog.food.flavor && <span style={{ textTransform: 'capitalize' }}> - {selectedLog.food.flavor}</span>}</span>
                   </h3>
                   {selectedLog.food.brand ? (
                     <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.2rem' }}>{selectedLog.food.brand}</span>

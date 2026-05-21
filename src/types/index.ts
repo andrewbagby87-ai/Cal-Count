@@ -48,10 +48,11 @@ export interface Food {
   id: string;
   userId: string;
   name: string;
+  flavor?: string;
   brand?: string;
   icon?: string;
   upc?: string;
-  upcs?: string[]; // <--- NEW: Support for multiple UPCs
+  upcs?: string[];
   calories: number;
   protein?: number;
   fiber?: number;

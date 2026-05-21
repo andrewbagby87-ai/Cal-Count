@@ -54,9 +54,10 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   
   const { user } = useAuth();
   const [step, setStep] = useState<'form' | 'meal'>('form');
+  const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
   
   const [formData, setFormData] = useState({
-    name: '', brand: '', icon: '', 
+    name: '', flavor: '', brand: '', icon: '', 
     upcs: initialUpc ? [initialUpc] : [''], 
     calories: '', fat: '', saturatedFat: '',
     transFat: '', cholesterol: '', sodium: '', carbs: '', fiber: '', sugar: '', protein: '', labelServings: '1',
@@ -80,6 +81,12 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const [iconSearch, setIconSearch] = useState('');
   const iconPickerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-complete States
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [existingFoodId, setExistingFoodId] = useState<string | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<Food | null>(null);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (iconPickerRef.current && !iconPickerRef.current.contains(event.target as Node)) {
@@ -98,7 +105,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  // Array Handlers with adjusted limits (allow up to 13 for EAN-13 barcodes)
   const handleUpcChange = (index: number, value: string) => {
     if (value !== '' && !/^\d*$/.test(value)) return;
     if (value.length > 13) return; 
@@ -154,7 +160,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name !== 'name' && name !== 'brand' && name !== 'icon' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
+    if (name !== 'name' && name !== 'brand' && name !== 'icon' && name !== 'flavor' && value !== '' && !/^\d*\.?\d*$/.test(value)) return; 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -216,7 +222,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     setError('');
     if (!formData.name.trim()) { setError('Name is required'); return; }
     
-    // UPDATED VALIDATION LOGIC
     const validUpcs = formData.upcs.map(u => u.trim()).filter(u => u !== '');
     for (const upc of validUpcs) {
       if (upc.length !== 8 && upc.length !== 12 && upc.length !== 13) {
@@ -312,6 +317,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
       const baseNutrition: any = {
         name: formData.name.trim(),
+        flavor: formData.flavor.trim() || undefined,
         brand: formData.brand.trim() || undefined,
         icon: formData.icon.trim() || undefined, 
         upcs: validUpcs.length > 0 ? validUpcs : undefined,
@@ -340,10 +346,13 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       if (!isRecipeIngredientMode) onClose();
 
       const cleanBaseNutrition = JSON.parse(JSON.stringify(baseNutrition));
-      const newFoodId = await createFood(user.uid, cleanBaseNutrition);
+      let newFoodId = existingFoodId;
 
-      window.dispatchEvent(new Event('foodLibraryChanged'));
-
+      if (!newFoodId) {
+        newFoodId = await createFood(user.uid, cleanBaseNutrition);
+        window.dispatchEvent(new Event('foodLibraryChanged'));
+      }
+      
       const calcConsumed = (val: string) => {
         const parsed = parseFloat(val);
         if (isNaN(parsed)) return undefined;
@@ -368,12 +377,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         consumedNutrition.volumeUnit = finalUnit;
       }
 
-      const foodObject: Food = {
-        id: newFoodId,
-        userId: user.uid,
-        ...cleanBaseNutrition,
-        createdAt: Date.now(),
-      };
+      const foodObject: Food = existingFoodId 
+        ? foods.find(f => f.id === existingFoodId)! 
+        : { id: newFoodId, userId: user.uid, ...cleanBaseNutrition, createdAt: Date.now() };
 
       if (isRecipeIngredientMode && onIngredientCalculated) {
         onIngredientCalculated(foodObject, consumedNutrition, finalAmount, finalUnit);
@@ -409,6 +415,44 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     } 
   };
 
+  // Auto-complete Logic
+  const nameSuggestions = formData.name.length > 1
+    ? foods.filter(f => f.name.toLowerCase().includes(formData.name.toLowerCase()) && (!isVitaminMode ? !f.isVitamin : f.isVitamin)).slice(0, 5)
+    : [];
+
+  const uniqueBrands = Array.from(new Set(foods.map(f => f.brand).filter(b => b && b.trim() !== '')));
+  const brandSuggestions = formData.brand.length > 0
+    ? uniqueBrands.filter(b => b && b.toLowerCase().includes(formData.brand.toLowerCase())).slice(0, 5)
+    : [];
+
+  const uniqueFlavors = Array.from(new Set(foods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
+  const flavorSuggestions = formData.flavor.length > 0
+    ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(formData.flavor.toLowerCase())).slice(0, 5)
+    : [];
+
+  const processSelection = (action: 'log' | 'copy') => {
+    if (!pendingSelection) return;
+    const food = pendingSelection;
+
+    if (action === 'log') {
+      setExistingFoodId(food.id);
+      setLogDetails(prev => ({ ...prev, consumptionMethod: 'serving', servingsConsumed: '1' }));
+      setStep('meal');
+    } else {
+      const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
+      setFormData(prev => ({
+        ...prev,
+        name: food.name, brand: food.brand || '', icon: food.icon || '',
+        calories: toStr(food.calories), fat: toStr(food.fat), saturatedFat: toStr(food.saturatedFat),
+        transFat: toStr(food.transFat), cholesterol: toStr(food.cholesterol), sodium: toStr(food.sodium),
+        carbs: toStr(food.carbs), fiber: toStr(food.fiber), sugar: toStr(food.sugar), protein: toStr(food.protein),
+        labelServings: toStr(food.servingSize || 1),
+        labelVolumes: (food.volumes && food.volumes.length > 0) ? food.volumes.map(v => ({ amount: toStr(v.amount), unit: v.unit })) : [{ amount: '', unit: 'g' }]
+      }));
+    }
+    setPendingSelection(null);
+  };
+
   const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
   const selectedVolIndex = isVolumeSelected ? parseInt(logDetails.consumptionMethod.split('-')[1]) : -1;
   const selectedVol = selectedVolIndex >= 0 ? formData.labelVolumes[selectedVolIndex] : null;
@@ -442,14 +486,81 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
           {error && <div className="error">{error}</div>}
           
           <form onSubmit={handleContinue}>
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative' }}>
               <label htmlFor="name">{isVitaminMode ? 'Vitamin Name *' : 'Food Name *'}</label>
-              <input id="name" type="text" name="name" value={formData.name} onChange={handleChange} placeholder={isVitaminMode ? "e.g., Vitamin C" : "e.g., Grilled Chicken Breast"} required />
+              <input 
+                id="name" type="text" name="name" value={formData.name} 
+                onChange={(e) => { handleChange(e); setShowNameSuggestions(true); setExistingFoodId(null); }} 
+                onFocus={() => setShowNameSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
+                placeholder={isVitaminMode ? "e.g., Vitamin C" : "e.g., Grilled Chicken Breast"} required 
+                autoComplete="off"
+              />
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                      {nameSuggestions.map(f => (
+                        <div 
+                          key={f.id} 
+                          onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
+                          style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {f.icon && <Icon icon={f.icon} size="1.2rem" />}
+                            <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>{f.name}</span>
+                          </div>
+                          {f.brand ? (
+                            <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{f.brand}</span>
+                          ) : (f as any).isRecipe ? (
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                              RECIPE
+                            </span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative', marginTop: '1rem' }}>
+              <label htmlFor="flavor">Flavor / Type (Optional)</label>
+              <input 
+                id="flavor" type="text" name="flavor" value={formData.flavor} 
+                onChange={(e) => { handleChange(e); setShowFlavorSuggestions(true); }} 
+                onFocus={() => setShowFlavorSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowFlavorSuggestions(false), 200)}
+                placeholder="e.g., Chocolate, Spicy, Roasted" 
+                autoComplete="off"
+              />
+              {showFlavorSuggestions && flavorSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {flavorSuggestions.map((f, i) => (
+                    <div key={i} onClick={() => { setFormData(prev => ({...prev, flavor: f as string})); setShowFlavorSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b', textTransform: 'capitalize' }}>
+                      {f}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="form-group" style={{ position: 'relative' }}>
               <label htmlFor="brand">Brand (Optional)</label>
-              <input id="brand" type="text" name="brand" value={formData.brand} onChange={handleChange} placeholder="e.g., Nature Made" />
+              <input 
+                id="brand" type="text" name="brand" value={formData.brand} 
+                onChange={(e) => { handleChange(e); setShowBrandSuggestions(true); }} 
+                onFocus={() => setShowBrandSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowBrandSuggestions(false), 200)}
+                placeholder="e.g., Nature Made" 
+                autoComplete="off"
+              />
+              {showBrandSuggestions && brandSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {brandSuggestions.map((b, i) => (
+                    <div key={i} onClick={() => { setFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b' }}>
+                      {b}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="form-group" style={{ position: 'relative' }} ref={iconPickerRef}>
@@ -739,6 +850,38 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
           onClose={() => setIsScannerOpen(false)}
           onScanSuccess={handleScanSuccess}
         />
+      )}
+
+      {/* NEW: Custom Auto-Suggest Modal Overlay */}
+      {pendingSelection && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 10000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem',
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '400px', backgroundColor: '#fff',
+            borderRadius: '1rem', padding: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', color: '#1e293b', fontSize: '1.25rem' }}>Food Already Exists</h3>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', margin: '0 0 1.5rem 0', lineHeight: '1.5' }}>
+              <strong>"{pendingSelection.name}"</strong> is already in your database. What would you like to do?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button type="button" onClick={() => processSelection('log')} style={{ padding: '0.85rem', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Skip Creating & Just Log It
+              </button>
+              <button type="button" onClick={() => processSelection('copy')} style={{ padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Copy Nutrition to New Item
+              </button>
+              <button type="button" onClick={() => setPendingSelection(null)} style={{ padding: '0.85rem', background: 'none', color: '#94a3b8', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
