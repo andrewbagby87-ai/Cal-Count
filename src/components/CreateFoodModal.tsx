@@ -430,7 +430,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(formData.flavor.toLowerCase())).slice(0, 5)
     : [];
 
-  const processSelection = (action: 'log' | 'copy') => {
+  const processSelection = (action: 'log' | 'copy' | 'name-only') => {
     if (!pendingSelection) return;
     const food = pendingSelection;
 
@@ -438,7 +438,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
       setExistingFoodId(food.id);
       setLogDetails(prev => ({ ...prev, consumptionMethod: 'serving', servingsConsumed: '1' }));
       setStep('meal');
-    } else {
+    } else if (action === 'copy') {
       const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
       setFormData(prev => ({
         ...prev,
@@ -449,6 +449,8 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
         labelServings: toStr(food.servingSize || 1),
         labelVolumes: (food.volumes && food.volumes.length > 0) ? food.volumes.map(v => ({ amount: toStr(v.amount), unit: v.unit })) : [{ amount: '', unit: 'g' }]
       }));
+    } else if (action === 'name-only') {
+      setFormData(prev => ({ ...prev, name: food.name }));
     }
     setPendingSelection(null);
   };
@@ -497,30 +499,32 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
                 autoComplete="off"
               />
               {showNameSuggestions && nameSuggestions.length > 0 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                      {nameSuggestions.map(f => (
-                        <div 
-                          key={f.id} 
-                          onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
-                          style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {f.icon && <Icon icon={f.icon} size="1.2rem" />}
-                            <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>{f.name}</span>
-                          </div>
-                          {f.brand ? (
-                            <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{f.brand}</span>
-                          ) : (f as any).isRecipe ? (
-                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
-                              RECIPE
-                            </span>
-                          ) : null}
-                        </div>
-                      ))}
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                  {nameSuggestions.map(f => (
+                    <div 
+                      key={f.id} 
+                      onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
+                      style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                        {f.icon && <Icon icon={f.icon} size="1.2rem" />}
+                        <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {f.name}{f.flavor ? ` - ${f.flavor}` : ''}
+                        </span>
+                      </div>
+                      {f.brand ? (
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', marginLeft: '0.5rem', flexShrink: 0 }}>{f.brand}</span>
+                      ) : (f as any).isRecipe ? (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em', marginLeft: '0.5rem', flexShrink: 0 }}>
+                          RECIPE
+                        </span>
+                      ) : null}
                     </div>
-                  )}
+                  ))}
+                </div>
+              )}
             </div>
-
+            
             <div className="form-group" style={{ position: 'relative', marginTop: '1rem' }}>
               <label htmlFor="flavor">Flavor / Type (Optional)</label>
               <input 
@@ -875,6 +879,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
               </button>
               <button type="button" onClick={() => processSelection('copy')} style={{ padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
                 Copy Nutrition to New Item
+              </button>
+              <button type="button" onClick={() => processSelection('name-only')} style={{ padding: '0.85rem', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Use Name Only
               </button>
               <button type="button" onClick={() => setPendingSelection(null)} style={{ padding: '0.85rem', background: 'none', color: '#94a3b8', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
                 Cancel

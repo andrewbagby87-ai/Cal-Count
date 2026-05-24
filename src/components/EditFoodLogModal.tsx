@@ -524,14 +524,14 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(editFormData.flavor.toLowerCase())).slice(0, 5)
     : [];
 
-  const processSelection = (action: 'swap' | 'copy') => {
+  const processSelection = (action: 'swap' | 'copy' | 'name-only') => {
     if (!pendingSelection) return;
     const food = pendingSelection;
 
     if (action === 'swap') {
       setLocalFood(food);
       setIsEditingNutrition(false); // Go back to log details to swap it
-    } else {
+    } else if (action === 'copy') {
       const toStr = (val: any) => (val !== undefined && val !== null ? String(val) : '');
       setEditFormData(prev => ({
         ...prev,
@@ -542,6 +542,8 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
         labelServings: toStr(food.servingSize || 1),
         labelVolumes: (food.volumes && food.volumes.length > 0) ? food.volumes.map(v => ({ amount: toStr(v.amount), unit: v.unit })) : [{ amount: '', unit: 'g' }]
       }));
+    } else if (action === 'name-only') {
+      setEditFormData(prev => ({ ...prev, name: food.name }));
     }
     setPendingSelection(null);
   };
@@ -732,14 +734,16 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
                           onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
                           style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
                             {f.icon && <Icon icon={f.icon} size="1.2rem" />}
-                            <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>{f.name}</span>
+                            <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {f.name}{f.flavor ? ` - ${f.flavor}` : ''}
+                            </span>
                           </div>
                           {f.brand ? (
-                            <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize' }}>{f.brand}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', marginLeft: '0.5rem', flexShrink: 0 }}>{f.brand}</span>
                           ) : (f as any).isRecipe ? (
-                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em', marginLeft: '0.5rem', flexShrink: 0 }}>
                               RECIPE
                             </span>
                           ) : null}
@@ -1175,6 +1179,9 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
               </button>
               <button type="button" onClick={() => processSelection('copy')} style={{ padding: '0.85rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
                 Copy Nutrition Instead
+              </button>
+              <button type="button" onClick={() => processSelection('name-only')} style={{ padding: '0.85rem', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
+                Use Name Only
               </button>
               <button type="button" onClick={() => setPendingSelection(null)} style={{ padding: '0.85rem', background: 'none', color: '#94a3b8', border: 'none', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}>
                 Cancel
