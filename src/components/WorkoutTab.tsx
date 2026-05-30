@@ -8,6 +8,7 @@ export default function WorkoutsTab() {
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [ignoredIds, setIgnoredIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visibleDays, setVisibleDays] = useState(7);
 
   useEffect(() => {
     if (user) {
@@ -62,6 +63,10 @@ export default function WorkoutsTab() {
     return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
   });
 
+  const cutoffMs = Date.now() - visibleDays * 24 * 60 * 60 * 1000;
+  const timeBasedWorkouts = sortedWorkouts.filter(w => getWorkoutDate(w).getTime() >= cutoffMs);
+  const displayedWorkouts = sortedWorkouts.slice(0, Math.max(timeBasedWorkouts.length, visibleDays));
+
   return (
     <div style={{ padding: '1rem', maxWidth: '600px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -75,8 +80,9 @@ export default function WorkoutsTab() {
             <p style={{ color: '#64748b', margin: 0 }}>No Apple Health workouts synced yet.</p>
           </div>
         ) : (
-          sortedWorkouts.map((workout, index) => {
-            const title = workout.name || 'Unknown Workout';
+          <>
+            {displayedWorkouts.map((workout, index) => {
+              const title = workout.name || 'Unknown Workout';
             const durationMins = workout.duration ? Math.round(workout.duration / 60) : 0;
             
             let calories = 0;
@@ -146,7 +152,17 @@ export default function WorkoutsTab() {
                 </div>
               </div>
             );
-          })
+            })}
+            
+            {sortedWorkouts.length > displayedWorkouts.length && (
+              <button 
+                onClick={() => setVisibleDays(d => d + 7)}
+                style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem', backgroundColor: '#e2e8f0', color: '#1e293b', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+              >
+                Show more
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -63,6 +63,7 @@ export default function FoodLogTab() {
   const [loading, setLoading] = useState(true);
   
   const topRef = useRef<HTMLDivElement>(null);
+  const requestCounter = useRef(0);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -214,6 +215,8 @@ export default function FoodLogTab() {
   const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
     
+    const currentRequest = ++requestCounter.current; // Track this specific fetch
+    
     if (showLoadingScreen) {
       setLoading(true);
     }
@@ -228,6 +231,9 @@ export default function FoodLogTab() {
         getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
         getDoneLoggingDates(user.uid).catch(() => ({}))
       ]);
+      
+      // If a newer fetch started while this one was running, ignore this stale data!
+      if (currentRequest !== requestCounter.current) return;
       
       setFoodLogs(logs);
       setDoneLoggingDates(firebaseDoneDates);

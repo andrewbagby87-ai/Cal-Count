@@ -8,7 +8,7 @@ import WorkoutTab from '../components/WorkoutTab';
 import './Dashboard.css';
 
 export default function Dashboard() {
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState<'account' | 'preferences' | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
   
@@ -66,7 +66,7 @@ export default function Dashboard() {
 
   // Load Settings page directly, letting its own CSS handle the full screen
   if (showSettings) {
-    return <UserSettings onBack={() => setShowSettings(false)} />;
+    return <UserSettings onBack={() => setShowSettings(null)} mode={showSettings} />;
   }
 
   const handleLogout = async () => {
@@ -98,10 +98,19 @@ export default function Dashboard() {
                 className="dropdown-item"
                 onClick={() => {
                   setShowDropdown(false);
-                  setShowSettings(true);
+                  setShowSettings('preferences');
                 }}
               >
-                ⚙️ Settings
+                📊 Preferences
+              </button>
+              <button 
+                className="dropdown-item"
+                onClick={() => {
+                  setShowDropdown(false);
+                  setShowSettings('account');
+                }}
+              >
+                ⚙️ Account
               </button>
               <button 
                 className="dropdown-item logout-btn"
@@ -141,29 +150,29 @@ export default function Dashboard() {
         </button>
       </nav>
 
-      <div className="dashboard-content">
+      <div className="dashboard-content" style={{ position: 'relative' }}>
         
         {/* 3. STAGGERED TAB RENDER AREA */}
         {/* Daily Stats is always in the DOM immediately */}
-        <div style={{ display: activeTab === 'stats' ? 'block' : 'none', height: '100%' }}>
+        <div style={activeTab === 'stats' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
           <DailyStatsTab />
         </div>
         
         {/* Other tabs only exist AFTER the boot sequence reaches them OR if the user clicks them early */}
         {(bootedTabs.includes('foodlog') || activeTab === 'foodlog') && (
-          <div style={{ display: activeTab === 'foodlog' ? 'block' : 'none', height: '100%' }}>
+          <div style={activeTab === 'foodlog' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
             <FoodLogTab />
           </div>
         )}
         
         {(bootedTabs.includes('weight') || activeTab === 'weight') && (
-          <div style={{ display: activeTab === 'weight' ? 'block' : 'none', height: '100%' }}>
+          <div style={activeTab === 'weight' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
             <WeightTab />
           </div>
         )}
         
         {(bootedTabs.includes('workout') || activeTab === 'workout') && (
-          <div style={{ display: activeTab === 'workout' ? 'block' : 'none', height: '100%' }}>
+          <div style={activeTab === 'workout' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
             <WorkoutTab />
           </div>
         )}

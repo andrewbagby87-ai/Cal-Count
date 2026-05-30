@@ -5,6 +5,7 @@ import './UserSettings.css';
 
 interface UserSettingsProps {
   onBack: () => void;
+  mode?: 'account' | 'preferences';
 }
 
 // --- ADDED DATE HELPER FOR GOAL HISTORY ---
@@ -16,7 +17,7 @@ const getLocalTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function UserSettings({ onBack }: UserSettingsProps) {
+export default function UserSettings({ onBack, mode = 'account' }: UserSettingsProps) {
   const { user, userProfile, updateUserProfile, deleteUserAccount } = useAuth();
   
   const [formData, setFormData] = useState({
@@ -196,7 +197,7 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
       <div className="settings-card">
         <header className="settings-header">
           <button className="back-btn" onClick={onBack} disabled={isBusy}>← Back</button>
-          <h1>Settings</h1>
+          <h1>{mode === 'preferences' ? 'Preferences' : 'Account Settings'}</h1>
         </header>
 
         <div className="settings-content">
@@ -207,148 +208,157 @@ export default function UserSettings({ onBack }: UserSettingsProps) {
           )}
 
           <form onSubmit={handleSave}>
-
-            <section className="settings-section">
-              <h2>Profile</h2>
-              <div className="form-group">
-                <label>Name *</label>
-                <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} disabled />
-              </div>
-            </section>
-
-            <section className="settings-section">
-              <h2>Change Password</h2>
-              <div className="form-group">
-                <label>New Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current" disabled={isBusy} />
-              </div>
-              <div className="form-group">
-                <label>Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" disabled={isBusy} />
-              </div>
-            </section>
-
-            <section className="settings-section">
-              <h2>Tracking Preferences</h2>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackFat" checked={formData.trackFat} onChange={handleChange} disabled={isBusy} /> Fat</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackSaturatedFat" checked={formData.trackSaturatedFat} onChange={handleChange} disabled={isBusy} /> Saturated Fat</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackCarbs" checked={formData.trackCarbs} onChange={handleChange} disabled={isBusy} /> Carbs</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackFiber" checked={formData.trackFiber} onChange={handleChange} disabled={isBusy} /> Fiber</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackSugar" checked={formData.trackSugar} onChange={handleChange} disabled={isBusy} /> Sugar</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackProtein" checked={formData.trackProtein} onChange={handleChange} disabled={isBusy} /> Protein</label>
-              </div>
-              <div className="checkbox-group">
-                <label><input type="checkbox" name="trackVitamins" checked={formData.trackVitamins} onChange={handleChange} disabled={isBusy} /> Vitamins</label>
-              </div>
-            </section>
-
-            <section className="settings-section" style={{ marginTop: '2.5rem' }}>
-              <h2>Budget Settings</h2>
-              <div className="form-group">
-                <label>Daily Calories Budget *</label>
-                <input type="number" name="caloriesBudget" value={formData.caloriesBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="500" required disabled={isBusy} />
-              </div>
-              
-              {formData.trackFat && (
-                <div className="form-group">
-                  <label>Daily Fat Budget (g) *</label>
-                  <input type="number" name="fatBudget" value={formData.fatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-              {formData.trackSaturatedFat && (
-                <div className="form-group">
-                  <label>Daily Saturated Fat Budget (g) *</label>
-                  <input type="number" name="saturatedFatBudget" value={formData.saturatedFatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-              {formData.trackCarbs && (
-                <div className="form-group">
-                  <label>Daily Carbs Budget (g) *</label>
-                  <input type="number" name="carbsBudget" value={formData.carbsBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-              {formData.trackFiber && (
-                <div className="form-group">
-                  <label>Daily Fiber Budget (g) *</label>
-                  <input type="number" name="fiberBudget" value={formData.fiberBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-              {formData.trackSugar && (
-                <div className="form-group">
-                  <label>Daily Sugar Budget (g) *</label>
-                  <input type="number" name="sugarBudget" value={formData.sugarBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-              {formData.trackProtein && (
-                <div className="form-group">
-                  <label>Daily Protein Budget (g) *</label>
-                  <input type="number" name="proteinBudget" value={formData.proteinBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
-                </div>
-              )}
-            </section>
-
-            <section className="settings-section" style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem' }}>
-              <h2>Apple Health Sync Setup</h2>
-              <div className="form-group">
-                <small style={{ color: '#666', marginTop: '4px', marginBottom: '12px', display: 'block' }}>
-                  Paste these values into the Health Auto Export app's REST API automation.
-                </small>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard('https://synchealthdata-iyfojguipa-uc.a.run.app/', 'Sync URL copied!')}
-                    >
-                      Copy Sync URL
-                    </button>
+            {mode === 'account' && (
+              <>
+                <section className="settings-section">
+                  <h2>Profile</h2>
+                  <div className="form-group">
+                    <label>Name *</label>
+                    <input type="text" name="name" value={formData.name} onChange={handleChange} required disabled={isBusy} />
                   </div>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard('x-user-id', 'Header Key copied!')}
-                    >
-                      Copy Key (x-user-id)
-                    </button>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" value={formData.email} onChange={handleChange} disabled />
                   </div>
-                  <div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard(userId, 'User ID copied!')}
-                    >
-                      Copy Value (User ID)
-                    </button>
+                </section>
+
+                <section className="settings-section">
+                  <h2>Change Password</h2>
+                  <div className="form-group">
+                    <label>New Password</label>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current" disabled={isBusy} />
                   </div>
-                </div>
-              </div>
-            </section>
+                  <div className="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" disabled={isBusy} />
+                  </div>
+                </section>
+
+                <section className="settings-section" style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem' }}>
+                  <h2>Apple Health Sync Setup</h2>
+                  <div className="form-group">
+                    <small style={{ color: '#666', marginTop: '4px', marginBottom: '12px', display: 'block' }}>
+                      Paste these values into the Health Auto Export app's REST API automation.
+                    </small>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary"
+                          onClick={() => copyToClipboard('https://synchealthdata-iyfojguipa-uc.a.run.app/', 'Sync URL copied!')}
+                        >
+                          Copy Sync URL
+                        </button>
+                      </div>
+                      <div>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary"
+                          onClick={() => copyToClipboard('x-user-id', 'Header Key copied!')}
+                        >
+                          Copy Key (x-user-id)
+                        </button>
+                      </div>
+                      <div>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary"
+                          onClick={() => copyToClipboard(userId, 'User ID copied!')}
+                        >
+                          Copy Value (User ID)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {mode === 'preferences' && (
+              <>
+                <section className="settings-section">
+                  <h2>Tracking Preferences</h2>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackFat" checked={formData.trackFat} onChange={handleChange} disabled={isBusy} /> Fat</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackSaturatedFat" checked={formData.trackSaturatedFat} onChange={handleChange} disabled={isBusy} /> Saturated Fat</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackCarbs" checked={formData.trackCarbs} onChange={handleChange} disabled={isBusy} /> Carbs</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackFiber" checked={formData.trackFiber} onChange={handleChange} disabled={isBusy} /> Fiber</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackSugar" checked={formData.trackSugar} onChange={handleChange} disabled={isBusy} /> Sugar</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackProtein" checked={formData.trackProtein} onChange={handleChange} disabled={isBusy} /> Protein</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="trackVitamins" checked={formData.trackVitamins} onChange={handleChange} disabled={isBusy} /> Vitamins</label>
+                  </div>
+                </section>
+
+                <section className="settings-section" style={{ marginTop: '2.5rem' }}>
+                  <h2>Budget Settings</h2>
+                  <div className="form-group">
+                    <label>Daily Calories Budget *</label>
+                    <input type="number" name="caloriesBudget" value={formData.caloriesBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="500" required disabled={isBusy} />
+                  </div>
+                  
+                  {formData.trackFat && (
+                    <div className="form-group">
+                      <label>Daily Fat Budget (g) *</label>
+                      <input type="number" name="fatBudget" value={formData.fatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                  {formData.trackSaturatedFat && (
+                    <div className="form-group">
+                      <label>Daily Saturated Fat Budget (g) *</label>
+                      <input type="number" name="saturatedFatBudget" value={formData.saturatedFatBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                  {formData.trackCarbs && (
+                    <div className="form-group">
+                      <label>Daily Carbs Budget (g) *</label>
+                      <input type="number" name="carbsBudget" value={formData.carbsBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                  {formData.trackFiber && (
+                    <div className="form-group">
+                      <label>Daily Fiber Budget (g) *</label>
+                      <input type="number" name="fiberBudget" value={formData.fiberBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                  {formData.trackSugar && (
+                    <div className="form-group">
+                      <label>Daily Sugar Budget (g) *</label>
+                      <input type="number" name="sugarBudget" value={formData.sugarBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                  {formData.trackProtein && (
+                    <div className="form-group">
+                      <label>Daily Protein Budget (g) *</label>
+                      <input type="number" name="proteinBudget" value={formData.proteinBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
 
             <div className="settings-actions">
               <button type="submit" className="btn btn-primary" disabled={isBusy}>
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
               
-              <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
-                {isDeleting ? 'Deleting...' : 'Delete Account'}
-              </button>
+              {mode === 'account' && (
+                <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={isBusy}>
+                  {isDeleting ? 'Deleting...' : 'Delete Account'}
+                </button>
+              )}
             </div>
           </form>
         </div>

@@ -69,6 +69,7 @@ export default function WeightTab() {
   const [unit, setUnit] = useState<'kg' | 'lbs'>('lbs');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [visibleDays, setVisibleDays] = useState(7);
 
   // Time Range State for Chart
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('month');
@@ -258,6 +259,10 @@ export default function WeightTab() {
     average = weights.reduce((sum, val) => sum + val, 0) / weights.length;
   }
 
+  const cutoffMs = Date.now() - visibleDays * 24 * 60 * 60 * 1000;
+  const timeBasedLogs = weightLogs.filter(log => log.timestamp >= cutoffMs);
+  const displayedLogs = weightLogs.slice(0, Math.max(timeBasedLogs.length, visibleDays));
+
   return (
     <div className="weight-tab">
       <div ref={topRef} />
@@ -301,7 +306,7 @@ export default function WeightTab() {
           ) : (
             <>
               <div style={{ width: '100%', height: '220px' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <LineChart data={chartData} margin={{ top: 10, right: 15, bottom: 5, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis 
@@ -438,7 +443,7 @@ export default function WeightTab() {
         </div>
       ) : (
         <div className="weight-logs">
-          {weightLogs.map((log) => (
+          {displayedLogs.map((log) => (
             <div 
               key={log.id} 
               className={`weight-log-item ${log.isSynced ? 'synced-item' : ''}`}
@@ -461,6 +466,15 @@ export default function WeightTab() {
               </div>
             </div>
           ))}
+          
+          {weightLogs.length > displayedLogs.length && (
+            <button 
+              onClick={() => setVisibleDays(d => d + 7)}
+              style={{ width: '100%', marginTop: '1rem', padding: '0.75rem', backgroundColor: '#e2e8f0', color: '#1e293b', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '1rem', cursor: 'pointer' }}
+            >
+              Show more
+            </button>
+          )}
         </div>
       )}
     </div>
