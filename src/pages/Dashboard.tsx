@@ -15,6 +15,12 @@ export default function Dashboard() {
   // 1. Tell React to ONLY mount the Daily Stats tab when the app first opens
   const [bootedTabs, setBootedTabs] = useState<string[]>(['stats']);
   
+  // Pull-to-refresh state
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [startY, setStartY] = useState(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
   // Bring in the logout function from useAuth
   const { userProfile, loading, logout } = useAuth();
   
@@ -75,6 +81,34 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Failed to log out', error);
     }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Only trigger pull-to-refresh if we are at the very top of the scroll view
+    if (contentRef.current && contentRef.current.scrollTop === 0) {
+      setStartY(e.touches[0].clientY);
+    } else {
+      setStartY(0);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (startY === 0) return;
+    const currentY = e.touches[0].clientY;
+    const distance = currentY - startY;
+    
+    // Only register if pulling downwards
+    if (distance > 0) {
+      setPullDistance(Math.min(distance, 120)); // Cap the visual stretch
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullDistance > 75) {
+      setRefreshKey(prev => prev + 1); // Trigger the refresh!
+    }
+    setStartY(0);
+    setPullDistance(0); // Snap back
   };
 
   return (
@@ -150,30 +184,49 @@ export default function Dashboard() {
         </button>
       </nav>
 
-      <div className="dashboard-content" style={{ position: 'relative' }}>
+      <div 
+        className="dashboard-content" 
+        style={{ 
+          position: 'relative', 
+          // FIX: Use 'none' when not pulling to prevent trapping fixed pop-ups
+          transform: pullDistance > 0 ? `translateY(${pullDistance * 0.4}px)` : 'none', 
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
+          overflowY: 'auto'
+        }}
+        ref={contentRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Visual Pull Indicator */}
+        {pullDistance > 0 && (
+          <div style={{ position: 'absolute', top: -30, left: 0, right: 0, textAlign: 'center', color: '#64748b', fontSize: '0.85rem', fontWeight: 600, zIndex: 10 }}>
+            {pullDistance > 75 ? '⬇️ Release to refresh' : '⬇️ Pull to refresh'}
+          </div>
+        )}
         
         {/* 3. STAGGERED TAB RENDER AREA */}
         {/* Daily Stats is always in the DOM immediately */}
         <div style={activeTab === 'stats' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-          <DailyStatsTab />
+          <DailyStatsTab key={`stats-${refreshKey}`} />
         </div>
         
         {/* Other tabs only exist AFTER the boot sequence reaches them OR if the user clicks them early */}
         {(bootedTabs.includes('foodlog') || activeTab === 'foodlog') && (
           <div style={activeTab === 'foodlog' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-            <FoodLogTab />
+            <FoodLogTab key={`foodlog-${refreshKey}`} />
           </div>
         )}
         
         {(bootedTabs.includes('weight') || activeTab === 'weight') && (
           <div style={activeTab === 'weight' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-            <WeightTab />
+            <WeightTab key={`weight-${refreshKey}`} />
           </div>
         )}
         
         {(bootedTabs.includes('workout') || activeTab === 'workout') && (
           <div style={activeTab === 'workout' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-            <WorkoutTab />
+            <WorkoutTab key={`workout-${refreshKey}`} />
           </div>
         )}
         

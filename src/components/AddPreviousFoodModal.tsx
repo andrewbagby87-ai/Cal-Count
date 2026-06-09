@@ -63,6 +63,16 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
+  const [viewMode, setViewMode] = useState<'foods' | 'meals'>('foods');
+  const [pastMealDate, setPastMealDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1); // Default to yesterday
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
   const [filters, setFilters] = useState<{
     showFoods: boolean;
     showRecipes: boolean;
@@ -154,6 +164,29 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
     };
   }, []);
+
+  const handlePastDateChange = (days: number) => {
+    const [y, m, d] = pastMealDate.split('-');
+    const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    date.setDate(date.getDate() + days);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setPastMealDate(`${year}-${month}-${day}`);
+  };
+
+  const handleModeSwitch = (mode: 'foods' | 'meals') => {
+    setViewMode(mode);
+    setMultiSelectedIds(new Set());
+    if (mode === 'meals') {
+      setIsMultiSelectMode(true); // Force multi-select
+      if (user && allLogs.length === 0) {
+        getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
+      }
+    } else {
+      setIsMultiSelectMode(false);
+    }
+  };
   
   const [logDetails, setLogDetails] = useState({
     date: initialDate || getLocalTodayString(),
@@ -494,9 +527,28 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 try {
       const payloads = [];
 
-      for (const foodId of multiSelectedIds) {
-        const food = localFoods.find(f => f.id === foodId);
-        if (!food) continue;
+      if (viewMode === 'meals') {
+        // EXACT LOG COPY MODE
+        for (const logId of multiSelectedIds) {
+          const originalLog = allLogs.find(l => (l as any).id === logId || l.createdAt?.toString() === logId);
+          if (!originalLog) continue;
+
+          const payload = {
+            ...originalLog,
+            date: logDetails.date,
+            mealType: logDetails.mealType,
+            isPlanned: logDetails.isPlanned,
+          };
+          
+          delete (payload as any).id;
+          delete (payload as any).createdAt;
+
+          payloads.push(JSON.parse(JSON.stringify(payload)));
+        }
+      } else {
+        for (const foodId of multiSelectedIds) {
+          const food = localFoods.find(f => f.id === foodId);
+          if (!food) continue;
         
         const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
         
@@ -562,6 +614,8 @@ try {
 
         payloads.push(JSON.parse(JSON.stringify(payload)));
       }
+
+    }
       
       await onAdd(payloads);
       
@@ -859,6 +913,27 @@ try {
       <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition && !isQuickAddMode) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
+        {/* NEW: View Mode Toggle */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+          <button 
+             className="btn btn-sm"
+             style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem', backgroundColor: viewMode === 'foods' ? '#2563eb' : '#f1f5f9', color: viewMode === 'foods' ? '#fff' : '#475569', border: '1px solid #cbd5e1' }}
+             onClick={() => handleModeSwitch('foods')}
+          >
+             By Food
+          </button>
+          <button 
+             className="btn btn-sm"
+             style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem', backgroundColor: viewMode === 'meals' ? '#2563eb' : '#f1f5f9', color: viewMode === 'meals' ? '#fff' : '#475569', border: '1px solid #cbd5e1' }}
+             onClick={() => handleModeSwitch('meals')}
+          >
+             Previous Meals
+          </button>
+        </div>
+
+        {/* ONLY SHOW THESE IN FOODS MODE */}
+        {viewMode === 'foods' && (
+          <>
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexShrink: 0 }}>
           {onCreateNew && (
             <button className="btn btn-primary btn-sm" style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem' }} onClick={onCreateNew}>
@@ -1086,6 +1161,16 @@ try {
             </button>
           )}
         </div>
+        </>
+        )}
+        {/* SHOW DATE NAVIGATOR IN MEALS MODE */}
+        {viewMode === 'meals' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0.35rem 0.5rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}>
+            <button type="button" className="btn btn-secondary" style={{ margin: 0, padding: '0.5rem 0.6rem', fontSize: '0.8rem', minWidth: '0', width: 'max-content', height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handlePastDateChange(-1)}>◀ Prev</button>
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', flex: 1, textAlign: 'center' }}>{formatDateDisplay(pastMealDate)}</span>
+            <button type="button" className="btn btn-secondary" style={{ margin: 0, padding: '0.5rem 0.6rem', fontSize: '0.8rem', minWidth: '0', width: 'max-content', height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handlePastDateChange(1)}>Next ▶</button>
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0, padding: '0 0.25rem', minHeight: '38px' }}>
           {isMultiSelectMode ? (
@@ -1134,9 +1219,78 @@ try {
         {error && <div className="error" style={{ flexShrink: 0 }}>{error}</div>}
 
         <div className="food-list" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
-          {/* UPDATE THE CONDITIONS HERE: */}
-          {!shouldLoadFoods ? (
-            <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
+          {viewMode === 'meals' ? (
+            // --- PREVIOUS MEALS VIEW ---
+            allLogs.filter(log => log.date === pastMealDate).length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>No meals logged on this date.</p>
+            ) : (
+              ['Vitamins','Breakfast', 'Lunch', 'Dinner', 'Snack',  ''].map(mealCategory => {
+                const categoryLogs = allLogs.filter(log => log.date === pastMealDate && (log.mealType || '') === mealCategory);
+                
+                if (categoryLogs.length === 0) return null;
+
+                // Sort chronologically within the meal
+                const sortedLogs = [...categoryLogs].sort((a, b) => ((a as any).createdAt || 0) - ((b as any).createdAt || 0));
+
+                return (
+                  // 1. Unified Outer Border Wrapper
+                  <div key={mealCategory || 'Other'} style={{ marginBottom: '1.25rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', backgroundColor: '#fff' }}>
+                    
+                    {/* 2. Category Header (Attached to the top of the border) */}
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', padding: '0.6rem 0.75rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #cbd5e1', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem', letterSpacing: '0.05em' }}>
+                      {mealCategory || 'Uncategorized'}
+                    </div>
+                    
+                    {/* 3. Food Log Items (Inside the bordered box) */}
+                    <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {sortedLogs.map((log) => {
+                        const uniqueId = (log as any).id || (log as any).createdAt?.toString() || `${log.foodId}-${Math.random()}`;
+                        const isSelected = multiSelectedIds.has(uniqueId);
+                        
+                        return (
+                          <button
+                            key={uniqueId}
+                            className="food-option"
+                            onClick={() => {
+                              setMultiSelectedIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(uniqueId)) next.delete(uniqueId);
+                                else next.add(uniqueId);
+                                return next;
+                              });
+                            }}
+                            style={{ margin: 0, display: 'flex', alignItems: 'center', textAlign: 'left', position: 'relative', ...(isSelected ? { borderColor: '#2563eb', backgroundColor: '#eff6ff', borderWidth: '2px' } : {}) }}
+                          >
+                            <div style={{ marginRight: '1rem', display: 'flex', alignItems: 'center' }}>
+                              <div style={{ width: '24px', height: '24px', borderRadius: '6px', border: `2px solid ${isSelected ? '#2563eb' : '#cbd5e1'}`, backgroundColor: isSelected ? '#2563eb' : 'transparent', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s' }}>
+                                {isSelected && <span style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                              </div>
+                            </div>
+                            
+                            <div style={{ flex: 1, paddingRight: '2rem' }}>
+                              <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+                                {log.food?.icon && <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.4rem' }}><Icon icon={log.food?.icon} size="1.2rem" /></div>}
+                                <span style={{ wordBreak: 'break-word' }}>
+                                  {log.food?.name}
+                                  {log.food?.flavor && <span style={{ textTransform: 'capitalize', color: '#64748b', fontWeight: 400 }}> - {log.food?.flavor}</span>}
+                                </span>
+                              </div>
+                              <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
+                                {log.amount} {log.unit} - {log.calories} cal
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )
+          ) : (
+            // --- EXISTING FOODS VIEW ---
+            !shouldLoadFoods ? (
+              <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
               Type at least 2 letters or apply a filter to view {isVitaminMode ? 'vitamins' : 'foods'}.
             </p>
           ) : processedFoods.length === 0 ? (
@@ -1213,7 +1367,7 @@ try {
                 </button>
               );
             })
-          )}
+          ))}
         </div>
         
         {!isMultiSelectMode && (
