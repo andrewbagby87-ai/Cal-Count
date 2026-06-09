@@ -107,10 +107,13 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   useEffect(() => { setLocalFoods(foods); }, [foods]);
 
   useEffect(() => {
-    if (user) {
+    const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
+    const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
+
+    if (user && shouldLoadFoods && allLogs.length === 0) {
       getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
     }
-  }, [user]);
+  }, [user, searchTerm, filters, allLogs.length]);
 
   useEffect(() => {
     if (initialFood) {
@@ -764,7 +767,10 @@ try {
   };
 
   // --- FILTER & SORT LOGIC ---
-  const processedFoods = localFoods.filter(food => {
+  const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
+    const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
+
+  const processedFoods = !shouldLoadFoods ? [] : localFoods.filter(food => {
     const searchLower = searchTerm.toLowerCase();
     const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
     const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
@@ -795,8 +801,12 @@ try {
       
       if (filters.fitsBudget && remainingCalories !== undefined) {
          maxCalories = remainingCalories;
-      } else if (filters.customLimitActive && filters.customLimitValue !== '') {
-         maxCalories = parseFloat(filters.customLimitValue);
+      } else if (filters.customLimitActive) {
+         const customVal = parseFloat(filters.customLimitValue);
+         if (isNaN(customVal) || customVal <= 0) {
+            return false; 
+         }
+         maxCalories = customVal;
       }
 
       if (maxCalories !== undefined) {
@@ -1124,7 +1134,12 @@ try {
         {error && <div className="error" style={{ flexShrink: 0 }}>{error}</div>}
 
         <div className="food-list" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem' }}>
-          {processedFoods.length === 0 ? (
+          {/* UPDATE THE CONDITIONS HERE: */}
+          {!shouldLoadFoods ? (
+            <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
+              Type at least 2 letters or apply a filter to view {isVitaminMode ? 'vitamins' : 'foods'}.
+            </p>
+          ) : processedFoods.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
               {isVitaminMode ? 'No vitamins found.' : 'No foods found matching criteria.'}
             </p>

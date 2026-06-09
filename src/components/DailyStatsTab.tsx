@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates } from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -53,7 +53,9 @@ const parseUnit = (u: string) => {
 
 const getWeekDates = (date: Date) => {
   const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay());
+  // Shift the start date to 3 days before the currently viewed date
+  start.setDate(date.getDate() - 3);
+  
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -158,6 +160,7 @@ export default function DailyStatsTab() {
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
   const [loading, setLoading] = useState(true);
+  const todayCache = useRef<any>(null);
   const [showCalRemaining, setShowCalRemaining] = useState(false);
   const [streak, setStreak] = useState(0);
 
@@ -223,19 +226,15 @@ export default function DailyStatsTab() {
 
   const handlePrevWeek = () => {
     const prev = new Date(viewDate);
-    // 1. Jump back 7 days to get into the previous week
+    // Jump exactly 7 days backward
     prev.setDate(prev.getDate() - 7);
-    // 2. Snap to Saturday (Day 6) of that week
-    prev.setDate(prev.getDate() + (6 - prev.getDay())); 
     setViewDate(prev);
   };
 
   const handleNextWeek = () => {
     const next = new Date(viewDate);
-    // 1. Jump forward 7 days to get into the next week
+    // Jump exactly 7 days forward
     next.setDate(next.getDate() + 7);
-    // 2. Snap to Sunday (Day 0) of that week
-    next.setDate(next.getDate() - next.getDay()); 
     setViewDate(next);
   };
 
@@ -273,23 +272,31 @@ export default function DailyStatsTab() {
     fetchStreak();
   }, [user?.uid, viewDate, refreshTrigger]); 
 
-  useEffect(() => {
+useEffect(() => {
     const loadNavigatorStats = async () => {
       if (!user?.uid) return;
       const datesToFetch = getWeekDates(viewDate);
       const summaries: Record<string, { progress: number, color: string }> = {};
 
-      const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
+      // 1. Calculate the start and end dates for the current week
+      const startDateStr = getDateString(datesToFetch[0]);
+      const endDateStr = getDateString(datesToFetch[6]);
+
+      // 2. Fetch ALL data for the entire week ONCE in the background
+      const [allHealthWorkouts, ignoredWorkouts, weeklyFoods, weeklyWorkouts] = await Promise.all([
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
+        getWeeklyFoodLogs(user.uid, startDateStr, endDateStr).catch(() => []),       // <--- Bulk fetch
+        getWeeklyWorkoutLogs(user.uid, startDateStr, endDateStr).catch(() => []) // <--- Bulk fetch
       ]);
 
-      await Promise.all(datesToFetch.map(async (date) => {
+      // 3. Process the data locally for each day instead of re-fetching
+      datesToFetch.forEach((date) => {
         const dStr = getDateString(date);
-        const [foods, workouts] = await Promise.all([
-          getDayFoodLogs(user.uid, dStr).catch(() => []),
-          getDayWorkoutLogs(user.uid, dStr).catch(() => [])
-        ]);
+        
+        // Filter our bulk arrays for just this day
+        const dayFoods = weeklyFoods.filter((log: any) => log.date === dStr);
+        const manualWorkouts = weeklyWorkouts.filter((log: any) => log.date === dStr);
 
         const todaysSynced = allHealthWorkouts.filter((w: any) => {
           const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dStr);
@@ -304,10 +311,11 @@ export default function DailyStatsTab() {
           return sum;
         }, 0);
         
-        const manualBurned = workouts.reduce((sum, log) => sum + log.caloriesBurned, 0);
-        dailyBurned += manualBurned;
+        if (manualWorkouts) {
+          dailyBurned += manualWorkouts.reduce((sum: number, w: any) => sum + (w.caloriesBurned || 0), 0);
+        }
 
-        const consumed = foods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+        const consumed = dayFoods.reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         
         const activeDayProfile = getActiveBudgets(userProfile, dStr);
         const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
@@ -327,7 +335,7 @@ export default function DailyStatsTab() {
         }
         
         summaries[dStr] = { progress, color };
-      }));
+      });
 
       setNavigatorSummaries(summaries);
     };
@@ -335,99 +343,113 @@ export default function DailyStatsTab() {
     loadNavigatorStats();
   }, [user?.uid, viewDate, userProfile, refreshTrigger]);
 
-  useEffect(() => {
+useEffect(() => {
     const loadData = async () => {
       if (!user?.uid) return;
       
-      if (!isBackgroundRefresh.current) {
+      const dateStr = getDateString(viewDate);
+      const todayStr = getDateString(new Date());
+
+      // Instant restore if navigating back to today
+      if (dateStr === todayStr && todayCache.current) {
+        setFoodLogs(todayCache.current.foods);
+        setWorkoutLogs(todayCache.current.workouts);
+        setSyncedWorkouts(todayCache.current.syncedWorkouts);
+        setTodayWeight(todayCache.current.weight);
+        if (!isBackgroundRefresh.current) setLoading(false);
+      } else if (!isBackgroundRefresh.current) {
         setLoading(true);
       }
       
       try {
-        const dateStr = getDateString(viewDate);
-        
-        const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts] = await Promise.all([
+        const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts, todayFoods, todayWorkouts] = await Promise.all([
           getDayFoodLogs(user.uid, dateStr).catch(() => []),
           getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
           getAllWeightLogs(user.uid).catch(() => []),
           getHealthLogs(user.uid).catch(() => []), 
           getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
-          getIgnoredWorkouts(user.uid).catch(() => [] as string[])
+          getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
+          // Fetch today in the background if looking at the past
+          dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
+          dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
         ]);
-        
-        setFoodLogs(foods || []);
-        setWorkoutLogs(workouts || []);
 
-        const todaysSyncedWorkouts = (syncedWorkoutsRaw || []).filter((w: any) => {
-          const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
-          const isIgnored = (ignoredWorkouts || []).includes(String(w.id || w.dbId)); 
-          return isToday && !isIgnored; 
-        });
-        
-        setSyncedWorkouts(todaysSyncedWorkouts);
-        
-        const todaysManualWeights = (manualWeights || []).filter(w => w.date === dateStr).map(w => ({
-          ...w,
-          timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
-        }));
+        // Helper function to process data for a specific date
+        const processDataForDate = (targetDateStr: string, rawFoods: any, rawWorkouts: any) => {
+          const processedSynced = (syncedWorkoutsRaw || []).filter((w: any) => {
+            const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, targetDateStr);
+            const isIgnored = (ignoredWorkouts || []).includes(String(w.id || w.dbId)); 
+            return isToday && !isIgnored; 
+          });
 
-        const todaysHealthWeights: any[] = [];
-        const safeHealthLogsRaw = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
-        
-        safeHealthLogsRaw.forEach((log: any) => {
-          const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
-          const baseTimestamp = baseTimestampObj.getTime();
+          const manualW = (manualWeights || []).filter((w: any) => w.date === targetDateStr).map((w: any) => ({
+            ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
+          }));
 
-          const processMetric = (metric: any) => {
-            if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
-              metric.data.forEach((entry: any) => {
-                const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
-                const parsedDate = formatSyncDate(dateObj);
-                if (parsedDate && parsedDate.dateStr === dateStr) {
-                  todaysHealthWeights.push({
-                    date: parsedDate.dateStr,
-                    time: parsedDate.timeStr,
-                    weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
-                    unit: parseUnit(metric.units || log.units),
-                    timestamp: parsedDate.timeMs,
-                    isSynced: true
-                  });
-                }
-              });
-            }
-          };
+          const healthW: any[] = [];
+          const safeHealth = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
+          
+          safeHealth.forEach((log: any) => {
+            const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
+            const baseTimestamp = baseTimestampObj.getTime();
 
-          if (log.name === 'weight_body_mass') {
-            if (Array.isArray(log.data)) {
-              processMetric(log);
-            } else {
-              const dateObj = parseSafeDate(log.date || log.timestamp, baseTimestamp);
-              const parsedDate = formatSyncDate(dateObj);
-              if (parsedDate && parsedDate.dateStr === dateStr) {
-                todaysHealthWeights.push({
-                  date: parsedDate.dateStr,
-                  time: parsedDate.timeStr,
-                  weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
-                  unit: parseUnit(log.units || log.unit),
-                  timestamp: parsedDate.timeMs,
-                  isSynced: true
+            const processMetric = (metric: any) => {
+              if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
+                metric.data.forEach((entry: any) => {
+                  const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+                  const parsedDate = formatSyncDate(dateObj);
+                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                    healthW.push({
+                      date: parsedDate.dateStr, time: parsedDate.timeStr,
+                      weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
+                      unit: parseUnit(metric.units || log.units),
+                      timestamp: parsedDate.timeMs, isSynced: true
+                    });
+                  }
                 });
               }
-            }
-          } else if (Array.isArray(log.metrics)) {
-            log.metrics.forEach(processMetric);
-          } else if (log.data && Array.isArray(log.data.metrics)) {
-            log.data.metrics.forEach(processMetric);
-          }
-        });
+            };
 
-        const combinedTodaysWeights = [...todaysManualWeights, ...todaysHealthWeights].filter(w => w.weight > 0);
-        if (combinedTodaysWeights.length > 0) {
-          combinedTodaysWeights.sort((a, b) => b.timestamp - a.timestamp);
-          setTodayWeight(combinedTodaysWeights[0]);
-        } else {
-          setTodayWeight(null);
+            if (log.name === 'weight_body_mass') {
+              if (Array.isArray(log.data)) {
+                processMetric(log);
+              } else {
+                const dateObj = parseSafeDate(log.date || log.timestamp, baseTimestamp);
+                const parsedDate = formatSyncDate(dateObj);
+                if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                  healthW.push({
+                    date: parsedDate.dateStr, time: parsedDate.timeStr,
+                    weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
+                    unit: parseUnit(log.units || log.unit),
+                    timestamp: parsedDate.timeMs, isSynced: true
+                  });
+                }
+              }
+            } else if (Array.isArray(log.metrics)) {
+              log.metrics.forEach(processMetric);
+            } else if (log.data && Array.isArray(log.data.metrics)) {
+              log.data.metrics.forEach(processMetric);
+            }
+          });
+
+          const combined = [...manualW, ...healthW].filter(w => w.weight > 0).sort((a, b) => b.timestamp - a.timestamp);
+          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null };
+        };
+
+        // Process the Viewed Date
+        const viewData = processDataForDate(dateStr, foods, workouts);
+        setFoodLogs(viewData.foods);
+        setWorkoutLogs(viewData.workouts);
+        setSyncedWorkouts(viewData.syncedWorkouts);
+        setTodayWeight(viewData.weight);
+
+        // Process Today's Background Cache
+        if (dateStr === todayStr) {
+           todayCache.current = viewData;
+        } else if (todayFoods && todayWorkouts) {
+           todayCache.current = processDataForDate(todayStr, todayFoods, todayWorkouts);
         }
+
       } catch (error) {
         console.error('Failed to load stats:', error);
       } finally {
@@ -435,6 +457,7 @@ export default function DailyStatsTab() {
         isBackgroundRefresh.current = false;
       }
     };
+    
     loadData();
   }, [user?.uid, viewDate, refreshTrigger]);
 

@@ -417,6 +417,7 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
         <div className="add-food-modal create-recipe-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box' }}>
            <CreateFoodModal 
              isRecipeIngredientMode={true} 
+             foods={foods} /* <--- ADD THIS EXACT LINE */
              initialUpc={scannedUpc || ''} 
              onClose={() => setStep('builder')} 
              onIngredientCalculated={(foodObj, macros, amt, unit) => {

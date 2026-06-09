@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate } from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -12,7 +12,9 @@ import './FoodLogTab.css';
 // --- Helper Functions for Navigator ---
 const getWeekDates = (date: Date) => {
   const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay());
+  // Shift the start date to 3 days before the currently viewed date
+  start.setDate(date.getDate() - 3);
+  
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -61,6 +63,8 @@ export default function FoodLogTab() {
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [burnedCalories, setBurnedCalories] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  const todayCache = useRef<any>(null);
   
   const topRef = useRef<HTMLDivElement>(null);
   const requestCounter = useRef(0);
@@ -196,48 +200,50 @@ export default function FoodLogTab() {
 
   const handlePrevWeek = () => {
     const prev = new Date(viewDate);
-    // 1. Jump back 7 days to get into the previous week
+    // Jump exactly 7 days backward
     prev.setDate(prev.getDate() - 7);
-    // 2. Snap to Saturday (Day 6) of that week
-    prev.setDate(prev.getDate() + (6 - prev.getDay())); 
     setViewDate(prev);
   };
 
   const handleNextWeek = () => {
     const next = new Date(viewDate);
-    // 1. Jump forward 7 days to get into the next week
+    // Jump exactly 7 days forward
     next.setDate(next.getDate() + 7);
-    // 2. Snap to Sunday (Day 0) of that week
-    next.setDate(next.getDate() - next.getDay()); 
     setViewDate(next);
   };
 
-  const loadData = async (showLoadingScreen = true) => {
+const loadData = async (showLoadingScreen = true) => {
     if (!user) return;
+    const currentRequest = ++requestCounter.current; 
     
-    const currentRequest = ++requestCounter.current; // Track this specific fetch
-    
-    if (showLoadingScreen) {
-      setLoading(true);
+    const dateStr = getDateString(viewDate);
+    const todayStr = getDateString(new Date());
+
+    // Instant restore if navigating back to today
+    if (dateStr === todayStr && todayCache.current) {
+      setFoodLogs(todayCache.current.logs);
+      setBurnedCalories(todayCache.current.burnedCalories);
+      showLoadingScreen = false;
     }
+
+    if (showLoadingScreen) setLoading(true);
     
     try {
-      const dateStr = getDateString(viewDate);
-      
-      const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates] = await Promise.all([
+      const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates, todayLogs, todayManualWorkouts] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
         getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
         getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
-        getDoneLoggingDates(user.uid).catch(() => ({}))
+        getDoneLoggingDates(user.uid).catch(() => ({})),
+        // Fetch today in the background if looking at the past
+        dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
+        dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
       ]);
       
-      // If a newer fetch started while this one was running, ignore this stale data!
       if (currentRequest !== requestCounter.current) return;
-      
-      setFoodLogs(logs);
       setDoneLoggingDates(firebaseDoneDates);
 
+      // --- Process the Viewed Date ---
       const todaysSyncedWorkouts = syncedWorkouts.filter((w: any) => {
         const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
         const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
@@ -255,12 +261,33 @@ export default function FoodLogTab() {
         totalBurned += manualWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
       }
 
+      setFoodLogs(logs);
       setBurnedCalories(totalBurned);
+
+      // --- Process Today's Background Cache ---
+      if (dateStr === todayStr) {
+         todayCache.current = { logs, burnedCalories: totalBurned };
+      } else if (todayLogs && todayManualWorkouts) {
+         const actualTodaySynced = syncedWorkouts.filter((w: any) => {
+           const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, todayStr);
+           const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
+           return isToday && !isIgnored; 
+         });
+
+         let todayBurned = actualTodaySynced.reduce((sum, w) => {
+           if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') return sum + Math.round(w.activeEnergyBurned.qty);
+           return sum;
+         }, 0);
+         todayBurned += todayManualWorkouts.reduce((sum: any, w: any) => sum + (w.caloriesBurned || 0), 0);
+
+         todayCache.current = { logs: todayLogs, burnedCalories: todayBurned };
+      }
 
     } catch (error) {
       console.error('Failed to load food data:', error);
     } finally {
-      if (showLoadingScreen) setLoading(false);
+      setLoading(false);
+      isBackgroundRefresh.current = false;
     }
   };
 
@@ -269,25 +296,32 @@ export default function FoodLogTab() {
     isBackgroundRefresh.current = false;
   }, [user?.uid, viewDate, refreshTrigger]);
 
-  useEffect(() => {
+useEffect(() => {
     const loadNavigatorStats = async () => {
-      if (!user) return;
+      if (!user?.uid) return;
       const datesToFetch = getWeekDates(viewDate);
-      
       const summaries: Record<string, { progress: number, color: string }> = {};
 
-      const [allHealthWorkouts, ignoredWorkouts] = await Promise.all([
-        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]), 
-        getIgnoredWorkouts(user.uid).catch(() => [] as string[]) 
+      // 1. Calculate the start and end dates for the current week
+      const startDateStr = getDateString(datesToFetch[0]);
+      const endDateStr = getDateString(datesToFetch[6]);
+
+      // 2. Fetch ALL data for the entire week ONCE in the background
+      const [allHealthWorkouts, ignoredWorkouts, weeklyFoods, weeklyWorkouts] = await Promise.all([
+        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
+        getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
+        getWeeklyFoodLogs(user.uid, startDateStr, endDateStr).catch(() => []),       // <--- Bulk fetch
+        getWeeklyWorkoutLogs(user.uid, startDateStr, endDateStr).catch(() => []) // <--- Bulk fetch
       ]);
 
-      await Promise.all(datesToFetch.map(async (date) => {
+      // 3. Process the data locally for each day instead of re-fetching
+      datesToFetch.forEach((date) => {
         const dStr = getDateString(date);
-        const [dayFoods, manualWorkouts] = await Promise.all([
-          getDayFoodLogs(user.uid, dStr).catch(() => []),
-          getDayWorkoutLogs(user.uid, dStr).catch(() => [])
-        ]);
         
+        // Filter our bulk arrays for just this day
+        const dayFoods = weeklyFoods.filter((log: any) => log.date === dStr);
+        const manualWorkouts = weeklyWorkouts.filter((log: any) => log.date === dStr);
+
         const todaysSynced = allHealthWorkouts.filter((w: any) => {
           const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dStr);
           const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
@@ -300,12 +334,12 @@ export default function FoodLogTab() {
           }
           return sum;
         }, 0);
-
+        
         if (manualWorkouts) {
-          dailyBurned += manualWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
+          dailyBurned += manualWorkouts.reduce((sum: number, w: any) => sum + (w.caloriesBurned || 0), 0);
         }
 
-        const consumed = dayFoods.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+        const consumed = dayFoods.reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
         
         const activeDayProfile = getActiveBudgets(userProfile, dStr);
         const budget = (activeDayProfile?.caloriesBudget || 0) + dailyBurned;
@@ -325,7 +359,7 @@ export default function FoodLogTab() {
         }
         
         summaries[dStr] = { progress, color };
-      }));
+      });
 
       setNavigatorSummaries(summaries);
     };

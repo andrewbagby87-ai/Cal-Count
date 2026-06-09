@@ -249,6 +249,11 @@
   flex: 1;
 }
 
+.week-day-btn.is-today:not(.selected) {
+  border: 2px solid #3b82f6; 
+  box-sizing: border-box; 
+}
+
 .week-day-btn:hover {
   background: #f1f5f9;
 }
@@ -442,7 +447,7 @@
 /* Default spacing for Desktop (leaves room for arrows) */
 .weekly-nav-wrapper {
   position: relative;
-  padding: 0 45px;
+  padding: 0; /* Changed from 0 45px to 0 */
   margin-bottom: 1.5rem;
 }
 
