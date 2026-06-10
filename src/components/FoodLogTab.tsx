@@ -115,14 +115,26 @@ export default function FoodLogTab() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const isBackgroundRefresh = useRef(false);
 
+// 1. SMARTER REFRESH LISTENER
   useEffect(() => {
-    const handleUpdate = () => {
-      isBackgroundRefresh.current = true;
-      setRefreshTrigger(prev => prev + 1);
+    const handleUpdate = (e: Event) => {
+      // If the event came from this tab itself, ignore it! We already updated the UI instantly.
+      if (e instanceof CustomEvent && e.detail?.source === 'FoodLogTab') {
+        return;
+      }
+      
+      // For external events (like CreateRecipeModal), wait 300ms before fetching
+      // This ensures Firebase has enough time to write the new data before we read it.
+      setTimeout(() => {
+        isBackgroundRefresh.current = true;
+        setRefreshTrigger(prev => prev + 1);
+      }, 300);
     };
+    
     window.addEventListener('foodDataChanged', handleUpdate);
     window.addEventListener('workoutDataChanged', handleUpdate);
     window.addEventListener('dayCompletedChanged', handleUpdate);
+    
     return () => {
       window.removeEventListener('foodDataChanged', handleUpdate);
       window.removeEventListener('workoutDataChanged', handleUpdate);
@@ -291,10 +303,11 @@ const loadData = async (showLoadingScreen = true) => {
     }
   };
 
-  useEffect(() => {
-    loadData(!isBackgroundRefresh.current);
-    isBackgroundRefresh.current = false;
-  }, [user?.uid, viewDate, refreshTrigger]);
+useEffect(() => {
+    if (getDateString(viewDate) === getDateString(new Date())) {
+      todayCache.current = { logs: foodLogs, burnedCalories: burnedCalories };
+    }
+  }, [foodLogs, burnedCalories, viewDate]);
 
 useEffect(() => {
     const loadNavigatorStats = async () => {
@@ -392,7 +405,7 @@ useEffect(() => {
       console.error('Failed to save food items:', err);
     }
 
-    window.dispatchEvent(new Event('foodDataChanged'));
+    window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
     setShowAddModal(false);
     showToast('Food logged!');
   };
@@ -404,7 +417,7 @@ useEffect(() => {
 
     try {
       await deleteFoodLog(user.uid, logId);
-      window.dispatchEvent(new Event('foodDataChanged')); 
+      window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
       showToast('Item removed!');
     } catch (error) {
       console.error('Failed to delete food log:', error);
@@ -464,7 +477,7 @@ const handleEditLog = async (updates: any) => {
         window.dispatchEvent(new Event('foodLibraryChanged'));
       }
       
-      window.dispatchEvent(new Event('foodDataChanged')); 
+      window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
       showToast('Log updated!');
     } catch (error) {
       console.error('Failed to update food log:', error);
@@ -589,7 +602,7 @@ const handleEditLog = async (updates: any) => {
         mealType: finalMealType, 
         timestamp: newTimestamp 
       });
-      window.dispatchEvent(new Event('foodDataChanged'));
+      window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
     } catch (error) {
       console.error("Failed to update log position:", error);
       loadData(false); 
@@ -1097,7 +1110,7 @@ const handleEditLog = async (updates: any) => {
                       
                       try {
                         await updateFoodLog(user.uid, targetId, { isPlanned: false });
-                        window.dispatchEvent(new Event('foodDataChanged'));
+                        window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
                         showToast('Confirmed as eaten!');
                       } catch (err) {
                         console.error('Failed to update planned status:', err);
@@ -1124,7 +1137,7 @@ const handleEditLog = async (updates: any) => {
                         
                         try {
                           await updateFoodLog(user.uid, targetId, { isPlanned: true });
-                          window.dispatchEvent(new Event('foodDataChanged'));
+                          window.dispatchEvent(new CustomEvent('foodDataChanged', { detail: { source: 'FoodLogTab' } }));
                           showToast('Marked as planned!');
                         } catch (err) {
                           console.error('Failed to update planned status:', err);

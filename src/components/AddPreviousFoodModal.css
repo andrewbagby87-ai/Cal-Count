@@ -2,7 +2,9 @@
 
 /* NEW: Force parent wrappers to use dynamic viewport height so they shrink when the keyboard opens */
 .modal-content, .add-food-modal {
+  max-height: 90vh !important; /* Fallback for older mobile browsers */
   max-height: 90dvh !important;
+  height: 100%; /* FIX: Prevents container from collapsing to 0 height on iOS */
   display: flex !important;
   flex-direction: column !important;
 }
@@ -66,7 +68,8 @@
   gap: 0.75rem;
   margin-bottom: 1.5rem;
   
-  flex: 1; 
+  flex: 1 1 auto; /* FIX: Allows proper shrinking/growing on mobile */
+  height: 100%; 
   overflow-y: auto;
   min-height: 0; 
   max-height: none; 
@@ -171,7 +174,6 @@
 
 .previous-food-modal * {
   box-sizing: border-box !important;
-  max-width: 100%;
 }
 
 .previous-food-modal .form-row {
@@ -206,4 +208,32 @@
   background-color: #f3e8ff; /* Light purple bg */
   color: #7e22ce;            /* Purple text */
   border: 1px solid #e9d5ff;
+}
+
+/* NEW: Indeterminate Loading Bar */
+.modal-loading-bar-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background-color: #e2e8f0;
+  overflow: hidden;
+  z-index: 50;
+  /* Optional: round the top corners if your modal has rounded corners */
+  border-top-left-radius: 0.5rem; 
+  border-top-right-radius: 0.5rem;
+}
+
+.modal-loading-bar {
+  height: 100%;
+  background-color: #2563eb; /* Primary blue */
+  width: 50%;
+  animation: loading-swipe 1.2s infinite ease-in-out;
+}
+
+@keyframes loading-swipe {
+  0% { transform: translateX(-150%); width: 30%; }
+  50% { width: 60%; }
+  100% { transform: translateX(250%); width: 30%; }
 }

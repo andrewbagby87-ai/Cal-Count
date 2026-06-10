@@ -58,6 +58,7 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
   const [flavorSearch, setFlavorSearch] = useState('');
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
+  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -121,7 +122,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
 
     if (user && shouldLoadFoods && allLogs.length === 0) {
-      getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
+      setIsFetchingLogs(true); // START LOADING
+      getAllFoodLogs(user.uid)
+        .then(logs => setAllLogs(logs))
+        .catch(console.error)
+        .finally(() => setIsFetchingLogs(false)); // STOP LOADING
     }
   }, [user, searchTerm, filters, allLogs.length]);
 
@@ -175,13 +180,17 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setPastMealDate(`${year}-${month}-${day}`);
   };
 
-  const handleModeSwitch = (mode: 'foods' | 'meals') => {
+const handleModeSwitch = (mode: 'foods' | 'meals') => {
     setViewMode(mode);
     setMultiSelectedIds(new Set());
     if (mode === 'meals') {
-      setIsMultiSelectMode(true); // Force multi-select
+      setIsMultiSelectMode(true);
       if (user && allLogs.length === 0) {
-        getAllFoodLogs(user.uid).then(logs => setAllLogs(logs)).catch(console.error);
+        setIsFetchingLogs(true); // START LOADING
+        getAllFoodLogs(user.uid)
+          .then(logs => setAllLogs(logs))
+          .catch(console.error)
+          .finally(() => setIsFetchingLogs(false)); // STOP LOADING
       }
     } else {
       setIsMultiSelectMode(false);
@@ -909,6 +918,12 @@ try {
 
   return (
     <>
+      {(loading || isFetchingLogs) && (
+        <div className="modal-loading-bar-wrapper">
+          <div className="modal-loading-bar"></div>
+        </div>
+      )}
+
       {/* --- 1. LIST VIEW --- */}
       <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition && !isQuickAddMode) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
