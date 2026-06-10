@@ -928,18 +928,41 @@ try {
       <div className="previous-food-modal list-view" style={{ display: (!selectedFood && !isEditingNutrition && !isQuickAddMode) ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
-        {/* NEW: View Mode Toggle */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+        {/* NEW: Slider View Mode Toggle */}
+        <div style={{ 
+          display: 'flex', position: 'relative', backgroundColor: '#f8fafc', 
+          border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '4px', 
+          marginBottom: '1rem', flexShrink: 0 
+        }}>
+          {/* Animated Background Pill */}
+          <div style={{
+            position: 'absolute', top: '4px', bottom: '4px', left: '4px',
+            width: 'calc(50% - 4px)', backgroundColor: '#2563eb', borderRadius: '0.35rem',
+            transition: 'transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1)',
+            transform: viewMode === 'foods' ? 'translateX(0)' : 'translateX(100%)',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.1)', zIndex: 1
+          }} />
+
           <button 
-             className="btn btn-sm"
-             style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem', backgroundColor: viewMode === 'foods' ? '#2563eb' : '#f1f5f9', color: viewMode === 'foods' ? '#fff' : '#475569', border: '1px solid #cbd5e1' }}
+             type="button"
+             style={{
+               flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
+               color: viewMode === 'foods' ? '#fff' : '#64748b',
+               background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+               transition: 'color 0.25s ease'
+             }}
              onClick={() => handleModeSwitch('foods')}
           >
              By Food
           </button>
           <button 
-             className="btn btn-sm"
-             style={{ flex: 1, padding: '0.6rem', fontSize: '0.9rem', backgroundColor: viewMode === 'meals' ? '#2563eb' : '#f1f5f9', color: viewMode === 'meals' ? '#fff' : '#475569', border: '1px solid #cbd5e1' }}
+             type="button"
+             style={{
+               flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
+               color: viewMode === 'meals' ? '#fff' : '#64748b',
+               background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+               transition: 'color 0.25s ease'
+             }}
              onClick={() => handleModeSwitch('meals')}
           >
              Previous Meals

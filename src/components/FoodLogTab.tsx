@@ -303,6 +303,11 @@ const loadData = async (showLoadingScreen = true) => {
     }
   };
 
+  useEffect(() => {
+    loadData(!isBackgroundRefresh.current);
+    isBackgroundRefresh.current = false;
+  }, [user?.uid, viewDate, refreshTrigger]);
+
 useEffect(() => {
     if (getDateString(viewDate) === getDateString(new Date())) {
       todayCache.current = { logs: foodLogs, burnedCalories: burnedCalories };
@@ -906,7 +911,7 @@ const handleEditLog = async (updates: any) => {
                 </div>
                 
                 {logsForMeal.length === 0 ? (
-                  <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Drop {mealName === 'Vitamins' ? 'vitamins' : 'foods'} here.</div>
+                  <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Click "Add +" to log.</div>
                 ) : (
                   <div className="food-logs-list">
                     {logsForMeal.map((log) => {
