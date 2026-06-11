@@ -911,7 +911,7 @@ const handleEditLog = async (updates: any) => {
                 </div>
                 
                 {logsForMeal.length === 0 ? (
-                  <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Click "Add +" to log.</div>
+                  <div className="meal-empty">No {mealName === 'Vitamins' ? 'vitamins' : 'foods'} logged. Click "+ Add" to log.</div>
                 ) : (
                   <div className="food-logs-list">
                     {logsForMeal.map((log) => {

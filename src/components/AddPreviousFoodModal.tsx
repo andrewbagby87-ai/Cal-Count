@@ -1,12 +1,31 @@
 // src/components/AddPreviousFoodModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import { Food, FoodLog } from '../types';
-import { deleteFood, getAllFoodLogs, updateFood, createFoodLog, updateAllPastLogsForFood } from '../services/database';
+import { deleteFood, getWeeklyFoodLogs, getDayFoodLogs, updateFood, createFoodLog, updateAllPastLogsForFood } from '../services/database';
 import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
 import './AddPreviousFoodModal.css';
+
+// NEW: Helper to safely filter out accidental duplicate entries from Firebase
+const deduplicateLogs = (logs: FoodLog[]) => {
+  const seen = new Set<string>();
+  return logs.filter(log => {
+    const id = (log as any).id || (log as any).createdAt?.toString();
+    // If we have no ID, keep it just to be safe
+    if (!id) return true;
+    
+    // If we've already seen this exact ID, drop this duplicate completely
+    if (seen.has(id)) {
+      return false; 
+    }
+    
+    // Otherwise, mark it as seen and keep it
+    seen.add(id);
+    return true;
+  });
+};
 
 interface Props {
   foods: Food[];
@@ -56,9 +75,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [searchTerm, setSearchTerm] = useState('');
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
   const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
-  const [flavorSearch, setFlavorSearch] = useState('');
   const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
   const [isFetchingLogs, setIsFetchingLogs] = useState(false);
+  const [fetchedDates, setFetchedDates] = useState<Set<string>>(new Set());
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -122,12 +141,29 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
 
     if (user && shouldLoadFoods && allLogs.length === 0) {
-      setIsFetchingLogs(true); // START LOADING
-      getAllFoodLogs(user.uid)
-        .then(logs => setAllLogs(logs))
-        .catch(console.error)
-        .finally(() => setIsFetchingLogs(false)); // STOP LOADING
-    }
+        setIsFetchingLogs(true); // START LOADING
+        
+        // NEW: Fetch only the last 7 days
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 6);
+        const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        
+        getWeeklyFoodLogs(user.uid, format(start), format(end))
+          .then(logs => {
+            setAllLogs(deduplicateLogs(logs));
+            // Mark these 7 days as downloaded in our tracker
+            const dates = new Set<string>();
+            for(let i=0; i<=6; i++) {
+               const d = new Date(end);
+               d.setDate(end.getDate() - i);
+               dates.add(format(d));
+            }
+            setFetchedDates(dates);
+          })
+          .catch(console.error)
+          .finally(() => setIsFetchingLogs(false)); // STOP LOADING
+      }
   }, [user, searchTerm, filters, allLogs.length]);
 
   useEffect(() => {
@@ -180,18 +216,41 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     setPastMealDate(`${year}-${month}-${day}`);
   };
 
+  // NEW: Dynamically fetch older days if you scroll past the initial 7 days
+  useEffect(() => {
+    if (!user || viewMode !== 'meals' || allLogs.length === 0) return; 
+    
+    if (!fetchedDates.has(pastMealDate)) {
+      setIsFetchingLogs(true);
+      getDayFoodLogs(user.uid, pastMealDate)
+        .then(newLogs => {
+          setAllLogs(prev => deduplicateLogs([...prev, ...newLogs]));
+          setFetchedDates(prev => new Set(prev).add(pastMealDate)); // Mark as fetched
+        })
+        .catch(console.error)
+        .finally(() => setIsFetchingLogs(false));
+    }
+  }, [user, pastMealDate, fetchedDates, viewMode, allLogs.length]);
+
 const handleModeSwitch = (mode: 'foods' | 'meals') => {
     setViewMode(mode);
     setMultiSelectedIds(new Set());
     if (mode === 'meals') {
-      setIsMultiSelectMode(true);
-      if (user && allLogs.length === 0) {
-        setIsFetchingLogs(true); // START LOADING
-        getAllFoodLogs(user.uid)
-          .then(logs => setAllLogs(logs))
-          .catch(console.error)
-          .finally(() => setIsFetchingLogs(false)); // STOP LOADING
-      }
+          setIsMultiSelectMode(true);
+          if (user && allLogs.length === 0) {
+            setIsFetchingLogs(true); // START LOADING
+            
+            // NEW: Fetch only the last 7 days
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - 6);
+            const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            
+            getWeeklyFoodLogs(user.uid, format(start), format(end))
+              .then(logs => setAllLogs(deduplicateLogs(logs)))
+              .catch(console.error)
+              .finally(() => setIsFetchingLogs(false)); // STOP LOADING
+          }
     } else {
       setIsMultiSelectMode(false);
     }
@@ -483,9 +542,20 @@ const handleModeSwitch = (mode: 'foods' | 'meals') => {
       );
       
       await updateFood(selectedFood.id, cleanFirebasePayload);
-      await updateAllPastLogsForFood(user.uid, selectedFood.id, updatedFood);
-      const newLogs = await getAllFoodLogs(user.uid);
-      setAllLogs(newLogs);
+          await updateAllPastLogsForFood(user.uid, selectedFood.id, updatedFood);
+          
+          // NEW: Re-fetch only the last 7 days
+          const end = new Date();
+          const start = new Date();
+          start.setDate(end.getDate() - 6);
+          const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          
+          const newWeeklyLogs = await getWeeklyFoodLogs(user.uid, format(start), format(end));
+          setAllLogs(prev => {
+            // Keep any older logs that we fetched manually so they don't vanish
+            const olderLogs = prev.filter(log => log.date < format(start));
+            return deduplicateLogs([...newWeeklyLogs, ...olderLogs]);
+          });
 
       setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
       setSelectedFood(updatedFood);

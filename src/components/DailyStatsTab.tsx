@@ -158,6 +158,7 @@ export default function DailyStatsTab() {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
+  const [todaySteps, setTodaySteps] = useState<number>(0);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
   const [loading, setLoading] = useState(true);
   const todayCache = useRef<any>(null);
@@ -356,6 +357,7 @@ useEffect(() => {
         setWorkoutLogs(todayCache.current.workouts);
         setSyncedWorkouts(todayCache.current.syncedWorkouts);
         setTodayWeight(todayCache.current.weight);
+        setTodaySteps(todayCache.current.steps || 0);
         if (!isBackgroundRefresh.current) setLoading(false);
       } else if (!isBackgroundRefresh.current) {
         setLoading(true);
@@ -386,7 +388,8 @@ useEffect(() => {
             ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
           }));
 
-          const healthW: any[] = [];
+const healthW: any[] = [];
+          let daySteps = 0; // NEW
           const safeHealth = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
           
           safeHealth.forEach((log: any) => {
@@ -394,37 +397,59 @@ useEffect(() => {
             const baseTimestamp = baseTimestampObj.getTime();
 
             const processMetric = (metric: any) => {
-              if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
-                metric.data.forEach((entry: any) => {
-                  const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+              // Extract Weight
+              if (metric.name === 'weight_body_mass') {
+                if (Array.isArray(metric.data)) {
+                  metric.data.forEach((entry: any) => {
+                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+                    const parsedDate = formatSyncDate(dateObj);
+                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                      healthW.push({
+                        date: parsedDate.dateStr, time: parsedDate.timeStr,
+                        weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
+                        unit: parseUnit(metric.units || log.units),
+                        timestamp: parsedDate.timeMs, isSynced: true
+                      });
+                    }
+                  });
+                } else {
+                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
                   const parsedDate = formatSyncDate(dateObj);
                   if (parsedDate && parsedDate.dateStr === targetDateStr) {
                     healthW.push({
                       date: parsedDate.dateStr, time: parsedDate.timeStr,
-                      weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
-                      unit: parseUnit(metric.units || log.units),
+                      weight: Math.round(Number(metric.qty || metric.value || metric.weight || 0) * 10) / 10,
+                      unit: parseUnit(metric.units || log.units || metric.unit),
                       timestamp: parsedDate.timeMs, isSynced: true
                     });
                   }
-                });
+                }
+              }
+
+              // NEW: Extract Steps
+              if (metric.name === 'step_count') {
+                if (Array.isArray(metric.data)) {
+                  metric.data.forEach((entry: any) => {
+                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+                    const parsedDate = formatSyncDate(dateObj);
+                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                      // FIX: Take the highest total synced, do not add duplicates together
+                      daySteps = Math.max(daySteps, Number(entry.qty || entry.value || 0));
+                    }
+                  });
+                } else {
+                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
+                  const parsedDate = formatSyncDate(dateObj);
+                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                    // FIX: Take the highest total synced, do not add duplicates together
+                    daySteps = Math.max(daySteps, Number(metric.qty || metric.value || 0));
+                  }
+                }
               }
             };
 
-            if (log.name === 'weight_body_mass') {
-              if (Array.isArray(log.data)) {
-                processMetric(log);
-              } else {
-                const dateObj = parseSafeDate(log.date || log.timestamp, baseTimestamp);
-                const parsedDate = formatSyncDate(dateObj);
-                if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                  healthW.push({
-                    date: parsedDate.dateStr, time: parsedDate.timeStr,
-                    weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10,
-                    unit: parseUnit(log.units || log.unit),
-                    timestamp: parsedDate.timeMs, isSynced: true
-                  });
-                }
-              }
+            if (log.name === 'weight_body_mass' || log.name === 'step_count') {
+              processMetric(log);
             } else if (Array.isArray(log.metrics)) {
               log.metrics.forEach(processMetric);
             } else if (log.data && Array.isArray(log.data.metrics)) {
@@ -433,7 +458,7 @@ useEffect(() => {
           });
 
           const combined = [...manualW, ...healthW].filter(w => w.weight > 0).sort((a, b) => b.timestamp - a.timestamp);
-          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null };
+          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null, steps: daySteps };
         };
 
         // Process the Viewed Date
@@ -442,6 +467,7 @@ useEffect(() => {
         setWorkoutLogs(viewData.workouts);
         setSyncedWorkouts(viewData.syncedWorkouts);
         setTodayWeight(viewData.weight);
+        setTodaySteps(viewData.steps || 0);
 
         // Process Today's Background Cache
         if (dateStr === todayStr) {
@@ -676,6 +702,20 @@ useEffect(() => {
               </div>
             </div>
           )}
+
+          {/* NEW: Steps Card */}
+          <div className="stats-card half-width-card">
+            <div className="stat-item">
+              <span className="stat-label">Steps</span>
+              <div className="weight-highlight">
+                <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#3b82f6' }}>
+                  {Math.round(todaySteps).toLocaleString()}
+                </span>
+                <span className="weight-unit">steps</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </>
