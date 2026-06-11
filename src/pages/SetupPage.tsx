@@ -27,6 +27,10 @@ export default function SetupPage() {
   const [sugarBudget, setSugarBudget] = useState<string | number>('');
   const [proteinBudget, setProteinBudget] = useState<string | number>('');
 
+  // NEW
+  const [weightGoal, setWeightGoal] = useState<string | number>('');
+  const [stepGoal, setStepGoal] = useState<string | number>('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -69,6 +73,24 @@ export default function SetupPage() {
         fiberBudget: fiberBudget !== '' ? Number(fiberBudget) : undefined,
         sugarBudget: sugarBudget !== '' ? Number(sugarBudget) : undefined,
         proteinBudget: proteinBudget !== '' ? Number(proteinBudget) : undefined,
+        
+        // NEW: Optional Goals
+        weightGoal: weightGoal !== '' ? Number(weightGoal) : undefined,
+        stepGoal: stepGoal !== '' ? Number(stepGoal) : undefined,
+        
+        // NEW: Initialize Goal History so the time machine works immediately
+        goalHistory: [{
+          date: new Date().toISOString().split('T')[0], // Today
+          caloriesBudget: Number(caloriesBudget),
+          fatBudget: fatBudget !== '' ? Number(fatBudget) : 0,
+          saturatedFatBudget: saturatedFatBudget !== '' ? Number(saturatedFatBudget) : 0,
+          carbsBudget: carbsBudget !== '' ? Number(carbsBudget) : 0,
+          fiberBudget: fiberBudget !== '' ? Number(fiberBudget) : 0,
+          sugarBudget: sugarBudget !== '' ? Number(sugarBudget) : 0,
+          proteinBudget: proteinBudget !== '' ? Number(proteinBudget) : 0,
+          weightGoal: weightGoal !== '' ? Number(weightGoal) : null,
+          stepGoal: stepGoal !== '' ? Number(stepGoal) : null,
+        }],
         
         trackFat,
         trackSaturatedFat,
@@ -203,6 +225,18 @@ export default function SetupPage() {
                 <input type="number" value={proteinBudget} onChange={(e) => setProteinBudget(e.target.value)} min="0" required placeholder="e.g. 150" />
               </div>
             )}
+          </div>
+
+          {/* NEW: Optional Goals */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+            <div className="form-group">
+              <label>Weight Goal (Optional)</label>
+              <input type="number" value={weightGoal} onChange={(e) => setWeightGoal(e.target.value)} min="0" step="0.1" placeholder="e.g. 150" />
+            </div>
+            <div className="form-group">
+              <label>Step Goal (Optional)</label>
+              <input type="number" value={stepGoal} onChange={(e) => setStepGoal(e.target.value)} min="0" placeholder="e.g. 10000" />
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', width: '100%', marginTop: '1rem' }}>

@@ -1,8 +1,8 @@
 // src/components/WeightTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllWeightLogs, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getAllWeightLogs, getWeightLogsSince, createWeightLog, deleteWeightLog, getHealthLogs, getHealthLogsSince } from '../services/database';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import './WeightTab.css';
 
 const formatTime12Hour = (timeValue: string) => {
@@ -57,7 +57,7 @@ const parseUnit = (u: string) => {
 };
 
 export default function WeightTab() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -71,8 +71,9 @@ export default function WeightTab() {
   const [submitting, setSubmitting] = useState(false);
   const [visibleDays, setVisibleDays] = useState(7);
 
-  // Time Range State for Chart
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('month');
+ // Time Range State for Chart
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('week');
+  const [loadedLevel, setLoadedLevel] = useState<number>(0); // NEW: Tracks how much data we've downloaded
 
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -82,9 +83,16 @@ export default function WeightTab() {
     }
   }, []);
 
-  const loadWeightLogs = async () => {
+  const loadWeightLogs = async (forceFetch = false) => {
     if (!user) return;
+    
+    // Smart Cache: Since we fetch all history locally, we only ever need to hit the database ONCE per session!
+    if (!forceFetch && loadedLevel >= 1) return;
+
     try {
+      if (weightLogs.length === 0) setLoading(true); 
+      
+      // Fetch the entire history once so we don't have to fight Firebase timestamp formats
       const [dbLogs, healthLogsRaw] = await Promise.all([
         getAllWeightLogs(user.uid),
         getHealthLogs(user.uid)
@@ -155,7 +163,14 @@ export default function WeightTab() {
         return true; 
       });
 
-      setWeightLogs(uniqueLogs);
+      // Robust Timestamp Fix: Ensure every log has a valid timestamp for the chart to read
+      const fixedLogs = uniqueLogs.map(log => ({
+        ...log,
+        timestamp: log.timestamp || new Date(`${log.date}T12:00:00`).getTime()
+      })).sort((a, b) => b.timestamp - a.timestamp);
+
+      setWeightLogs(fixedLogs);
+      setLoadedLevel(1); // Mark as cached!
     } catch (err) {
       console.error('Failed to load weight logs:', err);
     } finally {
@@ -163,8 +178,9 @@ export default function WeightTab() {
     }
   };
 
+  // Triggers only on initial load
   useEffect(() => {
-    loadWeightLogs();
+    loadWeightLogs(false);
   }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -192,7 +208,7 @@ export default function WeightTab() {
 
       setWeight('');
       setShowForm(false);
-      await loadWeightLogs();
+      await loadWeightLogs(true); // Force refresh
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save weight');
     } finally {
@@ -209,7 +225,7 @@ export default function WeightTab() {
     if (window.confirm('Are you sure you want to delete this weight log?')) {
       try {
         await deleteWeightLog(log.id);
-        await loadWeightLogs(); 
+        await loadWeightLogs(true); // Force refresh
       } catch (err) {
         console.error('Failed to delete log:', err);
         alert('Failed to delete the weight log. Please try again.');
@@ -240,7 +256,7 @@ export default function WeightTab() {
   const nowMs = Date.now();
   
   const chartData = [...weightLogs]
-    .filter(log => (nowMs - log.timestamp) <= rangeMs)
+    .filter(log => (nowMs - log.timestamp) <= rangeMs + (24 * 60 * 60 * 1000)) // Add 24h buffer so time-of-day doesn't hide logs
     .reverse() // Reverse so oldest is on the left
     .map(log => ({
       dateLabel: new Date(log.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -318,7 +334,16 @@ export default function WeightTab() {
                       padding={{ left: 15, right: 15 }} 
                     />
                     <YAxis 
-                      domain={[(dataMin: number) => Math.max(0, Math.floor(dataMin - 3)), (dataMax: number) => Math.ceil(dataMax + 3)]}
+                      domain={[
+                        (dataMin: number) => {
+                          const minWithGoal = userProfile?.weightGoal ? Math.min(dataMin, userProfile.weightGoal) : dataMin;
+                          return Math.max(0, Math.floor(minWithGoal - 3));
+                        }, 
+                        (dataMax: number) => {
+                          const maxWithGoal = userProfile?.weightGoal ? Math.max(dataMax, userProfile.weightGoal) : dataMax;
+                          return Math.ceil(maxWithGoal + 3);
+                        }
+                      ]}
                       axisLine={false} 
                       tickLine={false} 
                       tick={{ fill: '#64748b', fontSize: 12 }}
@@ -330,7 +355,18 @@ export default function WeightTab() {
                       itemStyle={{ color: '#2563eb', fontWeight: 600 }}
                       formatter={(value: any, name: any, props: any) => [`${value} ${props.payload.unit}`, 'Weight']}
                     />
-                    <Line 
+                    
+                    {/* NEW: Draw the Weight Goal Line */}
+                    {userProfile?.weightGoal && (
+                      <ReferenceLine 
+                        y={userProfile.weightGoal} 
+                        stroke="#10b981" 
+                        strokeDasharray="4 4" 
+                        label={{ position: 'top', value: 'Goal', fill: '#10b981', fontSize: 12, fontWeight: 600 }} 
+                      />
+                    )}
+
+                    <Line
                       type="monotone" 
                       dataKey="weight" 
                       stroke="#2563eb" 

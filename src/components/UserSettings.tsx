@@ -38,6 +38,8 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
     trackSugar: false,
     trackProtein: false,
     trackVitamins: false,
+    weightGoal: '' as number | string,
+    stepGoal: '' as number | string,
   });
   
   const [password, setPassword] = useState('');
@@ -67,6 +69,8 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
         trackSugar: userProfile.trackSugar || false,
         trackProtein: userProfile.trackProtein || false,
         trackVitamins: userProfile.trackVitamins || false,
+        weightGoal: userProfile.weightGoal || '',
+        stepGoal: userProfile.stepGoal || '',
       });
     }
   }, [userProfile]);
@@ -119,6 +123,8 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
         fiberBudget: Number(formData.fiberBudget) || 0,
         sugarBudget: Number(formData.sugarBudget) || 0,
         proteinBudget: Number(formData.proteinBudget) || 0,
+        weightGoal: formData.weightGoal ? Number(formData.weightGoal) : null,
+        stepGoal: formData.stepGoal ? Number(formData.stepGoal) : null,
       };
 
       // Remove any existing entry for TODAY to prevent duplicates if user saves twice in one day
@@ -137,6 +143,8 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
         fiberBudget: Number(formData.fiberBudget) || 0,
         sugarBudget: Number(formData.sugarBudget) || 0,
         proteinBudget: Number(formData.proteinBudget) || 0,
+        weightGoal: formData.weightGoal ? Number(formData.weightGoal) : null,
+        stepGoal: formData.stepGoal ? Number(formData.stepGoal) : null,
         goalHistory: updatedHistory // <--- Save the history array!
       };
 
@@ -345,6 +353,18 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
                       <input type="number" name="proteinBudget" value={formData.proteinBudget} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" required disabled={isBusy} />
                     </div>
                   )}
+                </section>
+
+                <section className="settings-section" style={{ marginTop: '2.5rem' }}>
+                  <h2>Goals (Optional)</h2>
+                  <div className="form-group">
+                    <label>Target Weight Goal</label>
+                    <input type="number" name="weightGoal" value={formData.weightGoal} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" step="0.1" disabled={isBusy} placeholder="No Goal Set" />
+                  </div>
+                  <div className="form-group">
+                    <label>Daily Step Goal</label>
+                    <input type="number" name="stepGoal" value={formData.stepGoal} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" disabled={isBusy} placeholder="No Goal Set" />
+                  </div>
                 </section>
               </>
             )}

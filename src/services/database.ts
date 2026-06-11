@@ -834,3 +834,26 @@ export async function toggleDoneLoggingDate(userId: string, dateStr: string, isD
     throw error;
   }
 }
+
+// Add these with your other export functions in database.ts
+export const getWeightLogsSince = async (userId: string, cutoffMs: number): Promise<any[]> => {
+  const logsRef = collection(db, 'weightLogs');
+  const q = query(
+    logsRef,
+    where('userId', '==', userId),
+    where('timestamp', '>=', cutoffMs)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const getHealthLogsSince = async (userId: string, cutoffMs: number): Promise<any[]> => {
+  const logsRef = collection(db, 'healthLogs');
+  const q = query(
+    logsRef,
+    where('userId', '==', userId),
+    where('timestamp', '>=', cutoffMs)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};

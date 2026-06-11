@@ -11,6 +11,11 @@ export interface UserProfile {
   email: string;
   caloriesBudget: number;
   
+  // NEW: Optional Goals
+  weightGoal?: number | null;
+  stepGoal?: number | null;
+  goalHistory?: any[]; // Ensure this is defined if it isn't already
+  
   // Nutrient Budgets
   proteinBudget?: number;
   fiberBudget?: number;

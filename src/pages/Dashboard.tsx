@@ -84,8 +84,8 @@ export default function Dashboard() {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Only trigger pull-to-refresh if we are at the very top of the scroll view
-    if (contentRef.current && contentRef.current.scrollTop === 0) {
+    // FIX: Relax the check to <= 5 to account for mobile sub-pixel scrolling
+    if (contentRef.current && contentRef.current.scrollTop <= 5) {
       setStartY(e.touches[0].clientY);
     } else {
       setStartY(0);
@@ -109,6 +109,12 @@ export default function Dashboard() {
     }
     setStartY(0);
     setPullDistance(0); // Snap back
+  };
+
+  // NEW: Catch browser interruptions so the screen doesn't get stuck pulled down
+  const handleTouchCancel = () => {
+    setStartY(0);
+    setPullDistance(0);
   };
 
   return (
@@ -180,7 +186,7 @@ export default function Dashboard() {
           className={`tab-btn ${activeTab === 'workout' ? 'active' : ''}`}
           onClick={() => setActiveTab('workout')}
         >
-          Workout
+          Workouts
         </button>
       </nav>
 
@@ -188,15 +194,16 @@ export default function Dashboard() {
         className="dashboard-content" 
         style={{ 
           position: 'relative', 
-          // FIX: Use 'none' when not pulling to prevent trapping fixed pop-ups
           transform: pullDistance > 0 ? `translateY(${pullDistance * 0.4}px)` : 'none', 
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          overscrollBehaviorY: 'contain' /* NEW: Stops Chrome/Safari from fighting your custom pull */
         }}
         ref={contentRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel} /* NEW: Snaps back if the browser interrupts */
       >
         {/* Visual Pull Indicator */}
         {pullDistance > 0 && (

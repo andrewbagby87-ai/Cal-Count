@@ -674,45 +674,101 @@ const healthW: any[] = [];
         <div className="dashboard-bottom-row">
           <div className="stats-card half-width-card">
             <div className="stat-item">
-              <span className="stat-label">Weight</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <img src="./weightscale.png" alt="Weight Icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                <span className="stat-label" style={{ margin: 0 }}>Weight</span>
+              </div>
               {todayWeight ? (
-                <div className="weight-highlight">
-                  <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
-                  <span className="weight-unit">{todayWeight.unit}</span>
-                  <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem' }}>
-                    at {formatTime12Hour(todayWeight.time)}
-                  </span>
+                <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                  <div className="weight-highlight" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '0.25rem' }}>
+                    <span className="weight-number">{Number(todayWeight.weight).toFixed(1)}</span>
+                    <span className="weight-unit">{todayWeight.unit}</span>
+                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.25rem' }}>
+                      at {formatTime12Hour(todayWeight.time)}
+                    </span>
+                  </div>
+                  {/* NEW: Distance from weight goal */}
+                  {activeProfile?.weightGoal && (
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '0.5rem' }}>
+                      <span style={{ color: Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal) < 0.1 ? '#10b981' : '#3b82f6' }}>
+                        {Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal) < 0.1 
+                          ? 'Goal reached! 🎉' 
+                          : `${Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal).toFixed(1)} ${todayWeight.unit} away`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="empty-weight"><span>No weight logged</span></div>
+                <div className="empty-weight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center' }}><span>No weight logged</span></div>
               )}
             </div>
           </div>
 
-          {caloriesBurned > 0 && (
-            <div className="stats-card half-width-card">
-              <div className="stat-item">
-                <span className="stat-label">Calories Burned</span>
-                <div className="weight-highlight">
+          {/* NEW: Calories Burned Card (Always Visible) */}
+          <div className="stats-card half-width-card">
+            <div className="stat-item">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <img src="./dumbell.png" alt="Workout Icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                <span className="stat-label" style={{ margin: 0 }}>Calories Burned</span>
+              </div>
+              {caloriesBurned > 0 ? (
+                <div className="weight-highlight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: '0.25rem' }}>
                   <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
                     {caloriesBurned}
                   </span>
                   <span className="weight-unit">kcal</span>
                 </div>
-              </div>
+              ) : (
+                <div className="empty-weight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center' }}>
+                  <span>No workouts logged</span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* NEW: Steps Card */}
+          {/* NEW: Steps Card Update with Circular Progress Bar */}
           <div className="stats-card half-width-card">
             <div className="stat-item">
-              <span className="stat-label">Steps</span>
-              <div className="weight-highlight">
-                <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#3b82f6' }}>
-                  {Math.round(todaySteps).toLocaleString()}
-                </span>
-                <span className="weight-unit">steps</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <img src="./footstep.png" alt="Steps Icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                <span className="stat-label" style={{ margin: 0 }}>Steps</span>
               </div>
+              {activeProfile?.stepGoal ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '1rem', position: 'relative' }}>
+                  <svg width="110" height="110" viewBox="0 0 110 110" style={{ transform: 'rotate(-90deg)' }}>
+                    {/* Background Circle */}
+                    <circle cx="55" cy="55" r="46" fill="none" stroke="#e2e8f0" strokeWidth="8" />
+                    {/* Progress Circle */}
+                    <circle 
+                      cx="55" cy="55" r="46" 
+                      fill="none" 
+                      stroke="#3b82f6" 
+                      strokeWidth="8" 
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 46}
+                      strokeDashoffset={2 * Math.PI * 46 - (Math.min((todaySteps / activeProfile.stepGoal) * 100, 100) / 100) * (2 * Math.PI * 46)}
+                      style={{ transition: 'stroke-dashoffset 0.8s ease-in-out' }}
+                    />
+                  </svg>
+                  
+                  {/* Inner Text Overlay */}
+                  <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#3b82f6', lineHeight: '1.2' }}>
+                      {Math.round(todaySteps).toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
+                      / {activeProfile.stepGoal.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="weight-highlight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: '0.25rem' }}>
+                  <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#3b82f6' }}>
+                    {Math.round(todaySteps).toLocaleString()}
+                  </span>
+                  <span className="weight-unit">steps</span>
+                </div>
+              )}
             </div>
           </div>
 
