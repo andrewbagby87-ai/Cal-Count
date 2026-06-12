@@ -27,6 +27,35 @@ const deduplicateLogs = (logs: FoodLog[]) => {
   });
 };
 
+// NEW: Global memory cache so downloaded logs survive when the modal is closed
+export let globalMealCache: FoodLog[] = [];
+export let globalFetchedDates = new Set<string>();
+let isPreloadingMeals = false;
+
+export const preloadWeeklyMeals = async (userId: string) => {
+  if (globalFetchedDates.size > 0 || isPreloadingMeals) return;
+  isPreloadingMeals = true;
+  try {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+    const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    
+    const logs = await getWeeklyFoodLogs(userId, format(start), format(end));
+    globalMealCache = deduplicateLogs(logs);
+    
+    for(let i=0; i<=6; i++) {
+       const d = new Date(end);
+       d.setDate(end.getDate() - i);
+       globalFetchedDates.add(format(d));
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isPreloadingMeals = false;
+  }
+};
+
 interface Props {
   foods: Food[];
   onAdd: (foodData: any) => Promise<void>;
@@ -75,9 +104,9 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
   const [searchTerm, setSearchTerm] = useState('');
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
   const [showFlavorSuggestions, setShowFlavorSuggestions] = useState(false);
-  const [allLogs, setAllLogs] = useState<FoodLog[]>([]);
+  const [allLogs, setAllLogs] = useState<FoodLog[]>(globalMealCache);
   const [isFetchingLogs, setIsFetchingLogs] = useState(false);
-  const [fetchedDates, setFetchedDates] = useState<Set<string>>(new Set());
+  const [fetchedDates, setFetchedDates] = useState<Set<string>>(globalFetchedDates);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -140,31 +169,15 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
     const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
     const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
 
-    if (user && shouldLoadFoods && allLogs.length === 0) {
-        setIsFetchingLogs(true); // START LOADING
-        
-        // NEW: Fetch only the last 7 days
-        const end = new Date();
-        const start = new Date();
-        start.setDate(end.getDate() - 6);
-        const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        
-        getWeeklyFoodLogs(user.uid, format(start), format(end))
-          .then(logs => {
-            setAllLogs(deduplicateLogs(logs));
-            // Mark these 7 days as downloaded in our tracker
-            const dates = new Set<string>();
-            for(let i=0; i<=6; i++) {
-               const d = new Date(end);
-               d.setDate(end.getDate() - i);
-               dates.add(format(d));
-            }
-            setFetchedDates(dates);
-          })
-          .catch(console.error)
-          .finally(() => setIsFetchingLogs(false)); // STOP LOADING
-      }
-  }, [user, searchTerm, filters, allLogs.length]);
+    if (user && shouldLoadFoods && globalFetchedDates.size === 0) {
+        setIsFetchingLogs(true);
+        preloadWeeklyMeals(user.uid).then(() => {
+          setAllLogs([...globalMealCache]);
+          setFetchedDates(new Set(globalFetchedDates));
+          setIsFetchingLogs(false);
+        });
+    }
+  }, [user, searchTerm, filters]);
 
   useEffect(() => {
     if (initialFood) {
@@ -218,14 +231,18 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   // NEW: Dynamically fetch older days if you scroll past the initial 7 days
   useEffect(() => {
-    if (!user || viewMode !== 'meals' || allLogs.length === 0) return; 
+    if (!user || viewMode !== 'meals') return; 
     
-    if (!fetchedDates.has(pastMealDate)) {
+    if (!globalFetchedDates.has(pastMealDate)) {
       setIsFetchingLogs(true);
       getDayFoodLogs(user.uid, pastMealDate)
         .then(newLogs => {
-          setAllLogs(prev => deduplicateLogs([...prev, ...newLogs]));
-          setFetchedDates(prev => new Set(prev).add(pastMealDate)); // Mark as fetched
+          // Save to global cache so it survives closing!
+          globalMealCache = deduplicateLogs([...globalMealCache, ...newLogs]);
+          globalFetchedDates.add(pastMealDate);
+          
+          setAllLogs([...globalMealCache]);
+          setFetchedDates(new Set(globalFetchedDates)); 
         })
         .catch(console.error)
         .finally(() => setIsFetchingLogs(false));
@@ -236,21 +253,19 @@ const handleModeSwitch = (mode: 'foods' | 'meals') => {
     setViewMode(mode);
     setMultiSelectedIds(new Set());
     if (mode === 'meals') {
-          setIsMultiSelectMode(true);
-          if (user && allLogs.length === 0) {
-            setIsFetchingLogs(true); // START LOADING
-            
-            // NEW: Fetch only the last 7 days
-            const end = new Date();
-            const start = new Date();
-            start.setDate(end.getDate() - 6);
-            const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            
-            getWeeklyFoodLogs(user.uid, format(start), format(end))
-              .then(logs => setAllLogs(deduplicateLogs(logs)))
-              .catch(console.error)
-              .finally(() => setIsFetchingLogs(false)); // STOP LOADING
-          }
+      setIsMultiSelectMode(true);
+      if (user && globalFetchedDates.size === 0) {
+        setIsFetchingLogs(true);
+        preloadWeeklyMeals(user.uid).then(() => {
+          setAllLogs([...globalMealCache]);
+          setFetchedDates(new Set(globalFetchedDates));
+          setIsFetchingLogs(false);
+        });
+      } else {
+        // Data is already cached, just make sure state is perfectly synced
+        setAllLogs([...globalMealCache]);
+        setFetchedDates(new Set(globalFetchedDates));
+      }
     } else {
       setIsMultiSelectMode(false);
     }
@@ -551,11 +566,13 @@ const handleModeSwitch = (mode: 'foods' | 'meals') => {
           const format = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           
           const newWeeklyLogs = await getWeeklyFoodLogs(user.uid, format(start), format(end));
-          setAllLogs(prev => {
-            // Keep any older logs that we fetched manually so they don't vanish
-            const olderLogs = prev.filter(log => log.date < format(start));
-            return deduplicateLogs([...newWeeklyLogs, ...olderLogs]);
-          });
+          
+          // Update the global cache directly
+          const olderLogs = globalMealCache.filter(log => log.date < format(start));
+          globalMealCache = deduplicateLogs([...newWeeklyLogs, ...olderLogs]);
+          
+          setAllLogs([...globalMealCache]);
+          setFetchedDates(new Set(globalFetchedDates));
 
       setLocalFoods(prevFoods => prevFoods.map(f => f.id === selectedFood.id ? updatedFood : f));
       setSelectedFood(updatedFood);

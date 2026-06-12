@@ -5,6 +5,7 @@ import DailyStatsTab from '../components/DailyStatsTab';
 import FoodLogTab from '../components/FoodLogTab';
 import WeightTab from '../components/WeightTab';
 import WorkoutTab from '../components/WorkoutTab';
+import { preloadWeeklyMeals } from '../components/AddPreviousFoodModal';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const contentRef = useRef<HTMLDivElement>(null);
   
   // Bring in the logout function from useAuth
-  const { userProfile, loading, logout } = useAuth();
+  const { user, userProfile, loading, logout } = useAuth();
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +37,13 @@ export default function Dashboard() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // NEW: Preload the weekly meals silently in the background
+  useEffect(() => {
+    if (user?.uid) {
+      preloadWeeklyMeals(user.uid);
+    }
+  }, [user]);
 
   // 2. THE WATERFALL BOOT SEQUENCE
   // We delay the mounting of hidden tabs so the network isn't choked on startup

@@ -159,6 +159,7 @@ export default function DailyStatsTab() {
   const [syncedWorkouts, setSyncedWorkouts] = useState<any[]>([]);
   const [todayWeight, setTodayWeight] = useState<WeightLog | null>(null);
   const [todaySteps, setTodaySteps] = useState<number>(0);
+  const [todaySleep, setTodaySleep] = useState<number>(0);
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
   const [loading, setLoading] = useState(true);
   const todayCache = useRef<any>(null);
@@ -358,6 +359,7 @@ useEffect(() => {
         setSyncedWorkouts(todayCache.current.syncedWorkouts);
         setTodayWeight(todayCache.current.weight);
         setTodaySteps(todayCache.current.steps || 0);
+        setTodaySleep(todayCache.current.sleep || 0);
         if (!isBackgroundRefresh.current) setLoading(false);
       } else if (!isBackgroundRefresh.current) {
         setLoading(true);
@@ -388,8 +390,9 @@ useEffect(() => {
             ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
           }));
 
-const healthW: any[] = [];
-          let daySteps = 0; // NEW
+          const healthW: any[] = [];
+          let daySteps = 0; 
+          let daySleep = 0; // NEW: Setup sleep variable
           const safeHealth = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
           
           safeHealth.forEach((log: any) => {
@@ -446,9 +449,29 @@ const healthW: any[] = [];
                   }
                 }
               }
+
+              // NEW: Extract Sleep
+              if (metric.name === 'sleep_analysis') {
+                if (Array.isArray(metric.data)) {
+                  metric.data.forEach((entry: any) => {
+                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
+                    const parsedDate = formatSyncDate(dateObj);
+                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                      daySleep = Math.max(daySleep, Number(entry.totalSleep || entry.qty || entry.value || 0));
+                    }
+                  });
+                } else {
+                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
+                  const parsedDate = formatSyncDate(dateObj);
+                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
+                    daySleep = Math.max(daySleep, Number(metric.totalSleep || metric.qty || metric.value || 0));
+                  }
+                }
+              }
             };
 
-            if (log.name === 'weight_body_mass' || log.name === 'step_count') {
+            // FIX: Added 'sleep_analysis' to the allowed processing log types
+            if (log.name === 'weight_body_mass' || log.name === 'step_count' || log.name === 'sleep_analysis') {
               processMetric(log);
             } else if (Array.isArray(log.metrics)) {
               log.metrics.forEach(processMetric);
@@ -458,7 +481,7 @@ const healthW: any[] = [];
           });
 
           const combined = [...manualW, ...healthW].filter(w => w.weight > 0).sort((a, b) => b.timestamp - a.timestamp);
-          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null, steps: daySteps };
+          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null, steps: daySteps, sleep: daySleep };
         };
 
         // Process the Viewed Date
@@ -468,6 +491,7 @@ const healthW: any[] = [];
         setSyncedWorkouts(viewData.syncedWorkouts);
         setTodayWeight(viewData.weight);
         setTodaySteps(viewData.steps || 0);
+        setTodaySleep(viewData.sleep || 0); // NEW: Save to view state
 
         // Process Today's Background Cache
         if (dateStr === todayStr) {
@@ -767,6 +791,35 @@ const healthW: any[] = [];
                     {Math.round(todaySteps).toLocaleString()}
                   </span>
                   <span className="weight-unit">steps</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* NEW: Sleep Card */}
+          <div className="stats-card half-width-card">
+            <div className="stat-item">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <img src="./bed.png" alt="Sleep Icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                <span className="stat-label" style={{ margin: 0 }}>Sleep</span>
+              </div>
+              {todaySleep > 0 ? (
+                <div className="weight-highlight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: '0.2rem' }}>
+                  {/* Calculate Hours */}
+                  <span className="burned" style={{ fontSize: '1.75rem', fontWeight: 700, color: '#6366f1' }}>
+                    {Math.floor(todaySleep)}
+                  </span>
+                  <span className="weight-unit" style={{ marginRight: '0.25rem' }}>hr</span>
+                  
+                  {/* Calculate Minutes */}
+                  <span className="burned" style={{ fontSize: '1.75rem', fontWeight: 700, color: '#6366f1' }}>
+                    {Math.round((todaySleep - Math.floor(todaySleep)) * 60)}
+                  </span>
+                  <span className="weight-unit">min</span>
+                </div>
+              ) : (
+                <div className="empty-weight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center' }}>
+                  <span>No sleep logged</span>
                 </div>
               )}
             </div>
