@@ -696,6 +696,7 @@ useEffect(() => {
         </div>
 
         <div className="dashboard-bottom-row">
+          {activeProfile?.showWeightOnDashboard !== false && (
           <div className="stats-card half-width-card">
             <div className="stat-item">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -727,8 +728,10 @@ useEffect(() => {
               )}
             </div>
           </div>
+          )}
 
           {/* NEW: Calories Burned Card (Always Visible) */}
+          {activeProfile?.showCaloriesBurnedOnDashboard !== false && (
           <div className="stats-card half-width-card">
             <div className="stat-item">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -749,8 +752,10 @@ useEffect(() => {
               )}
             </div>
           </div>
+          )}
 
           {/* NEW: Steps Card Update with Circular Progress Bar */}
+          {activeProfile?.showStepsOnDashboard !== false && (
           <div className="stats-card half-width-card">
             <div className="stat-item">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -795,8 +800,10 @@ useEffect(() => {
               )}
             </div>
           </div>
+          )}
 
           {/* NEW: Sleep Card */}
+          {activeProfile?.showSleepOnDashboard !== false && (
           <div className="stats-card half-width-card">
             <div className="stat-item">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -824,6 +831,7 @@ useEffect(() => {
               )}
             </div>
           </div>
+          )}
 
         </div>
       </div>

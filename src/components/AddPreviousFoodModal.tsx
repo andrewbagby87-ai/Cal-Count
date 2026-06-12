@@ -167,7 +167,8 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   useEffect(() => {
     const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
-    const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
+    // FIX: Always load if in vitamin mode, otherwise require 2 chars or filters
+    const shouldLoadFoods = isVitaminMode || searchTerm.length >= 2 || hasCustomFilters;
 
     if (user && shouldLoadFoods && globalFetchedDates.size === 0) {
         setIsFetchingLogs(true);
@@ -918,7 +919,8 @@ try {
 
   // --- FILTER & SORT LOGIC ---
   const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
-    const shouldLoadFoods = searchTerm.length >= 2 || hasCustomFilters;
+  // FIX: Always load if in vitamin mode, otherwise require 2 chars or filters
+  const shouldLoadFoods = isVitaminMode || searchTerm.length >= 2 || hasCustomFilters;
 
   const processedFoods = !shouldLoadFoods ? [] : localFoods.filter(food => {
     const searchLower = searchTerm.toLowerCase();
@@ -1416,7 +1418,7 @@ try {
             // --- EXISTING FOODS VIEW ---
             !shouldLoadFoods ? (
               <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
-              Type at least 2 letters or apply a filter to view {isVitaminMode ? 'vitamins' : 'foods'}.
+              Type at least 2 letters or apply a filter to view foods.
             </p>
           ) : processedFoods.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>

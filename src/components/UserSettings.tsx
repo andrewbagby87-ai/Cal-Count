@@ -38,6 +38,10 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
     trackSugar: false,
     trackProtein: false,
     trackVitamins: false,
+    showWeightOnDashboard: true,
+    showSleepOnDashboard: true,
+    showCaloriesBurnedOnDashboard: true,
+    showStepsOnDashboard: true,
     weightGoal: '' as number | string,
     stepGoal: '' as number | string,
   });
@@ -69,6 +73,10 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
         trackSugar: userProfile.trackSugar || false,
         trackProtein: userProfile.trackProtein || false,
         trackVitamins: userProfile.trackVitamins || false,
+        showWeightOnDashboard: userProfile.showWeightOnDashboard ?? true,
+        showSleepOnDashboard: userProfile.showSleepOnDashboard ?? true,
+        showCaloriesBurnedOnDashboard: userProfile.showCaloriesBurnedOnDashboard ?? true,
+        showStepsOnDashboard: userProfile.showStepsOnDashboard ?? true,
         weightGoal: userProfile.weightGoal || '',
         stepGoal: userProfile.stepGoal || '',
       });
@@ -307,6 +315,23 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
                   </div>
                   <div className="checkbox-group">
                     <label><input type="checkbox" name="trackVitamins" checked={formData.trackVitamins} onChange={handleChange} disabled={isBusy} /> Vitamins</label>
+                  </div>
+                </section>
+
+                {/* NEW: Dashboard Display Settings */}
+                <section className="settings-section" style={{ marginTop: '2.5rem' }}>
+                  <h2>Dashboard Display</h2>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="showWeightOnDashboard" checked={formData.showWeightOnDashboard} onChange={handleChange} disabled={isBusy} /> Show Weight</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="showCaloriesBurnedOnDashboard" checked={formData.showCaloriesBurnedOnDashboard} onChange={handleChange} disabled={isBusy} /> Show Calories Burned</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="showStepsOnDashboard" checked={formData.showStepsOnDashboard} onChange={handleChange} disabled={isBusy} /> Show Steps</label>
+                  </div>
+                  <div className="checkbox-group">
+                    <label><input type="checkbox" name="showSleepOnDashboard" checked={formData.showSleepOnDashboard} onChange={handleChange} disabled={isBusy} /> Show Sleep</label>
                   </div>
                 </section>
 
