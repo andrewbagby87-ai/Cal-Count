@@ -1018,45 +1018,47 @@ try {
         <h3 style={{ marginBottom: '1rem', flexShrink: 0 }}>{isVitaminMode ? 'Add Vitamin' : 'Add Food'}</h3>
         
         {/* NEW: Slider View Mode Toggle */}
-        <div style={{ 
-          display: 'flex', position: 'relative', backgroundColor: '#f8fafc', 
-          border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '4px', 
-          marginBottom: '1rem', flexShrink: 0 
-        }}>
-          {/* Animated Background Pill */}
-          <div style={{
-            position: 'absolute', top: '4px', bottom: '4px', left: '4px',
-            width: 'calc(50% - 4px)', backgroundColor: '#2563eb', borderRadius: '0.35rem',
-            transition: 'transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1)',
-            transform: viewMode === 'foods' ? 'translateX(0)' : 'translateX(100%)',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.1)', zIndex: 1
-          }} />
+        {!isVitaminMode && (
+          <div style={{ 
+            display: 'flex', position: 'relative', backgroundColor: '#f8fafc', 
+            border: '1px solid #cbd5e1', borderRadius: '0.5rem', padding: '4px', 
+            marginBottom: '1rem', flexShrink: 0 
+          }}>
+            {/* Animated Background Pill */}
+            <div style={{
+              position: 'absolute', top: '4px', bottom: '4px', left: '4px',
+              width: 'calc(50% - 4px)', backgroundColor: '#2563eb', borderRadius: '0.35rem',
+              transition: 'transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1)',
+              transform: viewMode === 'foods' ? 'translateX(0)' : 'translateX(100%)',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.1)', zIndex: 1
+            }} />
 
-          <button 
-             type="button"
-             style={{
-               flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
-               color: viewMode === 'foods' ? '#fff' : '#64748b',
-               background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
-               transition: 'color 0.25s ease'
-             }}
-             onClick={() => handleModeSwitch('foods')}
-          >
-             By Food
-          </button>
-          <button 
-             type="button"
-             style={{
-               flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
-               color: viewMode === 'meals' ? '#fff' : '#64748b',
-               background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
-               transition: 'color 0.25s ease'
-             }}
-             onClick={() => handleModeSwitch('meals')}
-          >
-             Previous Meals
-          </button>
-        </div>
+            <button 
+               type="button"
+               style={{
+                 flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
+                 color: viewMode === 'foods' ? '#fff' : '#64748b',
+                 background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+                 transition: 'color 0.25s ease'
+               }}
+               onClick={() => handleModeSwitch('foods')}
+            >
+               By Food
+            </button>
+            <button 
+               type="button"
+               style={{
+                 flex: 1, padding: '0.5rem', fontSize: '0.9rem', fontWeight: 600,
+                 color: viewMode === 'meals' ? '#fff' : '#64748b',
+                 background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+                 transition: 'color 0.25s ease'
+               }}
+               onClick={() => handleModeSwitch('meals')}
+            >
+               Previous Meals
+            </button>
+          </div>
+        )}
 
         {/* ONLY SHOW THESE IN FOODS MODE */}
         {viewMode === 'foods' && (
@@ -1124,11 +1126,19 @@ try {
 
             {showFilterMenu && (
               <div style={{
-                position: 'absolute', top: '100%', right: 0, zIndex: 20, backgroundColor: '#fff',
-                border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                minWidth: '280px', width: 'max-content', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                maxHeight: '400px', overflowY: 'auto'
-              }}>
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 10000,
+                display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem',
+                backdropFilter: 'blur(2px)'
+              }} onClick={() => setShowFilterMenu(false)}>
+                <div style={{
+                  backgroundColor: '#fff', borderRadius: '1rem', width: '100%', maxWidth: '350px',
+                  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                  maxHeight: '80vh', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                }} onClick={(e) => e.stopPropagation()}>
+                  
+                  {/* Scrollable Container */}
+                  <div style={{ overflowY: 'auto', flex: 1, paddingBottom: '0.5rem' }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Filters</span>
                   {(hasActiveFilters || sortMode !== 'newest') && (
@@ -1144,15 +1154,19 @@ try {
                   )}
                 </div>
 
-                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
-                  <input type="checkbox" checked={filters.showFoods} onChange={(e) => setFilters(p => ({...p, showFoods: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
-                  <span>🍎 Regular Foods</span>
-                </label>
+                {!isVitaminMode && (
+                  <>
+                    <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                      <input type="checkbox" checked={filters.showFoods} onChange={(e) => setFilters(p => ({...p, showFoods: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                      <span>🍎 Regular Foods</span>
+                    </label>
 
-                <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
-                  <input type="checkbox" checked={filters.showRecipes} onChange={(e) => setFilters(p => ({...p, showRecipes: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
-                  <span>🥘 Recipes</span>
-                </label>
+                    <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
+                      <input type="checkbox" checked={filters.showRecipes} onChange={(e) => setFilters(p => ({...p, showRecipes: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
+                      <span>🥘 Recipes</span>
+                    </label>
+                  </>
+                )}
 
                 <label style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', whiteSpace: 'nowrap', margin: 0, fontWeight: 'normal' }}>
                   <input type="checkbox" checked={filters.highProtein} onChange={(e) => setFilters(p => ({...p, highProtein: e.target.checked}))} style={{ margin: 0, cursor: 'pointer' }} />
@@ -1269,6 +1283,15 @@ try {
                   <span>Calories: Highest to Lowest</span>
                 </label>
 
+                  </div>
+                  
+                  {/* Fixed Footer with Done Button */}
+                  <div style={{ padding: '1rem', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                    <button type="button" onClick={() => setShowFilterMenu(false)} className="btn btn-primary" style={{ width: '100%', margin: 0 }}>
+                      Done
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1306,16 +1329,6 @@ try {
               
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button 
-                  className="btn btn-secondary btn-sm" 
-                  style={{ 
-                    margin: 0, padding: '0 1rem', fontSize: '0.85rem', height: '38px', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box'
-                  }} 
-                  onClick={() => { setIsMultiSelectMode(false); setMultiSelectedIds(new Set()); }}
-                >
-                  Cancel
-                </button>
-                <button 
                   className="btn btn-primary btn-sm" 
                   style={{ 
                     margin: 0, padding: '0 1rem', fontSize: '0.85rem', height: '38px', 
@@ -1351,13 +1364,17 @@ try {
             allLogs.filter(log => log.date === pastMealDate).length === 0 ? (
               <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>No meals logged on this date.</p>
             ) : (
-              ['Vitamins','Breakfast', 'Lunch', 'Dinner', 'Snack',  ''].map(mealCategory => {
+              ['Breakfast', 'Lunch', 'Dinner', 'Snack', ''].map(mealCategory => {
                 const categoryLogs = allLogs.filter(log => log.date === pastMealDate && (log.mealType || '') === mealCategory);
                 
                 if (categoryLogs.length === 0) return null;
 
-                // Sort chronologically within the meal
-                const sortedLogs = [...categoryLogs].sort((a, b) => ((a as any).createdAt || 0) - ((b as any).createdAt || 0));
+                // Sort chronologically within the meal using the primary timestamp
+                const sortedLogs = [...categoryLogs].sort((a, b) => {
+                  const timeA = a.timestamp || (a as any).createdAt || 0;
+                  const timeB = b.timestamp || (b as any).createdAt || 0;
+                  return timeA - timeB;
+                });
 
                 return (
                   // 1. Unified Outer Border Wrapper
