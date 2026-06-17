@@ -287,10 +287,11 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     setIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSaveUpdatesOnly = async () => {
+const handleSaveUpdatesOnly = async () => {
     if (!user) return;
     
-    onClose();
+    // GOOD: Sets button to "Saving..." and keeps modal open
+    setIsLogging(true);
     
     try {
       const baseNutrition = getBaseNutrition();
@@ -319,8 +320,14 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       window.dispatchEvent(new Event('foodLibraryChanged'));
 
       onCreated();
+      // GOOD: Closes the modal only after events are dispatched
+      onClose();
     } catch (err) {
       console.error(err);
+      alert("Failed to save updates.");
+    } finally {
+      // GOOD: Resets the button state
+      setIsLogging(false);
     }
   };
 
@@ -338,11 +345,12 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
     }
   };
 
- const handleFinalLog = async (e: React.FormEvent) => {
+const handleFinalLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
-    onClose();
+    // GOOD: Sets button to "Saving..." and keeps modal open
+    setIsLogging(true);
 
     try {
       const baseNutrition = getBaseNutrition();
@@ -400,8 +408,14 @@ export default function CreateRecipeModal({ foods, onClose, onCreated, selectedD
       window.dispatchEvent(new Event('foodLibraryChanged'));
       
       onCreated();
+      // GOOD: Closes the modal only after events are dispatched
+      onClose();
     } catch(err) {
       console.error(err);
+      alert("Failed to log recipe.");
+    } finally {
+      // GOOD: Resets the button state
+      setIsLogging(false);
     } 
   };
 
