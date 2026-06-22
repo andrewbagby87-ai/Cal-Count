@@ -1,5 +1,6 @@
 // src/components/CreateFoodModal.tsx
 import { useState, useRef, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useAuth } from '../contexts/AuthContext';
 import { createFood, getUserFoods, createFoodLog } from '../services/database';
 import { Food } from '../types';
@@ -75,6 +76,9 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [isAnalyzingLabel, setIsAnalyzingLabel] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const topRef = useRef<HTMLDivElement>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -215,6 +219,92 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     if (!val) return undefined;
     const parsed = parseFloat(val);
     return isNaN(parsed) ? undefined : Number(parsed.toFixed(2));
+  };
+
+  // <-- ADD THIS ENTIRE FUNCTION -->
+  const handleLabelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsAnalyzingLabel(true);
+    setError('');
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = async () => {
+        try {
+          const base64String = (reader.result as string).split(',')[1];
+          
+          // Initialize Gemini (using the standard 2.0 flash model)
+          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+          const prompt = `
+            Analyze this image of a nutrition label. Extract the nutritional values and return ONLY a raw JSON object. 
+            
+            CRITICAL INSTRUCTION: If the nutrition label has multiple columns (for example, "Per Serving" and "Per Container"), you MUST ONLY extract the values for ONE SERVING. Ignore the "Per Container" values entirely.
+            
+            Do not include markdown formatting like \`\`\`json.
+            Only output numbers or decimals as strings. If a value is missing or you can't read it, return an empty string "".
+            
+            NEW RULE: If a nutritional value on the label is explicitly listed as "<1", "< 1", "<1g", or "less than 1", you MUST output it as "0".
+            
+            SUGAR RULE: For the "sugar" key, you MUST extract the "Total Sugars" value. Do not use the "Added Sugars" value for this key.
+            
+            ALSO EXTRACT the serving size volume or weight (e.g., from "Serving Size 1 cup (240ml)" or "Serving Size 100g"). 
+            Return the number in a key called "servingAmount" and the unit in a key called "servingUnit". 
+            The "servingUnit" MUST perfectly match one of these exact strings: "g", "oz", "cup", "ml", "each". If the unit on the label does not match one of these, or is missing, leave both servingAmount and servingUnit as empty strings "".
+            
+            Use exactly these keys: calories, fat, saturatedFat, transFat, cholesterol, sodium, carbs, fiber, sugar, protein, labelServings, servingAmount, servingUnit.
+          `;
+
+          const result = await model.generateContent([
+            prompt,
+            { inlineData: { data: base64String, mimeType: file.type } }
+          ]);
+
+          const responseText = result.response.text().trim();
+          const cleanJsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const extractedData = JSON.parse(cleanJsonStr);
+
+          setFormData(prev => {
+            const hasValidVolume = extractedData.servingAmount && extractedData.servingUnit;
+
+            return {
+              ...prev,
+              calories: extractedData.calories || prev.calories,
+              fat: extractedData.fat || prev.fat,
+              saturatedFat: extractedData.saturatedFat || prev.saturatedFat,
+              transFat: extractedData.transFat || prev.transFat,
+              cholesterol: extractedData.cholesterol || prev.cholesterol,
+              sodium: extractedData.sodium || prev.sodium,
+              carbs: extractedData.carbs || prev.carbs,
+              fiber: extractedData.fiber || prev.fiber,
+              sugar: extractedData.sugar || prev.sugar,
+              protein: extractedData.protein || prev.protein,
+              
+              labelServings: '1', 
+
+              labelVolumes: hasValidVolume 
+                ? [{ amount: String(extractedData.servingAmount), unit: extractedData.servingUnit }] 
+                : prev.labelVolumes
+            };
+          });
+        } catch (innerErr) {
+          console.error("AI Parsing Error:", innerErr);
+          setError('Failed to extract data from the image. Please enter it manually.');
+        } finally {
+          setIsAnalyzingLabel(false);
+          if (fileInputRef.current) fileInputRef.current.value = ''; 
+        }
+      };
+    } catch (err) {
+      console.error(err);
+      setError('Error reading the image file.');
+      setIsAnalyzingLabel(false);
+    }
   };
 
   const handleContinue = (e: React.FormEvent) => {
@@ -663,10 +753,38 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
               </div>
             </div>
 
+            {/* <-- ADD THIS NEW BLOCK --> */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              ref={fileInputRef} 
+              onChange={handleLabelUpload} 
+              style={{ display: 'none' }} 
+            />
+
+            <div style={{ marginBottom: '1.5rem', marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '0.75rem', textAlign: 'center' }}>
+              <p style={{ margin: '0 0 0.75rem 0', color: '#166534', fontWeight: 600, fontSize: '0.9rem' }}>
+                ✨ Have a nutrition label?
+              </p>
+              <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isAnalyzingLabel}
+                style={{ 
+                  width: '100%', padding: '0.75rem', backgroundColor: '#22c55e', color: 'white', 
+                  border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: isAnalyzingLabel ? 'wait' : 'pointer' 
+                }}
+              >
+                {isAnalyzingLabel ? 'Analyzing Label...' : '📸 Scan Label with AI'}
+              </button>
+            </div>
+            {/* <-- END OF NEW BLOCK --> */}
+
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
             <div className="form-group">
-              <label htmlFor="labelServings">Number of Servings on Label *</label>
+              <label htmlFor="labelServings">Number of Servings *</label>
               <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={formData.labelServings} onChange={handleChange} placeholder="1" required />
             </div>
 
@@ -697,7 +815,7 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
-            <div className="form-group"><label htmlFor="calories">Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={formData.calories} onChange={handleChange} placeholder="0" required /></div>
+            <div className="form-group"><label htmlFor="calories">Calories *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={formData.calories} onChange={handleChange} placeholder="0" required /></div>
             <div className="form-group"><label htmlFor="fat">Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={formData.fat} onChange={handleChange} placeholder="0" /></div>
             <div className="form-group"><label htmlFor="saturatedFat">Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={formData.saturatedFat} onChange={handleChange} placeholder="0" /></div>
             <div className="form-group"><label htmlFor="transFat">Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={formData.transFat} onChange={handleChange} placeholder="0" /></div>
