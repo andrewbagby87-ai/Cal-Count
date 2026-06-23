@@ -1,5 +1,6 @@
 // src/components/AddPreviousFoodModal.tsx
 import { useState, useEffect, useRef } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Food, FoodLog } from '../types';
 import { deleteFood, getWeeklyFoodLogs, getDayFoodLogs, updateFood, createFoodLog, updateAllPastLogsForFood } from '../services/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -152,6 +153,11 @@ export default function AddPreviousFoodModal({ foods, onAdd, onBack, onClose, on
 
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddData, setQuickAddData] = useState({ name: '', icon: '', calories: '' });
+
+  const [isEstimatingMeal, setIsEstimatingMeal] = useState(false);
+  const mealPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const [mealDescription, setMealDescription] = useState('');
 
     useEffect(() => {
     // Lock background scrolling when modal mounts
@@ -827,6 +833,66 @@ try {
       setError(err instanceof Error ? err.message : 'Failed to add food');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMealPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsEstimatingMeal(true);
+    setError('');
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const base64String = (reader.result as string).split(',')[1];
+          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+          const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            generationConfig: {
+              temperature: 0, // Forces zero randomness
+            }
+          });
+
+          const userContext = mealDescription.trim() 
+            ? `\nThe user provided this additional context to help you: "${mealDescription}"` 
+            : '';
+
+          const prompt = `Analyze this image of a meal. Identify the visible ingredients and portion sizes, then estimate the total calories.${userContext}
+          Return ONLY a raw JSON object with no markdown formatting. 
+          Use these exact keys: {"calories": number, "description": "short name of food"}. 
+          Return calories as a rounded integer.`;
+          
+          const result = await model.generateContent([
+            prompt,
+            { inlineData: { data: base64String, mimeType: file.type } }
+          ]);
+
+          const responseText = result.response.text().trim();
+          const cleanJsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const extractedData = JSON.parse(cleanJsonStr);
+
+          // Auto-fill the Quick Add form!
+          setQuickAddData(prev => ({
+            ...prev,
+            name: extractedData.description || prev.name,
+            calories: extractedData.calories ? String(extractedData.calories) : prev.calories
+          }));
+        } catch (innerErr) {
+          console.error("AI Parsing Error:", innerErr);
+          setError('Failed to estimate calories from the image. Please enter manually.');
+        } finally {
+          setIsEstimatingMeal(false);
+          if (mealPhotoInputRef.current) mealPhotoInputRef.current.value = '';
+        }
+      };
+    } catch (err) {
+      console.error(err);
+      setError('Error reading the image file.');
+      setIsEstimatingMeal(false);
     }
   };
 
@@ -1534,6 +1600,49 @@ try {
           Log calories directly without saving a new food to your list.
         </p>
 
+        {/* <-- ADD THIS NEW BLOCK --> */}
+        <input
+          type="file"
+          accept="image/*"
+          // Note: Deliberately left out capture="environment" so mobile users can pick from their camera roll!
+          ref={mealPhotoInputRef}
+          onChange={handleMealPhotoUpload}
+          style={{ display: 'none' }}
+        />
+        <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '0.75rem', textAlign: 'center' }}>
+          <p style={{ margin: '0 0 0.75rem 0', color: '#166534', fontWeight: 600, fontSize: '0.9rem' }}>
+            ✨ Let AI estimate it for you?
+          </p>
+          
+          {/* <-- ADD THIS INPUT BLOCK --> */}
+          <input
+            type="text"
+            placeholder="Any hidden details? (e.g., 'cooked in butter', '8oz steak')"
+            value={mealDescription}
+            onChange={(e) => setMealDescription(e.target.value)}
+            disabled={isEstimatingMeal}
+            style={{
+              width: '100%', padding: '0.75rem', marginBottom: '0.75rem',
+              borderRadius: '0.5rem', border: '1px solid #bbf7d0', boxSizing: 'border-box',
+              fontSize: '0.9rem'
+            }}
+          />
+          {/* <-- END INPUT BLOCK --> */}
+
+          <button
+            type="button"
+            onClick={() => mealPhotoInputRef.current?.click()}
+            disabled={isEstimatingMeal}
+            style={{
+              width: '100%', padding: '0.75rem', backgroundColor: '#22c55e', color: 'white',
+              border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: isEstimatingMeal ? 'wait' : 'pointer'
+            }}
+          >
+            {isEstimatingMeal ? 'Estimating Calories...' : '📸 Upload Meal Photo'}
+          </button>
+        </div>
+        <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '0 0 1.5rem 0' }} />
+
         {error && <div className="error">{error}</div>}
 
         <form onSubmit={handleQuickAddSubmit}>
@@ -1821,7 +1930,7 @@ try {
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
             <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label htmlFor="labelServings" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Number of Servings on Label *</label>
+              <label htmlFor="labelServings" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Number of Servings *</label>
               <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required />
             </div>
 
@@ -1862,7 +1971,7 @@ try {
 
             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="calories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required /></div>
+            <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="calories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required /></div>
             <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="fat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
             <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="saturatedFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>
             <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="transFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} /></div>

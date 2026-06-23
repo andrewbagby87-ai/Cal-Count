@@ -29,7 +29,7 @@ export const FOOD_ICONS = [
   { icon: './mushroom.png', title: 'Mushroom' }, { icon: './ramen.png', title: 'Noodles / Ramen' },
   { icon: './squid.png', title: 'Octopus / Squid' }, { icon: './olive.png', title: 'Olive' },
   { icon: './onion.png', title: 'Onion' }, { icon: './orange.png', title: 'Orange' },
-  { icon: './pancakes.png', title: 'Pancakes' }, { icon: './spaghetti.png', title: 'Pasta' }, { icon: './peach.png', title: 'Peach' },
+  { icon: './pancakes.png', title: 'Pancakes' }, { icon: './spaghetti.png', title: 'Spaghetti' }, { icon: './peach.png', title: 'Peach' },
   { icon: './peanut.png', title: 'Peanuts' }, { icon: './pear.png', title: 'Pear' }, { icon: './pea.png', title: 'Peas / Pea Pod' },
   { icon: './pie.png', title: 'Pie' }, { icon: './pineapple.png', title: 'Pineapple' }, { icon: './pita.png', title: 'Pita' },
   { icon: './pizza.png', title: 'Pizza' }, { icon: './popcorn.png', title: 'Popcorn' },
@@ -53,8 +53,8 @@ export const FOOD_ICONS = [
   { icon: './smoothie.png', title: 'Smoothie' }, { icon: './ice-cream-pint.png', title: 'Ice Cream (Pint)' }, { icon: './churros.png', title: 'Churros' },
   { icon: './sub.png', title: 'Sub' }, { icon: './sugar.png', title: 'Sugar' }, { icon: './can.png', title: 'Soda Can' },
   { icon: './hash-brown.png', title: 'Hash Brown' }, { icon: './meat.png', title: 'Turkey / Chicken' }, { icon: './breakfast-sandwich.png', title: 'Breakfast Sandwich' },
-  { icon: './lasagna.png', title: 'Lasagna' }, { icon: './cinnamon-roll.png', title: 'Cinnamon Roll' }, { icon: './macaroni.png', title: 'Macaroni' },
-  { icon: './egg-roll.png', title: 'Egg Roll' }, { icon: './brownie.png', title: 'Brownie' },
+  { icon: './lasagna.png', title: 'Lasagna' }, { icon: './cinnamon-roll.png', title: 'Cinnamon Roll' }, { icon: './macaroni.png', title: 'Macaroni / Pasta' },
+  { icon: './egg-roll.png', title: 'Egg Roll' }, { icon: './brownie.png', title: 'Brownie' }, { icon: './smore.png', title: 'S\'more' },
   // Custom Image Examples: Just drop files in the `public` folder and reference them with `./`!
   //{ icon: './scale.png', title: 'Kitchen Scale' }
 

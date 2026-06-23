@@ -757,7 +757,6 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
             <input 
               type="file" 
               accept="image/*" 
-              capture="environment" 
               ref={fileInputRef} 
               onChange={handleLabelUpload} 
               style={{ display: 'none' }} 

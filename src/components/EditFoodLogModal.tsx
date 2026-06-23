@@ -866,7 +866,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
                 <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="labelServings" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Number of Servings on Label *</label>
+                  <label htmlFor="labelServings" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Number of Servings *</label>
                   <input id="labelServings" type="text" inputMode="decimal" name="labelServings" value={editFormData.labelServings} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required />
                 </div>
 
@@ -907,7 +907,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
 
                 <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="calories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories (from label) *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required /></div>
+                <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="calories" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Calories *</label><input id="calories" type="text" inputMode="decimal" name="calories" value={editFormData.calories} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required /></div>
                 <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="fat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Fat (g)</label><input id="fat" type="text" inputMode="decimal" name="fat" value={editFormData.fat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} /></div>
                 <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="saturatedFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Saturated Fat (g)</label><input id="saturatedFat" type="text" inputMode="decimal" name="saturatedFat" value={editFormData.saturatedFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} /></div>
                 <div className="form-group" style={{ marginBottom: '1rem' }}><label htmlFor="transFat" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Trans Fat (g)</label><input id="transFat" type="text" inputMode="decimal" name="transFat" value={editFormData.transFat} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} /></div>
