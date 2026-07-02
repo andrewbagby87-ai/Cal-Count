@@ -7,6 +7,7 @@ import { Food } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
+import { getBrandLogo, FOOD_BRANDS, normalizeBrandName } from '../constants/brands';
 import './CreateFoodModal.css';
 
 interface Props {
@@ -505,19 +506,32 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
     } 
   };
 
-  // Auto-complete Logic
-  const nameSuggestions = formData.name.length > 1
-    ? foods.filter(f => f.name.toLowerCase().includes(formData.name.toLowerCase()) && (!isVitaminMode ? !f.isVitamin : f.isVitamin)).slice(0, 5)
-    : [];
+// Auto-complete Logic
+  const usedBrands = foods.map(f => f.brand).filter(b => b && b.trim() !== '') as string[];
+  
+  // 1. Use a Map to deduplicate based on normalized names
+  const brandMap = new Map<string, string>();
+  
+  // 2. Add official brands FIRST so their perfect formatting always wins
+  FOOD_BRANDS.forEach(b => {
+    brandMap.set(normalizeBrandName(b.name), b.name);
+  });
+  
+  // 3. Add user history only if it doesn't match an official brand
+  usedBrands.forEach(b => {
+    const norm = normalizeBrandName(b);
+    if (!brandMap.has(norm)) {
+      brandMap.set(norm, b);
+    }
+  });
 
-  const uniqueBrands = Array.from(new Set(foods.map(f => f.brand).filter(b => b && b.trim() !== '')));
+  const allUniqueBrands = Array.from(brandMap.values());
+
+  // 4. Compare normalized inputs so "tacobell" matches "Taco Bell"
   const brandSuggestions = formData.brand.length > 0
-    ? uniqueBrands.filter(b => b && b.toLowerCase().includes(formData.brand.toLowerCase())).slice(0, 5)
-    : [];
-
-  const uniqueFlavors = Array.from(new Set(foods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
-  const flavorSuggestions = formData.flavor.length > 0
-    ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(formData.flavor.toLowerCase())).slice(0, 5)
+    ? allUniqueBrands.filter(b => 
+        normalizeBrandName(b).includes(normalizeBrandName(formData.brand))
+      ).slice(0, 6)
     : [];
 
   const processSelection = (action: 'log' | 'copy' | 'name-only') => {
@@ -552,6 +566,16 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
   const filteredIcons = FOOD_ICONS.filter(item => 
     item.title.toLowerCase().includes(iconSearch.toLowerCase())
   );
+
+  // Auto-complete Logic for Names & Duplicate Checking
+  const nameSuggestions = formData.name.length > 1
+    ? foods.filter(f => f.name.toLowerCase().includes(formData.name.toLowerCase()) && f.id !== existingFoodId).slice(0, 5)
+    : [];
+
+  const uniqueFlavors = Array.from(new Set(foods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
+  const flavorSuggestions = formData.flavor.length > 0
+    ? uniqueFlavors.filter(f => f && f.toLowerCase().includes(formData.flavor.toLowerCase())).slice(0, 5)
+    : [];
 
   return (
     <div className="create-food-modal" style={{ overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
@@ -590,21 +614,21 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
               />
               {showNameSuggestions && nameSuggestions.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                  {nameSuggestions.map(f => (
+                  {nameSuggestions.map(food => (
                     <div 
-                      key={f.id} 
-                      onClick={() => { setPendingSelection(f); setShowNameSuggestions(false); }} 
+                      key={food.id} 
+                      onClick={() => { setPendingSelection(food); setShowNameSuggestions(false); }} 
                       style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
-                        {f.icon && <Icon icon={f.icon} size="1.2rem" />}
+                        {food.icon && <Icon icon={food.icon} size="1.2rem" />}
                         <span style={{ fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {f.name}{f.flavor ? ` - ${f.flavor}` : ''}
+                          {food.name}{food.flavor ? ` - ${food.flavor}` : ''}
                         </span>
                       </div>
-                      {f.brand ? (
-                        <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', marginLeft: '0.5rem', flexShrink: 0 }}>{f.brand}</span>
-                      ) : (f as any).isRecipe ? (
+                      {food.brand ? (
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', marginLeft: '0.5rem', flexShrink: 0 }}>{food.brand}</span>
+                      ) : (food as any).isRecipe ? (
                         <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em', marginLeft: '0.5rem', flexShrink: 0 }}>
                           RECIPE
                         </span>
@@ -649,8 +673,20 @@ export default function CreateFoodModal({ onCreated, onClose, initialDate, isVit
               {showBrandSuggestions && brandSuggestions.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                   {brandSuggestions.map((b, i) => (
-                    <div key={i} onClick={() => { setFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b' }}>
-                      {b}
+                    <div 
+                      key={i} 
+                      onClick={() => { setFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} 
+                      style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                    >
+                      {getBrandLogo(b as string) && (
+                        <img 
+                          src={getBrandLogo(b as string)!} 
+                          alt={b as string} 
+                          style={{ height: '1.25rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                        />
+                      )}
+                      <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{b}</span>
                     </div>
                   ))}
                 </div>

@@ -7,6 +7,7 @@ import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
 import CreateRecipeModal from './CreateRecipeModal';
 import Icon from './Icon';
+import { getBrandLogo } from '../constants/brands';
 import './FoodLogTab.css';
 
 // --- Helper Functions for Navigator ---
@@ -942,7 +943,19 @@ const handleEditLog = async (updates: any) => {
                                   <span>{log.food.name}{log.food.flavor && <span style={{ textTransform: 'capitalize' }}> - {log.food.flavor}</span>}</span>
                                 </h4>
                                 {log.food.brand ? (
-                                  <span className="brand" style={{ textTransform: 'capitalize' }}>{log.food.brand}</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                                    {getBrandLogo(log.food.brand) && (
+                                      <img 
+                                        src={getBrandLogo(log.food.brand)!} 
+                                        alt={log.food.brand} 
+                                        style={{ height: '1rem', width: 'auto', borderRadius: '0.2rem', objectFit: 'contain' }} 
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                      />
+                                    )}
+                                    <span className="brand" style={{ textTransform: 'capitalize', fontSize: '0.85rem', color: '#64748b' }}>
+                                      {log.food.brand}
+                                    </span>
+                                  </div>
                                 ) : (log.food as any)?.isRecipe ? (
                                   <span style={{ display: 'inline-block', marginTop: '0.2rem', marginBottom: '0.1rem' }}>
                                     <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
@@ -1009,7 +1022,19 @@ const handleEditLog = async (updates: any) => {
                     <span>{selectedLog.food.name}{selectedLog.food.flavor && <span style={{ textTransform: 'capitalize' }}> - {selectedLog.food.flavor}</span>}</span>
                   </h3>
                   {selectedLog.food.brand ? (
-                    <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', display: 'block', marginTop: '0.2rem' }}>{selectedLog.food.brand}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.3rem' }}>
+                      {getBrandLogo(selectedLog.food.brand) && (
+                        <img 
+                          src={getBrandLogo(selectedLog.food.brand)!} 
+                          alt={selectedLog.food.brand} 
+                          style={{ height: '1.5rem', width: 'auto', borderRadius: '0.25rem', objectFit: 'contain' }} 
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                        />
+                      )}
+                      <span style={{ fontSize: '0.9rem', color: '#64748b', textTransform: 'capitalize', fontWeight: 500 }}>
+                        {selectedLog.food.brand}
+                      </span>
+                    </div>
                   ) : (selectedLog.food as any)?.isRecipe ? (
                     <span style={{ display: 'block', marginTop: '0.25rem' }}>
                       <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>

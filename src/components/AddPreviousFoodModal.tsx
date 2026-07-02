@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
+import { getBrandLogo, FOOD_BRANDS, normalizeBrandName } from '../constants/brands';
 import './AddPreviousFoodModal.css';
 
 // NEW: Helper to safely filter out accidental duplicate entries from Firebase
@@ -943,10 +944,28 @@ try {
 
   const filteredIcons = FOOD_ICONS.filter(item => item.title.toLowerCase().includes(iconSearch.toLowerCase()));
 
-  // Auto-complete Logic
-  const uniqueBrands = Array.from(new Set(localFoods.map(f => f.brand).filter(b => b && b.trim() !== '')));
+// Auto-complete Logic
+  const usedBrands = localFoods.map(f => f.brand).filter(b => b && b.trim() !== '') as string[];
+  
+  const brandMap = new Map<string, string>();
+  
+  FOOD_BRANDS.forEach(b => {
+    brandMap.set(normalizeBrandName(b.name), b.name);
+  });
+  
+  usedBrands.forEach(b => {
+    const norm = normalizeBrandName(b);
+    if (!brandMap.has(norm)) {
+      brandMap.set(norm, b);
+    }
+  });
+
+  const allUniqueBrands = Array.from(brandMap.values());
+
   const brandSuggestions = editFormData.brand.length > 0
-    ? uniqueBrands.filter(b => b && b.toLowerCase().includes(editFormData.brand.toLowerCase())).slice(0, 5)
+    ? allUniqueBrands.filter(b => 
+        normalizeBrandName(b).includes(normalizeBrandName(editFormData.brand))
+      ).slice(0, 6)
     : [];
 
   const uniqueFlavors = Array.from(new Set(localFoods.map(f => f.flavor).filter(f => f && f.trim() !== '')));
@@ -983,18 +1002,20 @@ try {
     setPendingSelection(null);
   };
 
-  // --- FILTER & SORT LOGIC ---
-  const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive;
-  // FIX: Always load if in vitamin mode, otherwise require 2 chars or filters
-  const shouldLoadFoods = isVitaminMode || searchTerm.length >= 2 || hasCustomFilters;
+// --- FILTER & SORT LOGIC ---
+  const isSearchActive = searchTerm.trim().length >= 2;
+  const hasCustomFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive || !filters.showFoods || !filters.showRecipes;
+  const isDefaultView = !isVitaminMode && !isSearchActive && !hasCustomFilters;
 
-  const processedFoods = !shouldLoadFoods ? [] : localFoods.filter(food => {
+  let processedFoods = localFoods.filter(food => {
     const searchLower = searchTerm.toLowerCase();
     const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
     const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
     const matchesFlavor = food.flavor?.toLowerCase().includes(searchLower) ?? false;
     const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
-    const matchesSearch = matchesName || matchesBrand || matchesFlavor || matchesUPC;
+
+    // If searching (2+ chars), enforce match. If default view, ignore search string so we can show recent items.
+    const matchesSearch = isSearchActive ? (matchesName || matchesBrand || matchesFlavor || matchesUPC) : true;
 
     if (!matchesSearch) return false;
 
@@ -1061,6 +1082,11 @@ try {
     // newest (default)
     return (b.createdAt || 0) - (a.createdAt || 0); 
   });
+
+  // Limit to 10 if we are just opening the menu without searching
+  if (isDefaultView) {
+    processedFoods = processedFoods.slice(0, 10);
+  }
 
   const hasActiveFilters = filters.highProtein || filters.highFiber || filters.fitsBudget || filters.customLimitActive || !filters.showFoods || !filters.showRecipes;
 
@@ -1477,17 +1503,49 @@ try {
                               </div>
                             </div>
                             
-                            <div style={{ flex: 1, paddingRight: '2rem' }}>
-                              <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-                                {log.food?.icon && <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.4rem' }}><Icon icon={log.food?.icon} size="1.2rem" /></div>}
-                                <span style={{ wordBreak: 'break-word' }}>
+                            <div style={{ flex: 1, paddingRight: '2rem', display: 'flex', alignItems: 'flex-start' }}>
+                              
+                              {/* 1. Icon Column (Isolated on the left) */}
+                              {log.food?.icon && (
+                                <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.6rem', marginTop: '0.1rem' }}>
+                                  <Icon icon={log.food.icon} size="1.2rem" />
+                                </div>
+                              )}
+                              
+                              {/* 2. Text Column (Everything stacks perfectly flush) */}
+                              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', wordBreak: 'break-word', lineHeight: '1.2' }}>
                                   {log.food?.name}
                                   {log.food?.flavor && <span style={{ textTransform: 'capitalize', color: '#64748b', fontWeight: 400 }}> - {log.food?.flavor}</span>}
-                                </span>
+                                </div>
+                                
+                                {log.food?.brand ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.2rem', marginTop: '0.1rem' }}>
+                                    {getBrandLogo(log.food.brand) && (
+                                      <img 
+                                        src={getBrandLogo(log.food.brand)!} 
+                                        alt={log.food.brand} 
+                                        style={{ height: '0.9rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                      />
+                                    )}
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
+                                      {log.food.brand}
+                                    </span>
+                                  </div>
+                                ) : (log.food as any)?.isRecipe ? (
+                                  <div style={{ marginBottom: '0.2rem', marginTop: '0.1rem', display: 'flex' }}>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                                      RECIPE
+                                    </span>
+                                  </div>
+                                ) : null}
+
+                                <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.1rem' }}>
+                                  {log.amount} {log.unit} - {log.calories} cal
+                                </div>
                               </div>
-                              <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
-                                {log.amount} {log.unit} - {log.calories} cal
-                              </div>
+                              
                             </div>
                           </button>
                         );
@@ -1499,18 +1557,15 @@ try {
             )
           ) : (
             // --- EXISTING FOODS VIEW ---
-            !shouldLoadFoods ? (
-              <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
-              Type at least 2 letters or apply a filter to view foods.
-            </p>
-          ) : processedFoods.length === 0 ? (
+          processedFoods.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
               {isVitaminMode ? 'No vitamins found.' : 'No foods found matching criteria.'}
             </p>
           ) : (
-            processedFoods.map((food) => {
-              const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
-              const isSelected = multiSelectedIds.has(food.id);
+            <>
+              {processedFoods.map((food) => {
+                const lastLog = allLogs.find(l => l.foodId === food.id || l.food?.id === food.id);
+                const isSelected = multiSelectedIds.has(food.id);
 
               const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
               const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
@@ -1547,36 +1602,67 @@ try {
                     </div>
                   )}
                   
-                  <div style={{ flex: 1, paddingRight: '2rem' }}>
-                    <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-                      {food.icon && <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.4rem' }}><Icon icon={food.icon} size="1.2rem" /></div>}
-                      <span style={{ wordBreak: 'break-word' }}>
-                        {food.name}
-                        {food.flavor && <span style={{ textTransform: 'capitalize', color: '#64748b', fontWeight: 400 }}> - {food.flavor}</span>}
-                      </span>
-                    </div>
-                    {food.brand ? (
-                      <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>
-                    ) : isRecipe ? (
-                      <div style={{ marginBottom: '0.25rem', display: 'flex' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
-                          RECIPE
-                        </span>
-                      </div>
-                    ) : null}
-                    <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569' }}>
-                      {food.servingSize} {food.servingUnit} - {food.calories} cal
-                    </div>
+                  <div style={{ flex: 1, paddingRight: '2rem', display: 'flex', alignItems: 'flex-start' }}>
                     
-                    {lastLog && (
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.35rem', fontWeight: 500 }}>
-                        Last logged: {lastLog.amount} {lastLog.unit}
+                    {/* 1. Icon Column */}
+                    {food.icon && (
+                      <div style={{ flexShrink: 0, display: 'flex', marginRight: '0.6rem', marginTop: '0.1rem' }}>
+                        <Icon icon={food.icon} size="1.2rem" />
                       </div>
                     )}
+                    
+                    {/* 2. Text Column */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                      <div className="food-name" style={{ marginBottom: '0.15rem', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize', fontSize: '1rem', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                        {food.name}
+                        {food.flavor && <span style={{ textTransform: 'capitalize', color: '#64748b', fontWeight: 400 }}> - {food.flavor}</span>}
+                      </div>
+                      
+                      {food.brand ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.2rem', marginTop: '0.1rem' }}>
+                          {getBrandLogo(food.brand) && (
+                            <img 
+                              src={getBrandLogo(food.brand)!} 
+                              alt={food.brand} 
+                              style={{ height: '0.9rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                            />
+                          )}
+                          <span className="food-brand" style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
+                            {food.brand}
+                          </span>
+                        </div>
+                      ) : isRecipe ? (
+                        <div style={{ marginBottom: '0.2rem', marginTop: '0.1rem', display: 'flex' }}>
+                          <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
+                            RECIPE
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <div className="food-serving" style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.1rem' }}>
+                        {food.servingSize} {food.servingUnit} - {food.calories} cal
+                      </div>
+                      
+                      {lastLog && (
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem', fontWeight: 500 }}>
+                          Last logged: {lastLog.amount} {lastLog.unit}
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </button>
               );
-            })
+            })}
+            
+            {/* Show a helper message at the bottom if we limited the list to 10 */}
+            {isDefaultView && localFoods.length > 10 && (
+              <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem', fontSize: '0.9rem', fontStyle: 'italic', margin: 0 }}>
+                Showing your 10 most recent items. Type at least 2 letters to search your full library.
+              </p>
+            )}
+            </>
           ))}
         </div>
         
@@ -1854,8 +1940,20 @@ try {
               {showBrandSuggestions && brandSuggestions.length > 0 && (
                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                   {brandSuggestions.map((b, i) => (
-                    <div key={i} onClick={() => { setEditFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b' }}>
-                      {b}
+                    <div 
+                      key={i} 
+                      onClick={() => { setEditFormData(prev => ({...prev, brand: b as string})); setShowBrandSuggestions(false); }} 
+                      style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                    >
+                      {getBrandLogo(b as string) && (
+                        <img 
+                          src={getBrandLogo(b as string)!} 
+                          alt={b as string} 
+                          style={{ height: '1.25rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                        />
+                      )}
+                      <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{b}</span>
                     </div>
                   ))}
                 </div>
