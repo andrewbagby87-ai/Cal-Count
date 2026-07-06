@@ -710,32 +710,43 @@ const handleFinalLog = async (e: React.FormEvent) => {
             </div>
 
             <div className="recipe-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
-              {foods
-                .filter(f => !f.isVitamin)
-                .filter(food => {
-                  const searchLower = searchTerm.toLowerCase();
-                  const matchesName = food.name?.toLowerCase().includes(searchLower) ?? false;
-                  const matchesBrand = food.brand?.toLowerCase().includes(searchLower) ?? false;
-                  const matchesUPC = (food as any).upc?.toLowerCase().includes(searchLower) ?? false;
-                  return matchesName || matchesBrand || matchesUPC;
-                })
-                .map(food => {
-                  const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
-                  const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
-                  const isRecipe = (food as any).isRecipe === true;
+              {(() => {
+                const isSearchActive = searchTerm.trim().length >= 2;
+                
+                let processedFoods = foods
+                  .filter(f => !f.isVitamin)
+                  .filter(food => {
+                    if (!isSearchActive) return true;
+                    const searchLower = searchTerm.toLowerCase();
+                    return (food.name?.toLowerCase().includes(searchLower) ?? false) || 
+                           (food.brand?.toLowerCase().includes(searchLower) ?? false) || 
+                           ((food as any).upc?.toLowerCase().includes(searchLower) ?? false);
+                  })
+                  .sort((a, b) => ((b as any).createdAt || 0) - ((a as any).createdAt || 0));
 
-                  return (
-                    <button
-                      key={food.id}
-                      className="food-option"
-                      onClick={() => { setActiveFood(food); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }}
-                      style={{ 
-                        display: 'flex', alignItems: 'center', textAlign: 'left',
-                        padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', 
-                        cursor: 'pointer', backgroundColor: '#fff', width: '100%', margin: 0,
-                        position: 'relative' 
-                      }}
-                    >
+                if (!isSearchActive) {
+                  processedFoods = processedFoods.slice(0, 10);
+                }
+
+                return (
+                  <>
+                    {processedFoods.map(food => {
+                      const hasHighProtein = (food.protein && food.calories) ? food.protein >= (food.calories / 10) : false;
+                      const hasHighFiber = food.fiber ? food.fiber >= 4 : false;
+                      const isRecipe = (food as any).isRecipe === true;
+
+                      return (
+                        <button
+                          key={food.id}
+                          className="food-option"
+                          onClick={() => { setActiveFood(food); setConsumptionMethod('serving'); setServingsConsumed('1'); setVolumeConsumed(''); setStep('size-ingredient'); }}
+                          style={{ 
+                            display: 'flex', alignItems: 'center', textAlign: 'left',
+                            padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', 
+                            cursor: 'pointer', backgroundColor: '#fff', width: '100%', margin: 0,
+                            position: 'relative' 
+                          }}
+                        >
                       {(hasHighProtein || hasHighFiber) && (
                         <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.35rem' }}>
                           {hasHighProtein && <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '0.25rem', backgroundColor: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="1g of protein per 10 calories">P</span>}
@@ -761,13 +772,22 @@ const handleFinalLog = async (e: React.FormEvent) => {
                           {food.servingSize} {food.servingUnit} - {food.calories} cal
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                        </button>
+                      );
+                    })}
+                  </>
+                );
+              })()}
               
-              {foods.filter(f => !f.isVitamin && (f.name?.toLowerCase().includes(searchTerm.toLowerCase()) || f.brand?.toLowerCase().includes(searchTerm.toLowerCase()) || (f as any).upc?.toLowerCase().includes(searchTerm.toLowerCase()))).length === 0 && (
+              {searchTerm.trim().length >= 2 && foods.filter(f => !f.isVitamin && (f.name?.toLowerCase().includes(searchTerm.toLowerCase()) || f.brand?.toLowerCase().includes(searchTerm.toLowerCase()) || (f as any).upc?.toLowerCase().includes(searchTerm.toLowerCase()))).length === 0 && (
                 <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
                   No foods found.
+                </p>
+              )}
+
+              {searchTerm.trim().length < 2 && foods.filter(f => !f.isVitamin).length > 10 && (
+                <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem', fontSize: '0.9rem', fontStyle: 'italic', margin: 0 }}>
+                  Showing your 10 most recent items. Type at least 2 letters to search your full library.
                 </p>
               )}
             </div>
