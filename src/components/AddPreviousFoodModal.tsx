@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
-import { getBrandLogo, FOOD_BRANDS, normalizeBrandName } from '../constants/brands';
+import { getBrandLogo, getBrandConfig, FOOD_BRANDS, normalizeBrandName } from '../constants/brands';
 import './AddPreviousFoodModal.css';
 
 // NEW: Helper to safely filter out accidental duplicate entries from Firebase
@@ -1529,9 +1529,11 @@ try {
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                                       />
                                     )}
+                                    {(!getBrandLogo(log.food.brand) || getBrandConfig(log.food.brand)?.showName) && (
                                     <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
                                       {log.food.brand}
                                     </span>
+                                  )}
                                   </div>
                                 ) : (log.food as any)?.isRecipe ? (
                                   <div style={{ marginBottom: '0.2rem', marginTop: '0.1rem', display: 'flex' }}>
@@ -1628,9 +1630,11 @@ try {
                               onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                             />
                           )}
+                          {(!getBrandLogo(food.brand) || getBrandConfig(food.brand)?.showName) && (
                           <span className="food-brand" style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
                             {food.brand}
                           </span>
+                        )}
                         </div>
                       ) : isRecipe ? (
                         <div style={{ marginBottom: '0.2rem', marginTop: '0.1rem', display: 'flex' }}>
@@ -1953,7 +1957,9 @@ try {
                           onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                         />
                       )}
+                    {(!getBrandLogo(b as string) || getBrandConfig(b as string)?.showName) && (
                       <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{b}</span>
+                    )}
                     </div>
                   ))}
                 </div>

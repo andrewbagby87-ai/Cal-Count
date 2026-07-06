@@ -1,16 +1,21 @@
 // src/constants/brands.ts
+export interface BrandConfig {
+  name: string;
+  logo: string;
+  showName?: boolean;
+}
 
-export const FOOD_BRANDS = [
-    { name: "McDonald's", logo: './brands/mcdonalds.png' },
-    { name: "Starbucks", logo: './brands/starbucks.png' },
-    { name: "Taco Bell", logo: './brands/tacobell.png' },
-    { name: "Wendy's", logo: './brands/wendys.png' },
+export const FOOD_BRANDS: BrandConfig[] = [
+    { name: "McDonald's", logo: './brands/mcdonalds.png', showName: true },
+    { name: "Starbucks", logo: './brands/starbucks.png', showName: true },
+    { name: "Taco Bell", logo: './brands/tacobell.png', showName: true },
+    { name: "Wendy's", logo: './brands/wendys.png', showName: true },
     { name: "Chipotle", logo: './brands/chipotle.png' },
-    { name: "Chick-fil-A", logo: './brands/chickfila.png' },
+    { name: "Chick-fil-A", logo: './brands/chickfila.png', showName: true },
     { name: "Subway", logo: './brands/subway.png' },
     { name: "Popeyes", logo: './brands/popeyes.png' },
-    { name: "Dominos", logo: './brands/dominos.png' },
-    { name: "Dunkin'", logo: './brands/dunkin.png' },
+    { name: "Dominos", logo: './brands/dominos.png', showName: true },
+    { name: "Dunkin'", logo: './brands/dunkin.png', showName: true },
     { name: "Arby's", logo: './brands/arbys.png' },
     { name: "Panera", logo: './brands/panera.png' },
     { name: "KFC", logo: './brands/kfc.png' },
@@ -19,13 +24,13 @@ export const FOOD_BRANDS = [
     { name: "In-N-Out", logo: './brands/innout.png' },
     { name: "Jack in the Box", logo: './brands/jackinthebox.png' },
     { name: "Sonic", logo: './brands/sonic.png' },
-    { name: "Dairy Queen", logo: './brands/dairyqueen.png' },
-    { name: "Little Caesars", logo: './brands/littlecaesars.png' },
+    { name: "Dairy Queen", logo: './brands/dairyqueen.png', showName: true },
+    { name: "Little Caesars", logo: './brands/littlecaesars.png', showName: true },
     { name: "Papa John's", logo: './brands/papajohns.png' },
     { name: "Pizza Hut", logo: './brands/pizzahut.png' },
     { name: "Waffle House", logo: './brands/wafflehouse.png' },
     { name: "Culver's", logo: './brands/culvers.png' },
-    { name: "Shake Shack", logo: './brands/shakeshack.png' },
+    { name: "Shake Shack", logo: './brands/shakeshack.png', showName: true },
     { name: "Jamba Juice", logo: './brands/jamba.png' },
     { name: "Tim Hortons", logo: './brands/timhortons.png' },
     { name: "Jimmy John's", logo: './brands/jimmyjohns.png' },
@@ -35,10 +40,10 @@ export const FOOD_BRANDS = [
     { name: "White Castle", logo: './brands/whitecastle.png' },
     { name: "Skyline Chili", logo: './brands/skylinechili.png' },
     { name: "Raising Cane's", logo: './brands/raisingcanes.png' },
-    { name: "Chili's", logo: './brands/chilis.png' },
+    { name: "Chili's", logo: './brands/chilis.png', showName: true },
     { name: "Applebee's", logo: './brands/applebees.png' },
     { name: "Smoothie King", logo: './brands/smoothieking.png' },
-    { name: "Buffalo Wild Wings", logo: './brands/bww.png' },
+    { name: "Buffalo Wild Wings", logo: './brands/bww.png', showName: true },
     { name: "Olive Garden", logo: './brands/olivegarden.png' },
     { name: "Red Lobster", logo: './brands/redlobster.png' },
     { name: "Outback Steakhouse", logo: './brands/outback.png' },
@@ -53,7 +58,7 @@ export const FOOD_BRANDS = [
     { name: "Tropical Smoothie Cafe", logo: './brands/tropicalsmoothie.png' },
     { name: "Prego", logo: './brands/prego.png' },
     { name: "Meijer", logo: './brands/meijer.png' },
-    { name: "Oikos", logo: './brands/dannon.png' },
+    { name: "Oikos", logo: './brands/dannon.png', showName: true},
     { name: "Dannon", logo: './brands/dannon.png' },
     { name: "Cheerios", logo: './brands/cheerios.png' },
     { name: "Smuckers", logo: './brands/smuckers.png' },
@@ -115,7 +120,7 @@ export const FOOD_BRANDS = [
     { name: "TGI FRIDAYS", logo: './brands/tgifridays.png' },
     { name: "Jack's", logo: './brands/jacks.png' },
     { name: "Fresh", logo: './brands/fresh.png' },
-    { name: "Laoban", logo: './brands/laoban.png' },
+    { name: "Laoban", logo: './brands/laoban.png', showName: true },
     { name: "Genius Gourmet", logo: './brands/geniusgourmet.png' },
     { name: "Legendary", logo: './brands/legendary.png' },
     { name: "Tai Pei", logo: './brands/taipei.png' },
@@ -126,7 +131,7 @@ export const FOOD_BRANDS = [
     { name: "Nabisco", logo: './brands/nabisco.png' },
     { name: "Hellmann's", logo: './brands/hellmanns.png' },
     { name: "Nature Valley", logo: './brands/naturevalley.png' },
-    { name: "StarKist", logo: './brands/starkist.png' },
+    { name: "StarKist", logo: './brands/starkist.png', showName: true},
     { name: "Angie's", logo: './brands/angies.png' },
     { name: "InnovAsian", logo: './brands/innovasian.png' },
     { name: "BIBIBOP", logo: './brands/bibibop.png' },
@@ -164,7 +169,6 @@ export const FOOD_BRANDS = [
     { name: "Noka", logo: './brands/noka.png' },
     { name: "Minute", logo: './brands/minute.png' },
     { name: "WOW BAO", logo: './brands/wowbao.png' },
-    { name: "Nature Valley Protein", logo: './brands/naturevalley.png' },
     { name: "Stacy's", logo: './brands/stacys.png' },
     { name: "Rao's", logo: './brands/raos.png' },
     { name: "Wholly Guacamole", logo: './brands/whollyguacamole.png' },
@@ -176,6 +180,7 @@ export const FOOD_BRANDS = [
     { name: "Mila", logo: './brands/mila.png' },
     { name: "Eggo", logo: './brands/eggo.png' },
     { name: "Whole Foods", logo: './brands/wholefoods.png' },
+    { name: "Oscar Mayer", logo: './brands/oscarmayer.png' },
 
     //{ name: "", logo: '' },
     
@@ -190,6 +195,12 @@ export const FOOD_BRANDS = [
 export const normalizeBrandName = (name: string) => {
   if (!name) return '';
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+export const getBrandConfig = (inputName: string | undefined | null) => {
+  if (!inputName) return null;
+  const normalizedInput = normalizeBrandName(inputName);
+  return FOOD_BRANDS.find(brand => normalizeBrandName(brand.name) === normalizedInput) || null;
 };
 
 /**

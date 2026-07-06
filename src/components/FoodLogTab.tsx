@@ -7,7 +7,7 @@ import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
 import CreateRecipeModal from './CreateRecipeModal';
 import Icon from './Icon';
-import { getBrandLogo } from '../constants/brands';
+import { getBrandLogo, getBrandConfig, FOOD_BRANDS, normalizeBrandName } from '../constants/brands';
 import './FoodLogTab.css';
 
 // --- Helper Functions for Navigator ---
@@ -952,9 +952,11 @@ const handleEditLog = async (updates: any) => {
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                                       />
                                     )}
+                                    {(!getBrandLogo(log.food.brand) || getBrandConfig(log.food.brand)?.showName) && (
                                     <span className="brand" style={{ textTransform: 'capitalize', fontSize: '0.85rem', color: '#64748b' }}>
                                       {log.food.brand}
                                     </span>
+                                  )}
                                   </div>
                                 ) : (log.food as any)?.isRecipe ? (
                                   <span style={{ display: 'inline-block', marginTop: '0.2rem', marginBottom: '0.1rem' }}>
@@ -1031,9 +1033,11 @@ const handleEditLog = async (updates: any) => {
                           onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                         />
                       )}
+                      {(!getBrandLogo(selectedLog.food.brand) || getBrandConfig(selectedLog.food.brand)?.showName) && (
                       <span style={{ fontSize: '0.9rem', color: '#64748b', textTransform: 'capitalize', fontWeight: 500 }}>
                         {selectedLog.food.brand}
                       </span>
+                    )}
                     </div>
                   ) : (selectedLog.food as any)?.isRecipe ? (
                     <span style={{ display: 'block', marginTop: '0.25rem' }}>
