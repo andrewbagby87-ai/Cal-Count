@@ -20,37 +20,37 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
     onScanSuccessRef.current = onScanSuccess;
   }, [onScanSuccess]);
 
-  // 1. Initialize the LIVE camera (as a convenience)
+// 1. Initialize the LIVE camera
   useEffect(() => {
     let isMounted = true;
-    
-    // FIX 1: Attempt to lock the device screen orientation to portrait
-    try {
-      // Cast to 'any' to bypass strict TypeScript checks for experimental APIs
-      if (screen.orientation && (screen.orientation as any).lock) {
-        (screen.orientation as any).lock('portrait').catch((err: any) => {
-          console.warn("Screen orientation lock denied or not supported:", err);
-        });
-      }
-    } catch (e) {
-      console.warn("Orientation API not available.");
-    }
+    let startTimeout: ReturnType<typeof setTimeout>;
 
     const html5QrCode = new Html5Qrcode("barcode-reader-container");
     scannerRef.current = html5QrCode;
 
     const startScanner = async () => {
+      if (!isMounted) return;
+      
+      // If it's already scanning (like after a rotation), stop it first
+      if (html5QrCode.isScanning) {
+        await html5QrCode.stop().catch(console.warn);
+      }
+
       try {
-        // FIX 2: Calculate a portrait aspect ratio so the video feed stays up-right
+        // Get the REAL aspect ratio of the window right now
         const currentRatio = window.innerWidth / window.innerHeight;
-        const portraitRatio = currentRatio < 1 ? currentRatio : 0.75; 
 
         await html5QrCode.start(
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: { width: 250, height: 150 },
-            aspectRatio: portraitRatio, // Forces the camera feed to stay vertical
+            // Responsive bounding box that fits both portrait and landscape
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const width = Math.min(viewfinderWidth * 0.8, 300);
+              const height = Math.min(viewfinderHeight * 0.5, 150);
+              return { width, height };
+            },
+            aspectRatio: currentRatio, 
           },
           (decodedText) => {
             if (isMounted && !hasScannedRef.current) {
@@ -61,26 +61,29 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
           () => {} // Silently ignore background frame errors
         );
       } catch (err) {
-        console.warn("Live camera init failed (expected on some devices):", err);
+        console.warn("Live camera init failed:", err);
         if (isMounted) {
           setCameraError("Live camera unavailable. Please use the 'Snap Photo' button below.");
         }
       }
     };
 
-    // Small delay to allow modal animation to finish before grabbing camera hardware
-    const timer = setTimeout(startScanner, 200);
+    // Small delay to allow modal animation to finish
+    startTimeout = setTimeout(startScanner, 200);
+
+    // Listen for phone rotation to restart the camera with the new aspect ratio
+    const handleOrientationChange = () => {
+      clearTimeout(startTimeout);
+      // Delay slightly after rotation to let the browser update window sizes
+      startTimeout = setTimeout(startScanner, 400); 
+    };
+    
+    window.addEventListener('orientationchange', handleOrientationChange);
 
     return () => {
       isMounted = false;
-      clearTimeout(timer);
-      
-      // Unlock the screen orientation when the modal closes
-      try {
-        if (screen.orientation && (screen.orientation as any).unlock) {
-          (screen.orientation as any).unlock();
-        }
-      } catch (e) {}
+      clearTimeout(startTimeout);
+      window.removeEventListener('orientationchange', handleOrientationChange);
 
       if (html5QrCode.isScanning) {
         html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);

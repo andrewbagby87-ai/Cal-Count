@@ -7,7 +7,8 @@ import CreateFoodModal from './CreateFoodModal';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_ICONS } from '../constants/icons';
 import Icon from './Icon';
-import './CreateFoodModal.css'; // <-- Added to pull in the standard form-group styles
+import { getBrandLogo, getBrandConfig } from '../constants/brands';
+import './CreateFoodModal.css';
 
 interface RecipeIngredient {
   food: Food;
@@ -564,7 +565,21 @@ const handleFinalLog = async (e: React.FormEvent) => {
                             )}
                           </div>
                           {ing.food.brand ? (
-                          <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', marginTop: '0.1rem', marginBottom: '0.15rem' }}>{ing.food.brand}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.2rem', marginTop: '0.1rem' }}>
+                              {getBrandLogo(ing.food.brand) && (
+                                <img 
+                                  src={getBrandLogo(ing.food.brand)!} 
+                                  alt={ing.food.brand} 
+                                  style={{ height: '0.9rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                />
+                              )}
+                              {(!getBrandLogo(ing.food.brand) || getBrandConfig(ing.food.brand)?.showName) && (
+                                <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
+                                  {ing.food.brand}
+                                </span>
+                              )}
+                            </div>
                           ) : (ing.food as any)?.isRecipe ? (
                             <div style={{ marginTop: '0.15rem', marginBottom: '0.15rem', display: 'flex' }}>
                               <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
@@ -760,7 +775,21 @@ const handleFinalLog = async (e: React.FormEvent) => {
                           <span>{food.name}</span>
                         </div>
                         {food.brand ? (
-                        <div className="food-brand" style={{ marginBottom: '0.25rem', fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize' }}>{food.brand}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.2rem', marginTop: '0.1rem' }}>
+                            {getBrandLogo(food.brand) && (
+                              <img 
+                                src={getBrandLogo(food.brand)!} 
+                                alt={food.brand} 
+                                style={{ height: '0.9rem', width: 'auto', borderRadius: '0.15rem', objectFit: 'contain' }} 
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                              />
+                            )}
+                            {(!getBrandLogo(food.brand) || getBrandConfig(food.brand)?.showName) && (
+                              <span className="food-brand" style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'capitalize', lineHeight: '1' }}>
+                                {food.brand}
+                              </span>
+                            )}
+                          </div>
                         ) : isRecipe ? (
                           <div style={{ marginBottom: '0.25rem', display: 'flex' }}>
                             <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '0.25rem', backgroundColor: '#0f766e', color: '#ffffff', letterSpacing: '0.02em' }}>
@@ -828,6 +857,62 @@ const handleFinalLog = async (e: React.FormEvent) => {
                     </div>
                   </div>
                 )}
+                {(() => {
+                  let multiplier = 1;
+                  if (consumptionMethod === 'serving') {
+                    const labelServings = activeFood.servingSize || 1;
+                    const consumed = parseFloat(servingsConsumed) || 0;
+                    multiplier = consumed / labelServings;
+                  } else {
+                    const volIndex = parseInt(consumptionMethod.split('-')[1]);
+                    const selectedVol = activeFood.volumes ? activeFood.volumes[volIndex] : null;
+                    if (selectedVol && selectedVol.amount) {
+                      multiplier = (parseFloat(volumeConsumed) || 0) / selectedVol.amount;
+                    } else {
+                      multiplier = 0;
+                    }
+                  }
+
+                  const calc = (val: number | undefined) => val ? Number((val * multiplier).toFixed(1)) : 0;
+                  
+                  const preview = {
+                    calories: calc(activeFood.calories), protein: calc(activeFood.protein), carbs: calc(activeFood.carbs),
+                    fat: calc(activeFood.fat), saturatedFat: calc(activeFood.saturatedFat), transFat: calc((activeFood as any).transFat),
+                    cholesterol: calc((activeFood as any).cholesterol), sodium: calc((activeFood as any).sodium),
+                    fiber: calc(activeFood.fiber), sugar: calc(activeFood.sugar),
+                  };
+
+                  return (
+                    <div style={{ marginTop: '0.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
+                        Ingredient Nutrition Preview
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        {[
+                          { label: 'Calories', value: `${preview.calories} cal`, isHighlight: true, indent: false },
+                          { label: 'Total Fat', value: `${preview.fat}g`, isHighlight: false, indent: false },
+                          { label: 'Saturated Fat', value: `${preview.saturatedFat}g`, isHighlight: false, indent: true },
+                          { label: 'Trans Fat', value: `${preview.transFat}g`, isHighlight: false, indent: true },
+                          { label: 'Cholesterol', value: `${preview.cholesterol}mg`, isHighlight: false, indent: false },
+                          { label: 'Sodium', value: `${preview.sodium}mg`, isHighlight: false, indent: false },
+                          { label: 'Total Carbohydrate', value: `${preview.carbs}g`, isHighlight: false, indent: false },
+                          { label: 'Dietary Fiber', value: `${preview.fiber}g`, isHighlight: false, indent: true },
+                          { label: 'Total Sugars', value: `${preview.sugar}g`, isHighlight: false, indent: true },
+                          { label: 'Protein', value: `${preview.protein}g`, isHighlight: false, indent: false },
+                        ].map((nutrient, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx !== 9 ? '1px solid #e2e8f0' : 'none', paddingBottom: idx !== 9 ? '0.2rem' : '0' }}>
+                            <span style={{ fontSize: nutrient.isHighlight ? '0.75rem' : '0.65rem', textTransform: 'uppercase', color: nutrient.isHighlight ? '#475569' : '#94a3b8', fontWeight: nutrient.isHighlight ? 700 : 400, paddingLeft: nutrient.indent ? '0.75rem' : '0' }}>
+                              {nutrient.label}
+                            </span>
+                            <span style={{ fontWeight: 700, color: nutrient.isHighlight ? '#2563eb' : '#1e293b', fontSize: nutrient.isHighlight ? '1rem' : '0.8rem' }}>
+                              {nutrient.value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', flexShrink: 0, marginTop: '1rem' }}>
