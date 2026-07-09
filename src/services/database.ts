@@ -710,6 +710,16 @@ export async function getHealthLogs(userId: string) {
     }
   }
 
+  try {
+    const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
+    const subSnap = await getDocs(syncsSubRef);
+    subSnap.docs.forEach(d => {
+      allSyncs.push({ ...d.data(), id: d.id });
+    });
+  } catch (e) {
+    console.warn("Could not fetch new syncs subcollection:", e);
+  }
+
   return allSyncs;
 }
 
@@ -765,6 +775,21 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
         });
     }
   } catch (err: any) {
+  }
+
+  try {
+    const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
+    const subSnap = await getDocs(syncsSubRef);
+    subSnap.docs.forEach(docSnap => {
+      const payload = docSnap.data();
+      if (payload.data && payload.data.workouts) {
+        allWorkouts.push(...extractData(payload.data.workouts));
+      } else if (payload.workouts) {
+        allWorkouts.push(...extractData(payload.workouts));
+      }
+    });
+  } catch (err: any) {
+    console.warn("Could not fetch new syncs subcollection for workouts:", err.message);
   }
 
   const uniqueWorkouts = Array.from(
