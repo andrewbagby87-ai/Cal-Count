@@ -20,21 +20,17 @@ exports.syncHealthData = onRequest({ invoker: "public" }, async (req, res) => {
     const db = getFirestore();
     const data = req.body; 
 
-    // Prepare the new sync entry
     const newSyncEntry = {
       ...data,
       timestamp: new Date().toISOString()
     };
 
-    // Reference the specific document named after the userId
-    const docRef = db.collection("healthLogs").doc(userId);
-
-    // Use set with { merge: true } and arrayUnion to add the new sync
-    // into a 'syncs' array. If the doc doesn't exist, it creates it.
-    await docRef.set({
-      userId: userId,
-      syncs: FieldValue.arrayUnion(newSyncEntry)
-    }, { merge: true });
+    // Use a subcollection instead of an unbounded array.
+    // This creates a new document for every sync, preventing the 1MB crash limit.
+    const syncsRef = db.collection("healthLogs").doc(userId).collection("syncs");
+    
+    // .add() automatically generates a unique ID for this specific sync payload
+    await syncsRef.add(newSyncEntry);
 
     res.status(200).send("Data synced successfully!");
   } catch (error) {
