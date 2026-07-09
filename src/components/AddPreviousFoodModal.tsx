@@ -2244,6 +2244,55 @@ try {
                 </div>
               )}
 
+              {/* --- NEW: VOLUMES CONVERSION PREVIEW --- */}
+              {selectedFood && (() => {
+                let multiplier = 0;
+                const isVolumeSelected = logDetails.consumptionMethod.startsWith('volume-');
+
+                if (logDetails.consumptionMethod === 'serving') {
+                  const labelServings = selectedFood.servingSize || 1;
+                  const consumedServings = parseFloat(logDetails.servingsConsumed) || 0;
+                  multiplier = consumedServings / labelServings;
+                } else if (isVolumeSelected && selectedFood.volumes) {
+                  const volIndex = parseInt(logDetails.consumptionMethod.split('-')[1]);
+                  const selectedVol = selectedFood.volumes[volIndex];
+                  if (selectedVol && selectedVol.amount) {
+                    const consumedVol = parseFloat(logDetails.volumeConsumed) || 0;
+                    multiplier = consumedVol / selectedVol.amount;
+                  }
+                }
+
+                if (multiplier > 0) {
+                  const conversions: string[] = [];
+                  if (logDetails.consumptionMethod !== 'serving') {
+                    conversions.push(`${Number((multiplier * (selectedFood.servingSize || 1)).toFixed(2))} serving(s)`);
+                  }
+                  if (selectedFood.volumes) {
+                    selectedFood.volumes.forEach((v, idx) => {
+                      if (logDetails.consumptionMethod !== `volume-${idx}` && v.amount) {
+                        conversions.push(`${Number((multiplier * v.amount).toFixed(2))} ${v.unit}`);
+                      }
+                    });
+                  }
+
+                  if (conversions.length > 0) {
+                    return (
+                      <div style={{ marginTop: '1.5rem', padding: '0.85rem 1rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #bfdbfe', fontSize: '0.9rem', color: '#1e3a8a' }}>
+                        <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Equates to:</strong>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {conversions.map((conv, i) => (
+                            <span key={i} style={{ backgroundColor: '#ffffff', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', border: '1px solid #dbeafe', fontWeight: 600 }}>
+                              {conv}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+                return null;
+              })()}
+
               {preview && (
                 <div style={{ 
                   marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', 

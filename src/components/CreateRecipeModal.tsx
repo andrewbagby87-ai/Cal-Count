@@ -471,7 +471,7 @@ const handleFinalLog = async (e: React.FormEvent) => {
       <div className="add-food-modal create-recipe-modal create-food-modal" style={{ backgroundColor: '#fff', width: '100%', maxWidth: '500px', borderRadius: '1rem', padding: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', overflowX: 'hidden', boxSizing: 'border-box' }}>
         
         {step === 'builder' && (
-          <>
+          <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, paddingRight: '0.25rem', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flexShrink: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>{isEditLogMode ? 'Edit Recipe Log' : (isEditFoodMode ? 'Edit Recipe' : 'Create Recipe')}</h2>
@@ -533,7 +533,7 @@ const handleFinalLog = async (e: React.FormEvent) => {
               </div>
             </div>
 
-            <div className="recipe-scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '0.25rem', overflowX: 'hidden' }}>
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
               <h4 style={{ margin: '0 0 0.5rem 0', color: '#475569' }}>Ingredients</h4>
               {ingredients.length === 0 ? (
                 <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px dashed #cbd5e1', marginBottom: '1.5rem', color: '#64748b' }}>
@@ -654,7 +654,7 @@ const handleFinalLog = async (e: React.FormEvent) => {
               </div>
             </div>
 
-            <div style={{ flexShrink: 0 }}>
+            <div style={{ flexShrink: 0, marginTop: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
                 <button onClick={() => setStep('select-previous')} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>+ Previous Food</button>
                 <button onClick={() => setStep('create-ingredient')} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>+ Create New</button>
@@ -691,7 +691,7 @@ const handleFinalLog = async (e: React.FormEvent) => {
                 </button>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {step === 'select-previous' && (
@@ -857,6 +857,53 @@ const handleFinalLog = async (e: React.FormEvent) => {
                     </div>
                   </div>
                 )}
+
+                {/* --- NEW: VOLUMES CONVERSION PREVIEW --- */}
+                {(() => {
+                  let multiplier = 0;
+                  if (consumptionMethod === 'serving') {
+                    const labelServings = activeFood.servingSize || 1;
+                    const consumed = parseFloat(servingsConsumed) || 0;
+                    multiplier = consumed / labelServings;
+                  } else {
+                    const volIndex = parseInt(consumptionMethod.split('-')[1]);
+                    const selectedVol = activeFood.volumes ? activeFood.volumes[volIndex] : null;
+                    if (selectedVol && selectedVol.amount) {
+                      multiplier = (parseFloat(volumeConsumed) || 0) / selectedVol.amount;
+                    }
+                  }
+
+                  if (multiplier > 0) {
+                    const conversions: string[] = [];
+                    if (consumptionMethod !== 'serving') {
+                      conversions.push(`${Number((multiplier * (activeFood.servingSize || 1)).toFixed(2))} serving(s)`);
+                    }
+                    if (activeFood.volumes) {
+                      activeFood.volumes.forEach((v: any, idx: number) => {
+                        if (consumptionMethod !== `volume-${idx}` && v.amount) {
+                          conversions.push(`${Number((multiplier * v.amount).toFixed(2))} ${v.unit}`);
+                        }
+                      });
+                    }
+
+                    if (conversions.length > 0) {
+                      return (
+                        <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #bfdbfe', fontSize: '0.9rem', color: '#1e3a8a' }}>
+                          <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Equates to:</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            {conversions.map((conv, i) => (
+                              <span key={i} style={{ backgroundColor: '#ffffff', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', border: '1px solid #dbeafe', fontWeight: 600 }}>
+                                {conv}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
+
                 {(() => {
                   let multiplier = 1;
                   if (consumptionMethod === 'serving') {
