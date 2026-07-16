@@ -697,7 +697,7 @@ const handleEditLog = async (updates: any) => {
                     className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                     onClick={() => setViewDate(date)}
                   >
-                    <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                    <span className="day-name">{date.getDay() === 4 ? 'TH' : date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
                     <div className="day-circle">
                        <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                        <span className="day-number">{date.getDate()}</span>

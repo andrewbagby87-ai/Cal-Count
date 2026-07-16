@@ -53,7 +53,7 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "LongHorn Steakhouse", logo: './brands/longhorn.png' },
     { name: "Olipop", logo: './brands/olipop.png' },
     { name: "Lay's", logo: './brands/lays.png' },
-    { name: "Coca-Cola", logo: './brands/cocacola.png' },
+    { name: "Coca-Cola", logo: './brands/cocacola.png' , showName: true },
     { name: "Pepsi", logo: './brands/pepsi.png', showName: true },
     { name: "Tropical Smoothie Cafe", logo: './brands/tropicalsmoothie.png' },
     { name: "Prego", logo: './brands/prego.png' },
@@ -97,7 +97,7 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Mayfield", logo: './brands/mayfield.png' },
     { name: "Kitkat", logo: './brands/kitkat.png' },
     { name: "Screamin' Sicilian", logo: './brands/screaminsicilian.png' },
-    { name: "Drumstick", logo: './brands/drumstick.png' },
+    { name: "Drumstick", logo: './brands/drumstick.png' , showName: true},
     { name: "Koia", logo: './brands/koia.png' },
     { name: "Jimmy Dean", logo: './brands/jimmydean.png' },
     { name: "Kraft", logo: './brands/kraft.png' },
@@ -184,6 +184,12 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Real Good", logo: './brands/realgood.png' },
     { name: "Just Bare", logo: './brands/justbare.png' },
     { name: "PAGODA", logo: './brands/pagoda.png' },
+    { name: "Nestle", logo: './brands/nestle.png' , showName: true },
+    { name: "Lotus", logo: './brands/lotus.png' },
+    { name: "Frederik's", logo: './brands/frederiks.png' },
+    { name: "Shorty's", logo: './brands/shortys.png' , showName: true },
+    { name: "American Airlines", logo: './brands/americanairlines.png' },
+
 
     //{ name: "", logo: '' },
     
