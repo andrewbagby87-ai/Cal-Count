@@ -1180,7 +1180,7 @@ const handleEditLog = async (updates: any) => {
                         }
                       }}
                     >
-                      🗓️ Mark as Planned
+                      Mark as Planned
                     </button>
                   )
                 )}
@@ -1199,7 +1199,7 @@ const handleEditLog = async (updates: any) => {
                         setSelectedLog(null);
                       }}
                     >
-                      ⚖️ Edit Amount Eaten
+                      Edit Amount Eaten
                     </button>
                     <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
                       <button 
@@ -1211,7 +1211,7 @@ const handleEditLog = async (updates: any) => {
                           setSelectedLog(null);
                         }}
                       >
-                        🍲 Edit Recipe
+                        Edit Recipe
                       </button>
                       <button 
                         className="btn btn-secondary" 

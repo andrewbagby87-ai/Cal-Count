@@ -119,8 +119,6 @@ export async function deleteFood(id: string) {
 
 // --- Food Log Operations ---
 export async function createFoodLog(userId: string, foodLog: any) {
-  const docRef = doc(db, 'foodLogs', userId);
-  
   const cleanFoodLog = JSON.parse(JSON.stringify(foodLog));
 
   const newLog = {
@@ -129,10 +127,9 @@ export async function createFoodLog(userId: string, foodLog: any) {
     timestamp: cleanFoodLog.timestamp || Date.now(),
   };
 
-  await setDoc(docRef, {
-    userId,
-    foodData: arrayUnion(newLog)
-  }, { merge: true });
+  // NEW: Save to the infinite subcollection instead of the 1MB limited array
+  const logRef = doc(db, `foodLogs/${userId}/logs`, newLog.id);
+  await setDoc(logRef, newLog);
 
   return newLog.id;
 }
@@ -140,6 +137,7 @@ export async function createFoodLog(userId: string, foodLog: any) {
 export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
   
+  // 1. Fetch old array-based logs (Legacy Support)
   try {
     const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
     if (exactDoc.exists()) {
@@ -148,7 +146,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
       if (data.logs) allLogs.push(...data.logs);
     }
   } catch (e) {
-    console.warn("Could not fetch all foodLogs array:", e);
+    console.warn("Could not fetch old foodLogs array:", e);
   }
 
   try {
@@ -157,8 +155,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     snapExact.docs.forEach(d => {
       if (d.id !== userId) {
         allLogs.push({
-          id: d.id,
-          ...d.data(),
+          id: d.id, ...d.data(),
           timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
         });
       }
@@ -167,12 +164,27 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
     console.warn("Could not fetch multi-doc format logs:", e);
   }
 
+  // 2. NEW: Fetch from the infinite subcollection
+  try {
+    const subColRef = collection(db, `foodLogs/${userId}/logs`);
+    const subSnap = await getDocs(subColRef);
+    subSnap.docs.forEach(d => {
+      allLogs.push({
+          ...d.data(),
+          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
+      });
+    });
+  } catch (e) {
+    console.warn("Could not fetch subcollection food logs:", e);
+  }
+
   return allLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
   
+  // 1. Fetch old array-based logs (Legacy Support)
   try {
     const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
     if (exactDoc.exists()) {
@@ -185,23 +197,32 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
   }
 
   try {
-    const qExact = query(
-      collection(db, 'foodLogs'),
-      where('userId', '==', userId),
-      where('date', '==', date)
-    );
+    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId), where('date', '==', date));
     const snapExact = await getDocs(qExact);
     snapExact.docs.forEach(d => {
       if (d.id !== userId) {
         allLogs.push({
-          id: d.id,
-          ...d.data(),
+          id: d.id, ...d.data(),
           timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
         });
       }
     });
   } catch (e) {
     console.warn("Could not fetch multi-doc format logs:", e);
+  }
+
+  // 2. NEW: Fetch from the infinite subcollection
+  try {
+    const subQ = query(collection(db, `foodLogs/${userId}/logs`), where('date', '==', date));
+    const subSnap = await getDocs(subQ);
+    subSnap.docs.forEach(d => {
+      allLogs.push({
+          ...d.data(),
+          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
+      });
+    });
+  } catch (e) {
+    console.warn("Could not fetch subcollection food logs:", e);
   }
 
   const dailyLogs = allLogs.filter((log: any) => log.date === date);
@@ -214,13 +235,25 @@ export async function getWeeklyFoodLogs(userId: string, startDate: string, endDa
 }
 
 export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
-  const docRef = doc(db, 'foodLogs', userId);
   const cleanUpdates = JSON.parse(JSON.stringify(updates));
 
+  // 1. Try updating the new subcollection first
+  try {
+    const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
+    const newLogSnap = await getDoc(newLogRef);
+    if (newLogSnap.exists()) {
+        await updateDoc(newLogRef, cleanUpdates);
+        return; 
+    }
+  } catch (e) {
+    console.warn("Error checking subcollection:", e);
+  }
+
+  // 2. Fallback to updating the old array structure
+  const docRef = doc(db, 'foodLogs', userId);
   try {
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
-
       if (docSnap.exists()) {
         const data = docSnap.data();
         let updated = false;
@@ -265,29 +298,32 @@ export async function updateFoodLog(userId: string, id: string, updates: Partial
 }
 
 export async function deleteFoodLog(userId: string, id: string) {
-  const docRef = doc(db, 'foodLogs', userId);
+  // 1. Delete from new subcollection
+  try {
+    const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
+    await deleteDoc(newLogRef);
+  } catch (e) {
+    console.warn("Error deleting from subcollection:", e);
+  }
 
+  // 2. Delete from old array structure
+  const docRef = doc(db, 'foodLogs', userId);
   try {
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(docRef);
-
       if (docSnap.exists()) {
         const data = docSnap.data();
-
         if (data.foodData) {
           const originalLength = data.foodData.length;
           const newFoodData = data.foodData.filter((log: any) => log.id !== id);
-          
           if (newFoodData.length < originalLength) {
             transaction.update(docRef, { foodData: newFoodData });
             return;
           }
         }
-
         if (data.logs) {
           const originalLength = data.logs.length;
           const newLogs = data.logs.filter((log: any) => log.id !== id);
-          
           if (newLogs.length < originalLength) {
             transaction.update(docRef, { logs: newLogs });
             return;
@@ -307,7 +343,6 @@ export async function deleteFoodLog(userId: string, id: string) {
 
 export async function updateAllPastLogsForFood(userId: string, foodId: string, updatedFood: Food) {
   const docRef = doc(db, 'foodLogs', userId);
-  const docSnap = await getDoc(docRef);
 
   const cleanUpdatedFood = Object.fromEntries(
     Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
@@ -330,16 +365,11 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
           ...ing,
           food: cleanUpdatedFood,
           macros: {
-            calories: calc(cleanUpdatedFood.calories),
-            protein: calc(cleanUpdatedFood.protein),
-            carbs: calc(cleanUpdatedFood.carbs),
-            fat: calc(cleanUpdatedFood.fat),
-            saturatedFat: calc(cleanUpdatedFood.saturatedFat),
-            transFat: calc((cleanUpdatedFood as any).transFat),
-            cholesterol: calc((cleanUpdatedFood as any).cholesterol),
-            sodium: calc((cleanUpdatedFood as any).sodium),
-            fiber: calc(cleanUpdatedFood.fiber),
-            sugar: calc(cleanUpdatedFood.sugar),
+            calories: calc(cleanUpdatedFood.calories), protein: calc(cleanUpdatedFood.protein),
+            carbs: calc(cleanUpdatedFood.carbs), fat: calc(cleanUpdatedFood.fat),
+            saturatedFat: calc(cleanUpdatedFood.saturatedFat), transFat: calc((cleanUpdatedFood as any).transFat),
+            cholesterol: calc((cleanUpdatedFood as any).cholesterol), sodium: calc((cleanUpdatedFood as any).sodium),
+            fiber: calc(cleanUpdatedFood.fiber), sugar: calc(cleanUpdatedFood.sugar),
           }
         };
       }
@@ -347,34 +377,22 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     });
 
     const totalMacros = updatedIngredients.reduce((acc: any, curr: any) => {
-      acc.calories += curr.macros.calories || 0;
-      acc.protein += curr.macros.protein || 0;
-      acc.carbs += curr.macros.carbs || 0;
-      acc.fat += curr.macros.fat || 0;
-      acc.saturatedFat += curr.macros.saturatedFat || 0;
-      acc.transFat += curr.macros.transFat || 0;
-      acc.cholesterol += curr.macros.cholesterol || 0;
-      acc.sodium += curr.macros.sodium || 0;
-      acc.fiber += curr.macros.fiber || 0;
-      acc.sugar += curr.macros.sugar || 0;
+      acc.calories += curr.macros.calories || 0; acc.protein += curr.macros.protein || 0;
+      acc.carbs += curr.macros.carbs || 0; acc.fat += curr.macros.fat || 0;
+      acc.saturatedFat += curr.macros.saturatedFat || 0; acc.transFat += curr.macros.transFat || 0;
+      acc.cholesterol += curr.macros.cholesterol || 0; acc.sodium += curr.macros.sodium || 0;
+      acc.fiber += curr.macros.fiber || 0; acc.sugar += curr.macros.sugar || 0;
       return acc;
     }, { calories: 0, protein: 0, carbs: 0, fat: 0, saturatedFat: 0, transFat: 0, cholesterol: 0, sodium: 0, fiber: 0, sugar: 0 });
 
     const servings = recipe.recipeServings || 1;
-
     return {
-      ...recipe,
-      recipeIngredients: updatedIngredients,
-      calories: Number((totalMacros.calories / servings).toFixed(2)),
-      protein: Number((totalMacros.protein / servings).toFixed(2)),
-      carbs: Number((totalMacros.carbs / servings).toFixed(2)),
-      fat: Number((totalMacros.fat / servings).toFixed(2)),
-      saturatedFat: Number((totalMacros.saturatedFat / servings).toFixed(2)),
-      transFat: Number((totalMacros.transFat / servings).toFixed(2)),
-      cholesterol: Number((totalMacros.cholesterol / servings).toFixed(2)),
-      sodium: Number((totalMacros.sodium / servings).toFixed(2)),
-      fiber: Number((totalMacros.fiber / servings).toFixed(2)),
-      sugar: Number((totalMacros.sugar / servings).toFixed(2)),
+      ...recipe, recipeIngredients: updatedIngredients,
+      calories: Number((totalMacros.calories / servings).toFixed(2)), protein: Number((totalMacros.protein / servings).toFixed(2)),
+      carbs: Number((totalMacros.carbs / servings).toFixed(2)), fat: Number((totalMacros.fat / servings).toFixed(2)),
+      saturatedFat: Number((totalMacros.saturatedFat / servings).toFixed(2)), transFat: Number((totalMacros.transFat / servings).toFixed(2)),
+      cholesterol: Number((totalMacros.cholesterol / servings).toFixed(2)), sodium: Number((totalMacros.sodium / servings).toFixed(2)),
+      fiber: Number((totalMacros.fiber / servings).toFixed(2)), sugar: Number((totalMacros.sugar / servings).toFixed(2)),
     };
   };
 
@@ -399,15 +417,9 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     console.error("Failed to cascade updates to master recipes:", e);
   }
 
-  if (!docSnap.exists()) return;
-  const data = docSnap.data();
-  let updated = false;
-
   const recalculateLog = (log: any) => {
     if (log.foodId === foodId || log.food?.id === foodId) {
-      updated = true;
       let multiplier = 1;
-
       if (log.unit === 'serving') {
         multiplier = log.amount / (cleanUpdatedFood.servingSize || 1);
       } else {
@@ -425,85 +437,88 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
       };
 
       const consumedNutrition = {
-        calories: calcConsumed(cleanUpdatedFood.calories) || 0,
-        fat: calcConsumed(cleanUpdatedFood.fat),
-        saturatedFat: calcConsumed(cleanUpdatedFood.saturatedFat),
-        transFat: calcConsumed((cleanUpdatedFood as any).transFat),
-        cholesterol: calcConsumed((cleanUpdatedFood as any).cholesterol),
-        sodium: calcConsumed((cleanUpdatedFood as any).sodium),
-        carbs: calcConsumed(cleanUpdatedFood.carbs),
-        fiber: calcConsumed(cleanUpdatedFood.fiber),
-        sugar: calcConsumed(cleanUpdatedFood.sugar),
-        protein: calcConsumed(cleanUpdatedFood.protein),
+        calories: calcConsumed(cleanUpdatedFood.calories) || 0, fat: calcConsumed(cleanUpdatedFood.fat),
+        saturatedFat: calcConsumed(cleanUpdatedFood.saturatedFat), transFat: calcConsumed((cleanUpdatedFood as any).transFat),
+        cholesterol: calcConsumed((cleanUpdatedFood as any).cholesterol), sodium: calcConsumed((cleanUpdatedFood as any).sodium),
+        carbs: calcConsumed(cleanUpdatedFood.carbs), fiber: calcConsumed(cleanUpdatedFood.fiber),
+        sugar: calcConsumed(cleanUpdatedFood.sugar), protein: calcConsumed(cleanUpdatedFood.protein),
       };
 
-      const cleanConsumedNutrition = Object.fromEntries(
-        Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
-      ) as any;
-
-      return {
-        ...log,
-        food: cleanUpdatedFood,
-        ...cleanConsumedNutrition
-      };
+      const cleanConsumedNutrition = Object.fromEntries(Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)) as any;
+      return { ...log, food: cleanUpdatedFood, ...cleanConsumedNutrition };
     }
 
     if (log.food?.isRecipe && log.food?.recipeIngredients) {
       const hasIngredient = log.food.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
-      
       if (hasIngredient) {
-        updated = true;
         const updatedRecipe = recalculateRecipeNutrition(log.food);
-        
         const multiplier = log.amount; 
-
         const calcConsumed = (val: number | undefined) => {
           if (val === undefined || isNaN(val)) return undefined;
           return Number((val * multiplier).toFixed(2));
         };
 
         const consumedNutrition = {
-          calories: calcConsumed(updatedRecipe.calories) || 0,
-          fat: calcConsumed(updatedRecipe.fat),
-          saturatedFat: calcConsumed(updatedRecipe.saturatedFat),
-          transFat: calcConsumed(updatedRecipe.transFat),
-          cholesterol: calcConsumed(updatedRecipe.cholesterol),
-          sodium: calcConsumed(updatedRecipe.sodium),
-          carbs: calcConsumed(updatedRecipe.carbs),
-          fiber: calcConsumed(updatedRecipe.fiber),
-          sugar: calcConsumed(updatedRecipe.sugar),
-          protein: calcConsumed(updatedRecipe.protein),
+          calories: calcConsumed(updatedRecipe.calories) || 0, fat: calcConsumed(updatedRecipe.fat),
+          saturatedFat: calcConsumed(updatedRecipe.saturatedFat), transFat: calcConsumed(updatedRecipe.transFat),
+          cholesterol: calcConsumed(updatedRecipe.cholesterol), sodium: calcConsumed(updatedRecipe.sodium),
+          carbs: calcConsumed(updatedRecipe.carbs), fiber: calcConsumed(updatedRecipe.fiber),
+          sugar: calcConsumed(updatedRecipe.sugar), protein: calcConsumed(updatedRecipe.protein),
         };
 
-        const cleanConsumedNutrition = Object.fromEntries(
-          Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)
-        ) as any;
-
-        return {
-          ...log,
-          food: updatedRecipe,
-          ...cleanConsumedNutrition
-        };
+        const cleanConsumedNutrition = Object.fromEntries(Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)) as any;
+        return { ...log, food: updatedRecipe, ...cleanConsumedNutrition };
       }
     }
-
     return log;
   };
 
-  if (data.foodData) {
-    updated = false;
-    const newFoodData = data.foodData.map(recalculateLog);
-    if (updated) {
-      await updateDoc(docRef, { foodData: newFoodData });
+  // 1. Update Old Array Structure
+  try {
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      let updatedArray = false;
+
+      if (data.foodData) {
+        const newFoodData = data.foodData.map((log: any) => {
+          const updatedLog = recalculateLog(log);
+          if (updatedLog !== log) updatedArray = true;
+          return updatedLog;
+        });
+        if (updatedArray) await updateDoc(docRef, { foodData: newFoodData });
+      } 
+      
+      if (data.logs) {
+        updatedArray = false;
+        const newLogs = data.logs.map((log: any) => {
+          const updatedLog = recalculateLog(log);
+          if (updatedLog !== log) updatedArray = true;
+          return updatedLog;
+        });
+        if (updatedArray) await updateDoc(docRef, { logs: newLogs });
+      }
     }
-  } 
-  
-  if (data.logs) {
-    updated = false;
-    const newLogs = data.logs.map(recalculateLog);
-    if (updated) {
-      await updateDoc(docRef, { logs: newLogs });
-    }
+  } catch (e) {
+    console.warn("Error updating old array logs:", e);
+  }
+
+  // 2. NEW: Update Infinite Subcollection
+  try {
+    const subColRef = collection(db, `foodLogs/${userId}/logs`);
+    const subSnap = await getDocs(subColRef);
+    const subUpdatePromises: Promise<void>[] = [];
+
+    subSnap.docs.forEach(docSnapshot => {
+      const log = docSnapshot.data();
+      const updatedLog = recalculateLog(log);
+      if (updatedLog !== log) {
+        subUpdatePromises.push(updateDoc(docSnapshot.ref, updatedLog));
+      }
+    });
+    await Promise.all(subUpdatePromises);
+  } catch (e) {
+    console.error("Failed to update subcollection logs:", e);
   }
 }
 
