@@ -268,6 +268,45 @@
 
 .nav-btn:hover { background: #cbd5e1; }
 
+.nav-btn.desktop-arrow {
+  width: 16px; /* Exactly matches the 1rem padding of the container! */
+  height: 100%; /* Spans perfectly from top to bottom */
+  padding: 0;
+  opacity: 0.95;
+  align-self: stretch;
+  display: block;
+  box-shadow: none; /* Removes the 3D float effect so it sits flush */
+}
+
+.nav-btn.desktop-arrow {
+  width: 36px; 
+  height: 100%;
+  padding: 0;
+  opacity: 0.95;
+  align-self: stretch;
+  display: block;
+  box-shadow: none;
+  border-radius: 0; /* Let the container's overflow handle the rounded corners */
+}
+
+.nav-btn.desktop-arrow.prev-week {
+  /* Fades from solid blue on the left edge into transparent white towards the center */
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.85) 0%, rgba(37, 99, 235, 0.4) 30%, rgba(255, 255, 255, 0) 100%);
+}
+
+.nav-btn.desktop-arrow.next-week {
+  /* Fades from transparent white in the center to solid blue on the right edge */
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(37, 99, 235, 0.4) 60%, rgba(37, 99, 235, 0.85) 100%);
+}
+
+.nav-btn.desktop-arrow.prev-week:hover {
+  background: linear-gradient(90deg, rgba(29, 78, 216, 1) 0%, rgba(29, 78, 216, 0.6) 30%, rgba(255, 255, 255, 0) 100%);
+}
+
+.nav-btn.desktop-arrow.next-week:hover {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(29, 78, 216, 0.6) 60%, rgba(29, 78, 216, 1) 100%);
+}
+
 .weekly-navigator {
   display: flex; justify-content: space-between; background: white;
   padding: 1rem; border-radius: 0.75rem; margin-bottom: 1.5rem;
@@ -324,13 +363,37 @@
 }
 
 .navigator-container {
-  background: white; padding: 1rem; border-radius: 0.75rem;
-  margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  display: flex; flex-direction: column; gap: 1rem;
+  background: white;
+  border: 1px solid #94a3b8; /* Adds a clean border to the entire bar */
+  padding: 1rem; 
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  display: flex; 
+  flex-direction: column; 
+  gap: 1rem;
+  position: relative;
+  overflow: hidden; /* CRITICAL: Clips the blue corners perfectly inside the border */
 }
+
+.navigator-container { position: relative; }
 
 .navigator-grid {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+}
+
+.navigator-grid .week-day-btn:nth-child(6) {
+  position: relative;
+}
+
+.navigator-grid .week-day-btn:nth-child(6)::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: 1px;
+  background: #e2e8f0;
 }
 
 .week-day-btn.diff-month { opacity: 0.4; }
@@ -359,6 +422,7 @@
 
 /* Mobile Fixes */
 @media (max-width: 600px) {
+  .nav-btn.desktop-arrow { width: 24px; }
   .navigator-container { padding: 0.75rem 0.25rem; }
   .navigator-grid { gap: 2px; }
   .week-day-btn { padding: 0.25rem 0.1rem; }

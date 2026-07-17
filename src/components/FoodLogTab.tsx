@@ -666,21 +666,20 @@ const handleEditLog = async (updates: any) => {
         </div>
 
         <div className="weekly-nav-wrapper">
-          <button 
-            className="nav-btn desktop-arrow" 
-            onClick={handlePrevWeek} 
-            style={{ position: 'absolute', left: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-          >
-            ←
-          </button>
-
           <div 
             className="navigator-container weekly-view"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
-            style={{ margin: 0 }} 
+            style={{ margin: 0, position: 'relative' }} 
           >
+            <button 
+              className="nav-btn desktop-arrow prev-week" 
+              onClick={handlePrevWeek} 
+              aria-label="Previous week"
+              style={{ position: 'absolute', left: '0', top: '0', bottom: '0', zIndex: 10, margin: 0 }}
+            />
+
             <div className="navigator-grid">
               {getWeekDates(viewDate).map((date) => {
                 const dStr = getDateString(date);
@@ -697,7 +696,7 @@ const handleEditLog = async (updates: any) => {
                     className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                     onClick={() => setViewDate(date)}
                   >
-                    <span className="day-name">{date.getDay() === 4 ? 'TH' : date.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                    <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                     <div className="day-circle">
                        <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                        <span className="day-number">{date.getDate()}</span>
@@ -706,15 +705,14 @@ const handleEditLog = async (updates: any) => {
                 );
               })}
             </div>
-          </div>
 
-          <button 
-            className="nav-btn desktop-arrow" 
-            onClick={handleNextWeek} 
-            style={{ position: 'absolute', right: '0', top: '55%', transform: 'translateY(-50%)', zIndex: 10, margin: 0 }}
-          >
-            →
-          </button>
+            <button 
+              className="nav-btn desktop-arrow next-week" 
+              onClick={handleNextWeek} 
+              aria-label="Next week"
+              style={{ position: 'absolute', right: '0', top: '0', bottom: '0', zIndex: 10, margin: 0 }}
+            />
+          </div>
         </div>
 
         <div className="tab-header">
@@ -835,11 +833,9 @@ const handleEditLog = async (updates: any) => {
               <><span style={{ filter: 'grayscale(100%)', opacity: 0.6 }}>🔥</span> Mark Day as Done</>
             )}
           </button>
+
           {!isDoneLogging && foodLogs.some(log => log.isPlanned) && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.4rem',
+            <div style={{
               fontSize: '0.8rem', 
               color: '#b91c1c', 
               backgroundColor: '#fef2f2',
