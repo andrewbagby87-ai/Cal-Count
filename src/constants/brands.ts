@@ -52,7 +52,7 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "The Cheesecake Factory", logo: './brands/thecheesecakefactory.png' },
     { name: "LongHorn Steakhouse", logo: './brands/longhorn.png' },
     { name: "Olipop", logo: './brands/olipop.png' },
-    { name: "Lay's", logo: './brands/lays.png' },
+    { name: "Lay's", logo: './brands/lays.png' , showName: true},
     { name: "Coca-Cola", logo: './brands/cocacola.png' , showName: true },
     { name: "Pepsi", logo: './brands/pepsi.png', showName: true },
     { name: "Tropical Smoothie Cafe", logo: './brands/tropicalsmoothie.png' },
@@ -139,7 +139,6 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Johnsonville", logo: './brands/johnsonville.png' },
     { name: "OIKOS Pro", logo: './brands/dannon.png' },
     { name: "Betty Crocker", logo: './brands/bettycrocker.png' },
-    { name: "KashiGo", logo: './brands/kashi.png' },
     { name: "Kashi", logo: './brands/kashi.png' },
     { name: "Bear Naked", logo: './brands/bearnaked.png' },
     { name: "Jell-o", logo: './brands/jello.png' },
@@ -189,6 +188,8 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Frederik's", logo: './brands/frederiks.png' },
     { name: "Shorty's", logo: './brands/shortys.png' , showName: true },
     { name: "American Airlines", logo: './brands/americanairlines.png' },
+    { name: "mosh", logo: './brands/mosh.png' },
+    { name: "Marie Callenders", logo: './brands/mariecallenders.png' , showName: true },
 
 
     //{ name: "", logo: '' },

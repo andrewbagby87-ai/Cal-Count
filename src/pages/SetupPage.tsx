@@ -240,11 +240,11 @@ export default function SetupPage() {
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', width: '100%', marginTop: '1rem' }}>
-            <button type="submit" disabled={loading} className="btn-primary" style={{ margin: 0, flex: 1 }}>
-              {loading ? 'Setting up...' : 'Complete Setup'}
-            </button>
             <button type="button" disabled={loading} className="btn btn-secondary" onClick={handleCancel} style={{ margin: 0, flex: 1, backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', color: '#64748b' }}>
               Cancel
+            </button>
+            <button type="submit" disabled={loading} className="btn-primary" style={{ margin: 0, flex: 1 }}>
+              {loading ? 'Setting up...' : 'Complete Setup'}
             </button>
           </div>
         </form>

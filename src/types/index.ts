@@ -10,6 +10,8 @@ export interface UserProfile {
   name: string;
   email: string;
   caloriesBudget: number;
+
+  isAdmin?: boolean;
   
   // NEW: Optional Goals
   weightGoal?: number | null;
@@ -53,6 +55,7 @@ export interface AuthContextType {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   deleteUserAccount: (password?: string) => Promise<void>; 
   refreshUserProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 export interface Food {

@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { onAuthStateChanged, signOut, deleteUser, EmailAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../services/firebase';
-// UPDATE: Import updateUserProfile from database as updateDbUserProfile
 import { getUserProfile, deleteAllUserData, updateUserProfile as updateDbUserProfile } from '../services/database';
 import type { AuthContextType, UserProfile } from '../types/index';
 
@@ -91,6 +90,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } 
   };
 
+  const resetPassword = async (email: string) => {
+  return sendPasswordResetEmail(auth, email);
+};
+
   const value: AuthContextType = {
     user,
     userProfile,
@@ -101,6 +104,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     updateUserProfile,
     deleteUserAccount,
     refreshUserProfile,
+    resetPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

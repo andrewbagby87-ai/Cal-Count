@@ -681,26 +681,45 @@ const handleEditLog = async (updates: any) => {
             />
 
             <div className="navigator-grid">
-              {getWeekDates(viewDate).map((date) => {
+              {getWeekDates(viewDate).map((date, index) => {
                 const dStr = getDateString(date);
                 const isSelected = dStr === viewStr;
                 const isActualToday = dStr === todayStr;
-                
                 const summary = navigatorSummaries[dStr] || { progress: 0, color: '#10b981' };
                 const progress = summary.progress;
                 const barColor = summary.color;
+                
+                // NEW: Check if this day is Saturday
+                const isSaturday = date.getDay() === 6;
+                // NEW: Don't show the line if Saturday is the very last item on the far right
+                const isLastItem = index === 6; 
                 
                 return (
                   <button 
                     key={dStr} 
                     className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                     onClick={() => setViewDate(date)}
+                    style={{ position: 'relative' }} /* NEW: Important so the line anchors to the button */
                   >
                     <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                     <div className="day-circle">
                        <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                        <span className="day-number">{date.getDate()}</span>
                     </div>
+
+                    {/* NEW: The Gray Divider Line */}
+                    {isSaturday && !isLastItem && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '-0.5rem', /* Tweaked to sit in the gap between buttons */
+                        top: '15%',
+                        bottom: '15%',
+                        width: '2px',
+                        backgroundColor: '#e2e8f0', /* Matches your empty circle border gray */
+                        borderRadius: '2px',
+                        pointerEvents: 'none' /* Prevents the line from blocking clicks */
+                      }} />
+                    )}
                   </button>
                 );
               })}

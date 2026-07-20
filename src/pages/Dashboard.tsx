@@ -137,7 +137,7 @@ export default function Dashboard() {
             onClick={() => setShowDropdown(!showDropdown)}
             title="Account Menu"
           >
-            👤 {userProfile?.name || 'Account'} ▾
+            👤 {userProfile?.name || 'Account'} {userProfile?.isAdmin && <img src="./shield.png" alt="Admin Icon" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />} ▾
           </button>
           
           {showDropdown && (

@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog} from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -171,6 +171,32 @@ export default function DailyStatsTab() {
   
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const handleToggleIgnoreWorkout = async (workoutId: string, isCurrentlyIgnored: boolean) => {
+    if (!user?.uid) return;
+    try {
+      await toggleIgnoredWorkout(user.uid, workoutId, !isCurrentlyIgnored);
+      
+      // NEW: Broadcast the change to the Workout Tab
+      window.dispatchEvent(new Event('workoutDataChanged'));
+      setRefreshTrigger(prev => prev + 1); 
+    } catch (error) {
+      console.error('Failed to toggle workout:', error);
+    }
+  };
+
+  const handleDeleteManualWorkout = async (workoutId: string) => {
+    if (!user?.uid || !window.confirm('Are you sure you want to delete this workout?')) return;
+    try {
+      await deleteWorkoutLog(workoutId);
+      
+      // NEW: Broadcast the change to the Workout Tab
+      window.dispatchEvent(new Event('workoutDataChanged'));
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to delete manual workout:', error);
+    }
+  };
   
   useEffect(() => {
     const handleUpdate = () => {
@@ -380,11 +406,12 @@ useEffect(() => {
 
         // Helper function to process data for a specific date
         const processDataForDate = (targetDateStr: string, rawFoods: any, rawWorkouts: any) => {
-          const processedSynced = (syncedWorkoutsRaw || []).filter((w: any) => {
-            const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, targetDateStr);
-            const isIgnored = (ignoredWorkouts || []).includes(String(w.id || w.dbId)); 
-            return isToday && !isIgnored; 
-          });
+          const processedSynced = (syncedWorkoutsRaw || [])
+            .filter((w: any) => isWorkoutOnDate(w.start || w.date || w.timestamp, targetDateStr))
+            .map((w: any) => ({
+              ...w,
+              isIgnored: (ignoredWorkouts || []).includes(String(w.id || w.dbId))
+            }));
 
           const manualW = (manualWeights || []).filter((w: any) => w.date === targetDateStr).map((w: any) => ({
             ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
@@ -519,6 +546,7 @@ useEffect(() => {
   
   const manualBurned = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
   const healthBurned = syncedWorkouts.reduce((sum, w) => {
+    if (w.isIgnored) return sum; // <-- Skip ignored workouts
     if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
        return sum + Math.round(w.activeEnergyBurned.qty);
     }
@@ -577,7 +605,7 @@ useEffect(() => {
               style={{ position: 'absolute', left: '0', top: '0', bottom: '0', zIndex: 10, margin: 0 }}
             />
             <div className="navigator-grid">
-              {getWeekDates(viewDate).map((date) => {
+              {getWeekDates(viewDate).map((date, index) => {
                 const dStr = getDateString(date);
                 const isSelected = dStr === viewStr;
                 const isActualToday = dStr === todayStr;
@@ -585,17 +613,37 @@ useEffect(() => {
                 const progress = summary.progress;
                 const barColor = summary.color;
                 
+                // NEW: Check if this day is Saturday
+                const isSaturday = date.getDay() === 6;
+                // NEW: Don't show the line if Saturday is the very last item on the far right
+                const isLastItem = index === 6; 
+                
                 return (
                   <button 
                     key={dStr} 
                     className={`week-day-btn ${isSelected ? 'selected' : ''} ${isActualToday ? 'is-today' : ''}`}
                     onClick={() => setViewDate(date)}
+                    style={{ position: 'relative' }} /* NEW: Important so the line anchors to the button */
                   >
                     <span className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                     <div className="day-circle">
                        <div className="day-progress" style={{ height: `${Math.min(progress * 100, 100)}%`, backgroundColor: barColor }} />
                        <span className="day-number">{date.getDate()}</span>
                     </div>
+
+                    {/* NEW: The Gray Divider Line */}
+                    {isSaturday && !isLastItem && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '-0.5rem', /* Tweaked to sit in the gap between buttons */
+                        top: '15%',
+                        bottom: '15%',
+                        width: '2px',
+                        backgroundColor: '#e2e8f0', /* Matches your empty circle border gray */
+                        borderRadius: '2px',
+                        pointerEvents: 'none' /* Prevents the line from blocking clicks */
+                      }} />
+                    )}
                   </button>
                 );
               })}
@@ -735,6 +783,7 @@ useEffect(() => {
                 <img src="./dumbell.png" alt="Workout Icon" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                 <span className="stat-label" style={{ margin: 0 }}>Calories Burned</span>
               </div>
+              
               {caloriesBurned > 0 ? (
                 <div className="weight-highlight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: '0.25rem' }}>
                   <span className="burned" style={{ fontSize: '2rem', fontWeight: 700, color: '#f97316' }}>
@@ -745,6 +794,66 @@ useEffect(() => {
               ) : (
                 <div className="empty-weight" style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center' }}>
                   <span>No workouts logged</span>
+                </div>
+              )}
+
+              {/* NEW: Individual Workout Breakdown */}
+              {(syncedWorkouts.length > 0 || workoutLogs.length > 0) && (
+                <div style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                  
+                  {/* Map Apple Health Workouts */}
+                  {syncedWorkouts.map((w: any) => {
+                    const wId = String(w.id || w.dbId);
+                    const cals = w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0;
+                    
+                    // Prioritize standard names/titles, fallback to cleaning up the Apple Health string
+                    let activityName = w.title || w.name || (w.workoutActivityType ? w.workoutActivityType.replace('HKWorkoutActivityType', '') : 'Workout');
+                    // Add spaces before capital letters (e.g., "TraditionalStrengthTraining" -> "Traditional Strength Training")
+                    activityName = activityName.replace(/([A-Z])/g, ' $1').trim();
+
+                    return (
+                      <div key={wId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', opacity: w.isIgnored ? 0.5 : 1 }}>
+                        <span style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%', textDecoration: w.isIgnored ? 'line-through' : 'none' }}>
+                          {activityName}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontWeight: 600, color: w.isIgnored ? '#94a3b8' : '#f97316', textDecoration: w.isIgnored ? 'line-through' : 'none' }}>{cals}</span>
+                          <button 
+                            onClick={() => handleToggleIgnoreWorkout(wId, w.isIgnored)}
+                            style={{ 
+                              background: w.isIgnored ? '#e2e8f0' : '#fee2e2', 
+                              color: w.isIgnored ? '#64748b' : '#ef4444', 
+                              border: 'none', 
+                              borderRadius: '4px', 
+                              padding: '3px 8px', 
+                              fontSize: '0.7rem', 
+                              cursor: 'pointer', 
+                              fontWeight: 600 
+                            }}
+                          >
+                            {w.isIgnored ? 'Add' : 'Ignore'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Map Manual Workouts */}
+                  {workoutLogs.map((w: WorkoutLog) => (
+                    <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                      <span style={{ color: '#475569' }}>Manual Workout</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600, color: '#f97316' }}>{w.caloriesBurned}</span>
+                        <button 
+                          onClick={() => handleDeleteManualWorkout(w.id)}
+                          style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '4px', padding: '3px 8px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
                 </div>
               )}
             </div>

@@ -10,6 +10,14 @@ export default function WorkoutsTab() {
   const [loading, setLoading] = useState(true);
   const [visibleDays, setVisibleDays] = useState(7);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
+    window.addEventListener('workoutDataChanged', handleUpdate);
+    return () => window.removeEventListener('workoutDataChanged', handleUpdate);
+  }, []);
+
   useEffect(() => {
     if (user) {
       Promise.all([
@@ -26,7 +34,7 @@ export default function WorkoutsTab() {
         setLoading(false);
       });
     }
-  }, [user]);
+  }, [user, refreshTrigger]);
 
   const handleToggle = async (workoutId: string, currentlyIgnored: boolean) => {
     if (!user) return;

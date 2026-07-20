@@ -382,20 +382,6 @@
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
 }
 
-.navigator-grid .week-day-btn:nth-child(6) {
-  position: relative;
-}
-
-.navigator-grid .week-day-btn:nth-child(6)::before {
-  content: '';
-  position: absolute;
-  left: -3px;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  width: 1px;
-  background: #e2e8f0;
-}
-
 .week-day-btn.diff-month { opacity: 0.4; }
 .monthly-view .day-circle { width: 32px; height: 32px; }
 

@@ -18,7 +18,7 @@ const getLocalTodayString = () => {
 };
 
 export default function UserSettings({ onBack, mode = 'account' }: UserSettingsProps) {
-  const { user, userProfile, updateUserProfile, deleteUserAccount } = useAuth();
+  const { user, userProfile, updateUserProfile, deleteUserAccount, resetPassword } = useAuth();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -45,9 +45,6 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
     weightGoal: '' as number | string,
     stepGoal: '' as number | string,
   });
-  
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -91,13 +88,26 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
     }));
   };
 
+  const handlePasswordReset = async () => {
+  if (!user?.email) {
+    setMessage('✗ No email address associated with this account.');
+    return;
+  }
+  
+  setIsSaving(true);
+  try {
+    await resetPassword(user.email);
+    setMessage('✓ Password reset email sent! Check your inbox.');
+  } catch (error: any) {
+    console.error(error);
+    setMessage('✗ Failed to send password reset email.');
+  } finally {
+    setIsSaving(false);
+  }
+};
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); 
-    
-    if (password && password !== confirmPassword) {
-      setMessage('Passwords do not match');
-      return;
-    }
 
     setIsSaving(true);
     setMessage('');
@@ -158,10 +168,6 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
 
       await updateUserProfile(dataToSave);
       setMessage('✓ Settings saved successfully!');
-      setTimeout(() => {
-        setPassword('');
-        setConfirmPassword('');
-      }, 1500);
     } catch (error) {
       setMessage('✗ Failed to save settings');
       console.error(error);
@@ -240,14 +246,17 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
 
                 <section className="settings-section">
                   <h2>Change Password</h2>
-                  <div className="form-group">
-                    <label>New Password</label>
-                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current" disabled={isBusy} />
-                  </div>
-                  <div className="form-group">
-                    <label>Confirm Password</label>
-                    <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" disabled={isBusy} />
-                  </div>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1rem', marginTop: '0' }}>
+                    Click the button below to receive an email with a secure link to reset your password.
+                  </p>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={handlePasswordReset}
+                    disabled={isBusy}
+                  >
+                    Send Password Reset Email
+                  </button>
                 </section>
 
                 <section className="settings-section" style={{ marginTop: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem' }}>
