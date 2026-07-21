@@ -1,6 +1,8 @@
 // src/components/UserSettings.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { sendEmailVerification } from 'firebase/auth';
+import { auth } from '../services/firebase';
 import './UserSettings.css';
 
 interface UserSettingsProps {
@@ -86,6 +88,25 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
       ...prev,
       [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? '' : Number(value)) : value),
     }));
+  };
+
+  const handleSendVerification = async () => {
+    if (!auth.currentUser) return;
+    
+    setIsSaving(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setMessage('✓ Verification email sent! Please check your inbox.');
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/too-many-requests') {
+        setMessage('✗ Too many requests. Please wait a bit and try again.');
+      } else {
+        setMessage('✗ Failed to send verification email.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handlePasswordReset = async () => {
@@ -240,9 +261,47 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
                   </div>
                   <div className="form-group">
                     <label>Email</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleChange} disabled />
+                    {/* Wrapper to handle the absolute positioning of the icon/button */}
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input 
+                        type="email" 
+                        name="email" 
+                        value={formData.email} 
+                        onChange={handleChange} 
+                        disabled 
+                        style={{ width: '100%', paddingRight: '70px', boxSizing: 'border-box' }} 
+                      />
+                      
+                      <div style={{ position: 'absolute', right: '10px', display: 'flex', alignItems: 'center' }}>
+                        {user?.emailVerified ? (
+                          <img 
+                            src="./check.png" 
+                            alt="Email Verified" 
+                            title="Email Verified"
+                            style={{ width: '20px', height: '20px' }} 
+                          />
+                        ) : (
+                          <button 
+                            type="button"
+                            onClick={handleSendVerification}
+                            disabled={isBusy}
+                            style={{ 
+                              background: 'none', 
+                              border: 'none', 
+                              color: '#0ea5e9', 
+                              fontWeight: '600', 
+                              cursor: isBusy ? 'not-allowed' : 'pointer',
+                              padding: '0',
+                              fontSize: '0.9rem'
+                            }}
+                          >
+                            Verify
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </section>
+                  </section>
 
                 <section className="settings-section">
                   <h2>Change Password</h2>

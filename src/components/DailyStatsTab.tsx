@@ -635,13 +635,13 @@ useEffect(() => {
                     {isSaturday && !isLastItem && (
                       <div style={{
                         position: 'absolute',
-                        right: '-0.5rem', /* Tweaked to sit in the gap between buttons */
+                        right: '-0.25rem', /* <--- Cut this value in half! */
                         top: '15%',
                         bottom: '15%',
                         width: '2px',
-                        backgroundColor: '#e2e8f0', /* Matches your empty circle border gray */
+                        backgroundColor: '#e2e8f0',
                         borderRadius: '2px',
-                        pointerEvents: 'none' /* Prevents the line from blocking clicks */
+                        pointerEvents: 'none'
                       }} />
                     )}
                   </button>
