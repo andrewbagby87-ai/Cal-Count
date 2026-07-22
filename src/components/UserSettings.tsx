@@ -1,7 +1,7 @@
 // src/components/UserSettings.tsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { sendEmailVerification } from 'firebase/auth';
+import { sendEmailVerification, verifyBeforeUpdateEmail } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import './UserSettings.css';
 
@@ -110,22 +110,65 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
   };
 
   const handlePasswordReset = async () => {
-  if (!user?.email) {
-    setMessage('✗ No email address associated with this account.');
-    return;
-  }
-  
-  setIsSaving(true);
-  try {
-    await resetPassword(user.email);
-    setMessage('✓ Password reset email sent! Check your inbox.');
-  } catch (error: any) {
-    console.error(error);
-    setMessage('✗ Failed to send password reset email.');
-  } finally {
-    setIsSaving(false);
-  }
-};
+    if (!user?.email) {
+      setMessage('✗ No email address associated with this account.');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await resetPassword(user.email);
+      setMessage('✓ Password reset email sent! Check your inbox.');
+    } catch (error: any) {
+      console.error(error);
+      setMessage('✗ Failed to send password reset email.');
+    } finally {
+      setIsSaving(false);
+    }
+  }; // <--- Make sure handlePasswordReset completely closes here!
+
+const handleChangeEmail = async () => {
+    if (!auth.currentUser) return;
+
+    const newEmail = window.prompt("Enter your new email address:");
+    
+    // Cancel if they hit cancel, left it blank, or entered their current email
+    if (!newEmail || newEmail.trim() === '' || newEmail === user?.email) {
+      return;
+    }
+
+    // Basic email format validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      setMessage('✗ Please enter a valid email address.');
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage('');
+    
+    try {
+      // Firebase's secure flow: Sends verification to the NEW email, 
+      // and automatically sends a security/revert notice to the OLD email.
+      await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
+      
+      // Note: We DO NOT update Firestore or local state here anymore, 
+      // because the email doesn't actually change until they click the link!
+      
+      setMessage(`✓ Verification sent! Please check ${newEmail} to confirm the change.`);
+    } catch (error: any) {
+      console.error(error);
+      // Handle Firebase's strict security requirement
+      if (error.code === 'auth/requires-recent-login') {
+        setMessage('✗ Security Check: Please log out and log back in before changing your email.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        setMessage('✗ That email is already in use by another account.');
+      } else {
+        setMessage('✗ ' + (error.message || 'Failed to update email.'));
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); 
@@ -300,8 +343,29 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
                         )}
                       </div>
                     </div>
+                    
+                    {/* Restored small Change Email link */}
+                    <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                      <button 
+                        type="button"
+                        onClick={handleChangeEmail}
+                        disabled={isBusy}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          color: '#64748b', 
+                          textDecoration: 'underline',
+                          cursor: isBusy ? 'not-allowed' : 'pointer',
+                          padding: '0',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        Change Email Address
+                      </button>
+                    </div>
+
                   </div>
-                  </section>
+                </section>
 
                 <section className="settings-section">
                   <h2>Change Password</h2>
