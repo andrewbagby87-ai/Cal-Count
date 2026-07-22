@@ -112,6 +112,7 @@ export interface FoodLog {
   timestamp: number;
   isPlanned?: boolean;
   createdAt?: number;
+  updatedAt?: number;
   
   // For edited foods (only edit this log entry)
   editedNutrition?: {

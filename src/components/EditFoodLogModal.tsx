@@ -84,6 +84,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     protein: toStr(localFood.protein),
   });
 
+  const [updatePastLogs, setUpdatePastLogs] = useState(true);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
   const iconPickerRef = useRef<HTMLDivElement>(null);
@@ -158,8 +159,22 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
         ...localFood,
         name: editFormData.name.trim(),
         icon: editFormData.icon.trim() === '' ? null : editFormData.icon.trim(),
-        calories: cals
+        calories: cals,
+        updatedAt: Date.now() // <-- NEW: Add the timestamp
       };
+
+      // NEW: Update past instances of this log if toggle is checked
+      // NEW: Update past instances of this log if toggle is checked
+      if (updatePastLogs && user) {
+        // Guarantee an ID exists for the old quick-add log
+        const targetFoodId = localFood.id || log.foodId || (log.food as any).id || `food-${Date.now()}`;
+        updatedFood.id = targetFoodId; // Attach it to the payload
+
+        if (targetFoodId) {
+          // NEW: Pass localFood.name as the 4th argument fallback
+          await updateAllPastLogsForFood(user.uid, targetFoodId, updatedFood, localFood.name);
+        }
+      }
 
       const rawFirebasePayload: any = {
         date: logDetails.date,
@@ -381,6 +396,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       
     const updatedFood: any = {
       ...localFood,
+      id: localFood.id || `food-${Date.now()}`,
       name: editFormData.name.trim(),
       flavor: editFormData.flavor.trim() === '' ? null : editFormData.flavor.trim(),
       brand: editFormData.brand.trim() === '' ? null : editFormData.brand.trim(),
@@ -399,6 +415,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
       protein: safeParse(editFormData.protein),
       servingSize: parseFloat(editFormData.labelServings) || 1,
       volumes: validVolumes.length > 0 ? validVolumes : null,
+      updatedAt: Date.now(),
     };
 
     if (!user) return;
@@ -410,8 +427,20 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
         Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
       );
       
-      await updateFood(localFood.id, cleanFirebasePayload);
-      await updateAllPastLogsForFood(user.uid, localFood.id, updatedFood);
+      // Use the guaranteed ID that was generated on updatedFood
+      const targetFoodId = updatedFood.id;
+      
+      // Only attempt the global Firebase writes if we have a valid ID to target
+      if (targetFoodId) {
+        // Always update the base food item for future use
+        await updateFood(targetFoodId, cleanFirebasePayload);
+        
+        // Only update historical logs if the toggle is checked
+        if (updatePastLogs) {
+          // NEW: Pass localFood.name as the 4th argument fallback
+          await updateAllPastLogsForFood(user.uid, targetFoodId, updatedFood, localFood.name);
+        }
+      }
 
       setLocalFood(updatedFood);
       
@@ -503,6 +532,7 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
     e.preventDefault();
     setError('');
     try {
+      // Pass the toggle state here
       await processLogSave(localFood, logDetails, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -594,6 +624,21 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
             <form onSubmit={handleQuickAddSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', overflowX: 'hidden' }}>
                 
+                {/* --- NEW: UPDATE PAST LOGS TOGGLE (QUICK ADD VIEW) --- */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+                  <input
+                    type="checkbox"
+                    id="updatePastLogsQuick"
+                    checked={updatePastLogs}
+                    onChange={(e) => setUpdatePastLogs(e.target.checked)}
+                    style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                  />
+                  <label htmlFor="updatePastLogsQuick" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+                    Update past logs
+                  </label>
+                </div>
+                {/* ---------------------------------- */}
+
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
                   <label htmlFor="quickName" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>Title *</label>
                   <input id="quickName" type="text" name="name" value={editFormData.name} onChange={handleEditChange} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} required />
@@ -716,11 +761,26 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
             <form onSubmit={handleSaveNutritionForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', overflowX: 'hidden' }}>
                 
-            <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
+                {/* --- BRING THE TOGGLE BACK HERE --- */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #cbd5e1' }}>
+                  <input
+                    type="checkbox"
+                    id="updatePastLogsNutrition"
+                    checked={updatePastLogs}
+                    onChange={(e) => setUpdatePastLogs(e.target.checked)}
+                    style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', margin: 0 }}
+                  />
+                  <label htmlFor="updatePastLogsNutrition" style={{ cursor: 'pointer', margin: 0, fontWeight: 600, color: '#475569' }}>
+                    Update past logs
+                  </label>
+                </div>
+                {/* ---------------------------------- */}
+
+                <div className="form-group" style={{ position: 'relative', marginBottom: '1rem' }}>
                   <label htmlFor="name" style={{ display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>{localFood.isVitamin ? 'Vitamin Name *' : 'Food Name *'}</label>
                   <input 
                     id="name" type="text" name="name" value={editFormData.name} 
-                    onChange={(e) => { handleEditChange(e); setShowNameSuggestions(true); }} 
+                    onChange={(e) => { handleEditChange(e); setShowNameSuggestions(true); }}
                     onFocus={() => setShowNameSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
                     style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', width: '100%', boxSizing: 'border-box' }} required 
@@ -1132,13 +1192,21 @@ export default function EditFoodLogModal({ log, onSave, onClose, isDoneDay, onLa
                 })()}
 
                 {/* Preview Section */}
+                {/* Preview Section */}
                 <div style={{ 
                   marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', 
                   borderRadius: '0.75rem', border: '1px solid #e2e8f0'
                 }}>
-                  <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
-                    Nutrition Preview
-                  </h4>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+                    <h4 style={{ margin: 0, color: '#1e293b' }}>
+                      Nutrition Preview
+                    </h4>
+                    {(localFood as any).updatedAt && (
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, fontStyle: 'italic' }}>
+                        Updated {String(new Date((localFood as any).updatedAt).getMonth() + 1).padStart(2, '0')}/{String(new Date((localFood as any).updatedAt).getFullYear()).slice(-2)}
+                      </span>
+                    )}
+                  </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                     {[

@@ -341,16 +341,16 @@ export async function deleteFoodLog(userId: string, id: string) {
   }
 }
 
-export async function updateAllPastLogsForFood(userId: string, foodId: string, updatedFood: Food) {
+export const updateAllPastLogsForFood = async (userId: string, foodId: string, updatedFood: any, fallbackName?: string) => {
   const docRef = doc(db, 'foodLogs', userId);
 
   const cleanUpdatedFood = Object.fromEntries(
     Object.entries(updatedFood).filter(([_, v]) => v !== undefined)
-  ) as Food;
+  ) as unknown as Food;
 
   const recalculateRecipeNutrition = (recipe: any) => {
     let updatedIngredients = recipe.recipeIngredients.map((ing: any) => {
-      if (ing.food.id === foodId || ing.food?.id === foodId) {
+      if (ing.food.id === foodId || ing.food?.id === foodId || (fallbackName && ing.food?.name === fallbackName)) {
         let multiplier = 1;
         if (ing.unit === 'serving') {
           multiplier = ing.amount / (cleanUpdatedFood.servingSize || 1);
@@ -404,7 +404,7 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
     foodsSnap.docs.forEach(docSnap => {
       const foodData = docSnap.data();
       if (foodData.isRecipe && foodData.recipeIngredients) {
-        const hasIngredient = foodData.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
+        const hasIngredient = foodData.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId || (fallbackName && ing.food?.name === fallbackName));
         if (hasIngredient) {
           const updatedRecipe = recalculateRecipeNutrition(foodData);
           recipeUpdatePromises.push(updateDoc(doc(db, 'foods', docSnap.id), updatedRecipe));
@@ -418,7 +418,7 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
   }
 
   const recalculateLog = (log: any) => {
-    if (log.foodId === foodId || log.food?.id === foodId) {
+    if (log.foodId === foodId || log.food?.id === foodId || (fallbackName && log.food?.name === fallbackName)) {
       let multiplier = 1;
       if (log.unit === 'serving') {
         multiplier = log.amount / (cleanUpdatedFood.servingSize || 1);
@@ -445,11 +445,11 @@ export async function updateAllPastLogsForFood(userId: string, foodId: string, u
       };
 
       const cleanConsumedNutrition = Object.fromEntries(Object.entries(consumedNutrition).filter(([_, v]) => v !== undefined)) as any;
-      return { ...log, food: cleanUpdatedFood, ...cleanConsumedNutrition };
+      return { ...log, foodId: foodId, food: cleanUpdatedFood, ...cleanConsumedNutrition };
     }
 
     if (log.food?.isRecipe && log.food?.recipeIngredients) {
-      const hasIngredient = log.food.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId);
+      const hasIngredient = log.food.recipeIngredients.some((ing: any) => ing.food.id === foodId || ing.food?.id === foodId || (fallbackName && ing.food?.name === fallbackName));
       if (hasIngredient) {
         const updatedRecipe = recalculateRecipeNutrition(log.food);
         const multiplier = log.amount; 
