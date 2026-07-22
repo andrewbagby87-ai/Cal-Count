@@ -10,6 +10,10 @@ import './Dashboard.css';
 
 export default function Dashboard() {
   const [showSettings, setShowSettings] = useState<'account' | 'preferences' | null>(null);
+  
+  // NEW: State to manage the isolated Health Logs view
+  const [healthTab, setHealthTab] = useState<'weight' | 'workout' | null>(null);
+  
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
   
@@ -38,7 +42,7 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // NEW: Preload the weekly meals silently in the background
+  // Preload the weekly meals silently in the background
   useEffect(() => {
     if (user?.uid) {
       preloadWeeklyMeals(user.uid);
@@ -46,7 +50,6 @@ export default function Dashboard() {
   }, [user]);
 
   // 2. THE WATERFALL BOOT SEQUENCE
-  // We delay the mounting of hidden tabs so the network isn't choked on startup
   useEffect(() => {
     let isMounted = true;
 
@@ -55,16 +58,6 @@ export default function Dashboard() {
       await new Promise(r => setTimeout(r, 800));
       if (!isMounted) return;
       setBootedTabs(prev => prev.includes('foodlog') ? prev : [...prev, 'foodlog']);
-
-      // Wait another 800ms, then boot Weight
-      await new Promise(r => setTimeout(r, 800));
-      if (!isMounted) return;
-      setBootedTabs(prev => prev.includes('weight') ? prev : [...prev, 'weight']);
-
-      // Wait another 800ms, then boot Workouts
-      await new Promise(r => setTimeout(r, 800));
-      if (!isMounted) return;
-      setBootedTabs(prev => prev.includes('workout') ? prev : [...prev, 'workout']);
     };
 
     runBootSequence();
@@ -83,6 +76,66 @@ export default function Dashboard() {
     return <UserSettings onBack={() => setShowSettings(null)} mode={showSettings} />;
   }
 
+  // NEW: Isolate Health Logs in its own full-screen view
+  if (healthTab) {
+    return (
+      <div className="dashboard">
+        <header className="dashboard-header" style={{ display: 'flex', alignItems: 'center' }}>
+          <button 
+            onClick={() => setHealthTab(null)} 
+            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: '0 10px 0 0', color: '#1e293b' }}
+          >
+            ←
+          </button>
+          <h1 style={{ margin: 0 }}>Health Logs</h1>
+        </header>
+
+        <nav style={{ 
+          display: 'flex', position: 'relative', backgroundColor: '#f8fafc', 
+          border: '1px solid #cbd5e1', borderRadius: '0.75rem', padding: '4px', 
+          margin: '0 1rem 1rem 1rem', flexShrink: 0 
+        }}>
+          {/* Animated Background Pill */}
+          <div style={{
+            position: 'absolute', top: '4px', bottom: '4px', left: '4px',
+            width: 'calc(50% - 4px)', backgroundColor: '#2563eb', borderRadius: '0.5rem',
+            transition: 'transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1)',
+            transform: healthTab === 'weight' ? 'translateX(0)' : 'translateX(100%)',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.1)', zIndex: 1
+          }} />
+
+          <button
+            onClick={() => setHealthTab('weight')}
+            style={{
+              flex: 1, padding: '0.85rem', fontSize: '0.95rem', fontWeight: 600,
+              color: healthTab === 'weight' ? '#fff' : '#64748b',
+              background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+              transition: 'color 0.25s ease'
+            }}
+          >
+            Weight
+          </button>
+          <button
+            onClick={() => setHealthTab('workout')}
+            style={{
+              flex: 1, padding: '0.85rem', fontSize: '0.95rem', fontWeight: 600,
+              color: healthTab === 'workout' ? '#fff' : '#64748b',
+              background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+              transition: 'color 0.25s ease'
+            }}
+          >
+            Workouts
+          </button>
+        </nav>
+
+        <div className="dashboard-content" style={{ overflowY: 'auto' }}>
+          {healthTab === 'weight' && <WeightTab />}
+          {healthTab === 'workout' && <WorkoutTab />}
+        </div>
+      </div>
+    );
+  }
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -92,7 +145,6 @@ export default function Dashboard() {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // FIX: Relax the check to <= 5 to account for mobile sub-pixel scrolling
     if (contentRef.current && contentRef.current.scrollTop <= 5) {
       setStartY(e.touches[0].clientY);
     } else {
@@ -107,19 +159,18 @@ export default function Dashboard() {
     
     // Only register if pulling downwards
     if (distance > 0) {
-      setPullDistance(Math.min(distance, 120)); // Cap the visual stretch
+      setPullDistance(Math.min(distance, 120)); 
     }
   };
 
   const handleTouchEnd = () => {
     if (pullDistance > 75) {
-      setRefreshKey(prev => prev + 1); // Trigger the refresh!
+      setRefreshKey(prev => prev + 1); 
     }
     setStartY(0);
-    setPullDistance(0); // Snap back
+    setPullDistance(0); 
   };
 
-  // NEW: Catch browser interruptions so the screen doesn't get stuck pulled down
   const handleTouchCancel = () => {
     setStartY(0);
     setPullDistance(0);
@@ -155,6 +206,15 @@ export default function Dashboard() {
                 className="dropdown-item"
                 onClick={() => {
                   setShowDropdown(false);
+                  setHealthTab('weight'); // Opens the new isolated view
+                }}
+              >
+                ❤️ Health Logs
+              </button>
+              <button 
+                className="dropdown-item"
+                onClick={() => {
+                  setShowDropdown(false);
                   setShowSettings('account');
                 }}
               >
@@ -171,30 +231,41 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <nav className="dashboard-tabs">
+      <nav style={{ 
+        display: 'flex', position: 'relative', backgroundColor: '#f8fafc', 
+        border: '1px solid #cbd5e1', borderRadius: '0.75rem', padding: '4px', 
+        margin: '0 1rem 1rem 1rem', flexShrink: 0 
+      }}>
+        {/* Animated Background Pill */}
+        <div style={{
+          position: 'absolute', top: '4px', bottom: '4px', left: '4px',
+          width: 'calc(50% - 4px)', backgroundColor: '#2563eb', borderRadius: '0.5rem',
+          transition: 'transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1)',
+          transform: activeTab === 'stats' ? 'translateX(0)' : 'translateX(100%)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.1)', zIndex: 1
+        }} />
+
         <button
-          className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
           onClick={() => setActiveTab('stats')}
+          style={{
+            flex: 1, padding: '0.85rem', fontSize: '0.95rem', fontWeight: 600,
+            color: activeTab === 'stats' ? '#fff' : '#64748b',
+            background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+            transition: 'color 0.25s ease'
+          }}
         >
           Daily Stats
         </button>
         <button
-          className={`tab-btn ${activeTab === 'foodlog' ? 'active' : ''}`}
           onClick={() => setActiveTab('foodlog')}
+          style={{
+            flex: 1, padding: '0.85rem', fontSize: '0.95rem', fontWeight: 600,
+            color: activeTab === 'foodlog' ? '#fff' : '#64748b',
+            background: 'transparent', border: 'none', zIndex: 2, cursor: 'pointer',
+            transition: 'color 0.25s ease'
+          }}
         >
           Food Log
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'weight' ? 'active' : ''}`}
-          onClick={() => setActiveTab('weight')}
-        >
-          Weight
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'workout' ? 'active' : ''}`}
-          onClick={() => setActiveTab('workout')}
-        >
-          Workouts
         </button>
       </nav>
 
@@ -205,13 +276,13 @@ export default function Dashboard() {
           transform: pullDistance > 0 ? `translateY(${pullDistance * 0.4}px)` : 'none', 
           transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
           overflowY: 'auto',
-          overscrollBehaviorY: 'contain' /* NEW: Stops Chrome/Safari from fighting your custom pull */
+          overscrollBehaviorY: 'contain' 
         }}
         ref={contentRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchCancel} /* NEW: Snaps back if the browser interrupts */
+        onTouchCancel={handleTouchCancel} 
       >
         {/* Visual Pull Indicator */}
         {pullDistance > 0 && (
@@ -221,27 +292,13 @@ export default function Dashboard() {
         )}
         
         {/* 3. STAGGERED TAB RENDER AREA */}
-        {/* Daily Stats is always in the DOM immediately */}
         <div style={activeTab === 'stats' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
           <DailyStatsTab key={`stats-${refreshKey}`} />
         </div>
         
-        {/* Other tabs only exist AFTER the boot sequence reaches them OR if the user clicks them early */}
         {(bootedTabs.includes('foodlog') || activeTab === 'foodlog') && (
           <div style={activeTab === 'foodlog' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
             <FoodLogTab key={`foodlog-${refreshKey}`} />
-          </div>
-        )}
-        
-        {(bootedTabs.includes('weight') || activeTab === 'weight') && (
-          <div style={activeTab === 'weight' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-            <WeightTab key={`weight-${refreshKey}`} />
-          </div>
-        )}
-        
-        {(bootedTabs.includes('workout') || activeTab === 'workout') && (
-          <div style={activeTab === 'workout' ? { height: '100%' } : { position: 'absolute', visibility: 'hidden', opacity: 0, pointerEvents: 'none', width: '100%', height: '100%', top: 0, left: 0, overflow: 'hidden' }}>
-            <WorkoutTab key={`workout-${refreshKey}`} />
           </div>
         )}
         
