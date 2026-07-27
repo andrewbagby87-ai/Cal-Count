@@ -847,7 +847,7 @@ export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ig
 };
 
 // --- Done Logging & Streak Operations ---
-export async function getDoneLoggingDates(userId: string): Promise<Record<string, boolean>> {
+export async function getDoneLoggingDates(userId: string): Promise<Record<string, any>> {
   try {
     const docRef = doc(db, 'users', userId);
     const snap = await getDoc(docRef);
@@ -861,14 +861,18 @@ export async function getDoneLoggingDates(userId: string): Promise<Record<string
   }
 }
 
-export async function toggleDoneLoggingDate(userId: string, dateStr: string, isDone: boolean) {
+export async function toggleDoneLoggingDate(
+  userId: string, 
+  dateStr: string, 
+  payload: boolean | { isDone: boolean, totalCalories: number, budget: number }
+) {
   try {
     const docRef = doc(db, 'users', userId);
-    await setDoc(docRef, {
-      doneLoggingDates: {
-        [dateStr]: isDone
-      }
-    }, { merge: true });
+    
+    // Using dot notation to target the specific date key inside the map
+    await updateDoc(docRef, {
+      [`doneLoggingDates.${dateStr}`]: payload
+    });
   } catch (error) {
     console.error("Error toggling done logging date:", error);
     throw error;
@@ -897,3 +901,79 @@ export const getHealthLogsSince = async (userId: string, cutoffMs: number): Prom
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
+
+export async function migrateLegacyDoneDates(userId: string, userProfile: any) {
+  try {
+    const docRef = doc(db, 'users', userId);
+    const snap = await getDoc(docRef);
+    
+    if (!snap.exists() || !snap.data().doneLoggingDates) {
+      console.log("No done dates found to migrate.");
+      return;
+    }
+
+    const dates = snap.data().doneLoggingDates;
+    const updates: Record<string, any> = {};
+    let needsUpdate = false;
+
+    // Loop through every saved date in the user's profile
+    for (const [dateStr, value] of Object.entries(dates)) {
+      // If the value is exactly true, it's the old format that needs updating
+      if (value === true) { 
+        console.log(`Migrating data for ${dateStr}...`);
+        
+        // Fetch the historical data for this specific day
+        const [foods, workouts, healthLogs, ignoredWorkouts] = await Promise.all([
+           getDayFoodLogs(userId, dateStr),
+           getDayWorkoutLogs(userId, dateStr),
+           getSyncedHealthWorkouts(userId),
+           getIgnoredWorkouts(userId)
+        ]);
+
+        // Calculate total calories consumed
+        const consumed = foods.reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+        
+        // Calculate total calories burned
+        const todaysSynced = healthLogs.filter((w: any) => {
+          // Re-use your existing date parsing logic
+          const d = new Date(w.start || w.date || w.timestamp);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const isToday = `${y}-${m}-${day}` === dateStr;
+          return isToday && !ignoredWorkouts.includes(String(w.id || w.dbId));
+        });
+        
+        let burned = todaysSynced.reduce((sum, w) => (w.activeEnergyBurned?.units === 'kcal' ? sum + Math.round(w.activeEnergyBurned.qty) : sum), 0);
+        burned += workouts.reduce((sum: number, w: any) => sum + (w.caloriesBurned || 0), 0);
+
+        // Get the historical budget using your Time Machine function
+        let historicalProfile = userProfile;
+        if (userProfile.goalHistory && userProfile.goalHistory.length > 0) {
+           for (const entry of userProfile.goalHistory) {
+             if (entry.date <= dateStr) historicalProfile = { ...userProfile, ...entry };
+             else break;
+           }
+        }
+        const budget = (historicalProfile?.caloriesBudget || 0) + burned;
+
+        // Queue the Firebase update using dot notation to update just the nested key
+        updates[`doneLoggingDates.${dateStr}`] = {
+          isDone: true,
+          totalCalories: consumed,
+          budget: budget
+        };
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      await updateDoc(docRef, updates);
+      console.log("Migration successfully completed!");
+    } else {
+      console.log("All dates are already using the new summary format.");
+    }
+  } catch (error) {
+    console.error("Migration failed:", error);
+  }
+}
