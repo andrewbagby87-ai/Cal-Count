@@ -306,55 +306,70 @@ useEffect(() => {
       const datesToFetch = getWeekDates(viewDate);
       const summaries: Record<string, { progress: number, color: string }> = {};
 
-      // 1. Fetch ONLY the user profile dictionary (Super fast!)
+      const actualTodayStr = getDateString(new Date()); 
+
       const doneDates = await getDoneLoggingDates(user.uid);
 
-      // 2. Process the navigation bar based on the summaries
       datesToFetch.forEach((date) => {
         const dStr = getDateString(date);
         const dayData = doneDates[dStr];
 
         let progress = 0;
-        let color = '#10b981'; // Default green
+        let color = '#10b981'; 
 
-        // If the day was completed, use the pre-calculated summary data
         if (dayData && typeof dayData === 'object' && dayData.isDone) {
           const { totalCalories, budget } = dayData;
-          
           if (budget > 0) {
             progress = totalCalories / budget;
             const remaining = Math.round(budget - totalCalories);
-            
-            if (remaining < 0) color = '#ef4444'; // Over budget (Red)
-            else if (remaining === 0 && totalCalories > 0) color = '#2563eb'; // Exact (Blue)
+            if (remaining < 0) color = '#ef4444'; 
+            else if (remaining === 0 && totalCalories > 0) color = '#2563eb'; 
           } else if (totalCalories > 0) {
             progress = 1;
             color = '#ef4444'; 
           }
         } 
-        // If it's today (or an unfinished day), fallback to checking the active view state 
-        // to prevent fetching massive arrays just for the navigator
         else if (dStr === getDateString(viewDate)) {
-       const activeProfile = getActiveBudgets(userProfile, dStr);
-       const currentConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-       
-       // Calculate today's burned calories from the already-loaded arrays
-       const currentManual = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
-       const currentHealth = syncedWorkouts.reduce((sum, w) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
-       const currentBurned = currentManual + currentHealth;
-       
-       const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned;
-       
-       if (currentBudget > 0) {
-         progress = currentConsumed / currentBudget;
-         const remaining = Math.round(currentBudget - currentConsumed);
-         if (remaining < 0) color = '#ef4444';
-         else if (remaining === 0 && currentConsumed > 0) color = '#2563eb';
-       } else if (currentConsumed > 0) {
-         progress = 1;
-         color = '#ef4444';
-       }
-    }
+           const activeProfile = getActiveBudgets(userProfile, dStr);
+           const currentConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+           
+           // DAILY STATS USES THESE INSTEAD OF BURNEDCALORIES
+           const currentManual = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
+           const currentHealth = syncedWorkouts.reduce((sum, w) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
+           const currentBurned = currentManual + currentHealth;
+           
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned;
+           
+           if (currentBudget > 0) {
+             progress = currentConsumed / currentBudget;
+             const remaining = Math.round(currentBudget - currentConsumed);
+             if (remaining < 0) color = '#ef4444';
+             else if (remaining === 0 && currentConsumed > 0) color = '#2563eb';
+           } else if (currentConsumed > 0) {
+             progress = 1;
+             color = '#ef4444';
+           }
+        }
+        else if (dStr === actualTodayStr && todayCache.current) {
+           const activeProfile = getActiveBudgets(userProfile, dStr);
+           const currentConsumed = (todayCache.current.foods || []).reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
+           
+           const currentManual = (todayCache.current.workouts || []).reduce((sum: number, log: any) => sum + log.caloriesBurned, 0);
+           const currentHealth = (todayCache.current.syncedWorkouts || []).reduce((sum: number, w: any) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
+           const currentBurned = currentManual + currentHealth;
+           
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned;
+           
+           if (currentBudget > 0) {
+             progress = currentConsumed / currentBudget;
+             const remaining = Math.round(currentBudget - currentConsumed);
+             if (remaining < 0) color = '#ef4444';
+             else if (remaining === 0 && currentConsumed > 0) color = '#2563eb';
+           } else if (currentConsumed > 0) {
+             progress = 1;
+             color = '#ef4444';
+           }
+        }
 
         summaries[dStr] = { progress, color };
       });
@@ -363,7 +378,7 @@ useEffect(() => {
     };
 
     loadNavigatorStats();
-  }, [user?.uid, viewDate, userProfile, refreshTrigger]);
+  }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, workoutLogs, syncedWorkouts]);
 
 useEffect(() => {
     const loadData = async () => {
@@ -371,6 +386,14 @@ useEffect(() => {
       
       const dateStr = getDateString(viewDate);
       const todayStr = getDateString(new Date());
+
+      //Clear stale data immediately to prevent phantom calories
+      if (dateStr !== todayStr && !isBackgroundRefresh.current) {
+        setFoodLogs([]);
+        setWorkoutLogs([]);
+        setSyncedWorkouts([]);
+        setTodayWeight(null);
+      }
 
       // Instant restore if navigating back to today
       if (dateStr === todayStr && todayCache.current) {

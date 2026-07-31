@@ -137,34 +137,6 @@ export async function createFoodLog(userId: string, foodLog: any) {
 export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
   
-  // 1. Fetch old array-based logs (Legacy Support)
-  try {
-    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
-    if (exactDoc.exists()) {
-      const data = exactDoc.data();
-      if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs);
-    }
-  } catch (e) {
-    console.warn("Could not fetch old foodLogs array:", e);
-  }
-
-  try {
-    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId));
-    const snapExact = await getDocs(qExact);
-    snapExact.docs.forEach(d => {
-      if (d.id !== userId) {
-        allLogs.push({
-          id: d.id, ...d.data(),
-          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
-        });
-      }
-    });
-  } catch (e) {
-    console.warn("Could not fetch multi-doc format logs:", e);
-  }
-
-  // 2. NEW: Fetch from the infinite subcollection
   try {
     const subColRef = collection(db, `foodLogs/${userId}/logs`);
     const subSnap = await getDocs(subColRef);
@@ -183,35 +155,7 @@ export async function getAllFoodLogs(userId: string): Promise<FoodLog[]> {
 
 export async function getDayFoodLogs(userId: string, date: string): Promise<FoodLog[]> {
   const allLogs: any[] = [];
-  
-  // 1. Fetch old array-based logs (Legacy Support)
-  try {
-    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
-    if (exactDoc.exists()) {
-      const data = exactDoc.data();
-      if (data.foodData) allLogs.push(...data.foodData);
-      if (data.logs) allLogs.push(...data.logs);
-    }
-  } catch (e) {
-    console.warn("Could not fetch exact foodLogs doc:", e);
-  }
 
-  try {
-    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId), where('date', '==', date));
-    const snapExact = await getDocs(qExact);
-    snapExact.docs.forEach(d => {
-      if (d.id !== userId) {
-        allLogs.push({
-          id: d.id, ...d.data(),
-          timestamp: d.data().timestamp?.toMillis ? d.data().timestamp.toMillis() : d.data().timestamp,
-        });
-      }
-    });
-  } catch (e) {
-    console.warn("Could not fetch multi-doc format logs:", e);
-  }
-
-  // 2. NEW: Fetch from the infinite subcollection
   try {
     const subQ = query(collection(db, `foodLogs/${userId}/logs`), where('date', '==', date));
     const subSnap = await getDocs(subQ);
@@ -225,8 +169,7 @@ export async function getDayFoodLogs(userId: string, date: string): Promise<Food
     console.warn("Could not fetch subcollection food logs:", e);
   }
 
-  const dailyLogs = allLogs.filter((log: any) => log.date === date);
-  return dailyLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
+  return allLogs.sort((a: any, b: any) => b.timestamp - a.timestamp);
 }
 
 export async function getWeeklyFoodLogs(userId: string, startDate: string, endDate: string): Promise<FoodLog[]> {
@@ -236,109 +179,13 @@ export async function getWeeklyFoodLogs(userId: string, startDate: string, endDa
 
 export async function updateFoodLog(userId: string, id: string, updates: Partial<FoodLog>) {
   const cleanUpdates = JSON.parse(JSON.stringify(updates));
-
-  // 1. Try updating the new subcollection first
-  try {
-    const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
-    const newLogSnap = await getDoc(newLogRef);
-    if (newLogSnap.exists()) {
-        await updateDoc(newLogRef, cleanUpdates);
-        return; 
-    }
-  } catch (e) {
-    console.warn("Error checking subcollection:", e);
-  }
-
-  // 2. Fallback to updating the old array structure
-  const docRef = doc(db, 'foodLogs', userId);
-  try {
-    await runTransaction(db, async (transaction) => {
-      const docSnap = await transaction.get(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        let updated = false;
-        
-        if (data.foodData) {
-          const newFoodData = data.foodData.map((log: any) => {
-            if (log.id === id) {
-              updated = true;
-              return { ...log, ...cleanUpdates };
-            }
-            return log;
-          });
-          if (updated) {
-            transaction.update(docRef, { foodData: newFoodData });
-            return;
-          }
-        }
-        
-        if (data.logs && !updated) {
-          const newLogs = data.logs.map((log: any) => {
-            if (log.id === id) {
-              updated = true;
-              return { ...log, ...cleanUpdates };
-            }
-            return log;
-          });
-          if (updated) {
-            transaction.update(docRef, { logs: newLogs });
-            return;
-          }
-        }
-      }
-    });
-  } catch (error) {
-    try {
-      const fallbackRef = doc(db, 'foodLogs', id);
-      await updateDoc(fallbackRef, cleanUpdates);
-    } catch (e) {
-      console.warn("Could not update multi-doc format fallback:", e);
-    }
-  }
+  const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
+  await updateDoc(newLogRef, cleanUpdates);
 }
 
 export async function deleteFoodLog(userId: string, id: string) {
-  // 1. Delete from new subcollection
-  try {
-    const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
-    await deleteDoc(newLogRef);
-  } catch (e) {
-    console.warn("Error deleting from subcollection:", e);
-  }
-
-  // 2. Delete from old array structure
-  const docRef = doc(db, 'foodLogs', userId);
-  try {
-    await runTransaction(db, async (transaction) => {
-      const docSnap = await transaction.get(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.foodData) {
-          const originalLength = data.foodData.length;
-          const newFoodData = data.foodData.filter((log: any) => log.id !== id);
-          if (newFoodData.length < originalLength) {
-            transaction.update(docRef, { foodData: newFoodData });
-            return;
-          }
-        }
-        if (data.logs) {
-          const originalLength = data.logs.length;
-          const newLogs = data.logs.filter((log: any) => log.id !== id);
-          if (newLogs.length < originalLength) {
-            transaction.update(docRef, { logs: newLogs });
-            return;
-          }
-        }
-      }
-    });
-  } catch (error) {
-    try {
-      const fallbackRef = doc(db, 'foodLogs', id);
-      await deleteDoc(fallbackRef);
-    } catch (e) {
-      console.warn("Could not delete multi-doc format fallback:", e);
-    }
-  }
+  const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
+  await deleteDoc(newLogRef);
 }
 
 export const updateAllPastLogsForFood = async (userId: string, foodId: string, updatedFood: any, fallbackName?: string) => {
@@ -975,5 +822,57 @@ export async function migrateLegacyDoneDates(userId: string, userProfile: any) {
     }
   } catch (error) {
     console.error("Migration failed:", error);
+  }
+}
+
+export async function migrateLegacyFoodLogs(userId: string | undefined) {
+  if (!userId) {
+    console.error("Missing User ID for migration.");
+    return;
+  }
+
+  console.log("Starting legacy food log migration...");
+  const logsToMigrate = new Map();
+
+  try {
+    // 1. Fetch old array-based logs
+    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
+    if (exactDoc.exists()) {
+      const data = exactDoc.data();
+      if (data.foodData) data.foodData.forEach((log: any) => logsToMigrate.set(log.id, log));
+      if (data.logs) data.logs.forEach((log: any) => logsToMigrate.set(log.id, log));
+    }
+
+    // 2. Fetch old multi-doc format logs
+    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId));
+    const snapExact = await getDocs(qExact);
+    snapExact.docs.forEach(d => {
+      if (d.id !== userId) {
+        logsToMigrate.set(d.id, { id: d.id, ...d.data() });
+      }
+    });
+
+    if (logsToMigrate.size === 0) {
+      console.log("No legacy logs found! Everything is already in the new format.");
+      return;
+    }
+
+    console.log(`Found ${logsToMigrate.size} legacy logs to move. Copying to subcollection...`);
+
+    // 3. Copy them to the new subcollection
+    const migrationPromises = [];
+    for (const [id, log] of logsToMigrate.entries()) {
+      const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
+      migrationPromises.push(setDoc(newLogRef, log));
+    }
+
+    // Wait for all saves to finish
+    await Promise.all(migrationPromises);
+    
+    console.log(`Migration Complete! Successfully copied ${logsToMigrate.size} logs to the new subcollection.`);
+    console.log("You can now safely remove the legacy fallback queries from your code.");
+
+  } catch (error) {
+    console.error("Error migrating food logs:", error);
   }
 }

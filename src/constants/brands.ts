@@ -67,13 +67,13 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Dave's Hot Chicken", logo: './brands/daveshotchicken.png' },
     { name: "Pop Tarts", logo: './brands/poptarts.png' },
     { name: "Hotpockets", logo: './brands/hotpockets.png' },
-    { name: "Halo Top", logo: './brands/halotop.png' },
+    { name: "Halo Top", logo: './brands/halotop.png' , showName: true},
     { name: "Sargento", logo: './brands/sargento.png' },
     { name: "Bertolli", logo: './brands/bertolli.png' },
     { name: "Fresh by Meijer", logo: './brands/freshbymeijer.png' },
     { name: "Lifeway", logo: './brands/lifeway.png' },
     { name: "Cole's", logo: './brands/coles.png' },
-    { name: "Saffron Road", logo: './brands/saffronroad.png' },
+    { name: "Saffron Road", logo: './brands/saffronroad.png' , showName: true},
     { name: "Too Good", logo: './brands/toogood.png' },
     { name: "Clean Simple Eats", logo: './brands/cleansimpleeats.png' },
     { name: "Tyson", logo: './brands/tyson.png' },
@@ -190,6 +190,7 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "American Airlines", logo: './brands/americanairlines.png' },
     { name: "mosh", logo: './brands/mosh.png' },
     { name: "Marie Callenders", logo: './brands/mariecallenders.png' , showName: true },
+    { name: "Sandwich Bros", logo: './brands/sandwichbros.png' },
 
 
     //{ name: "", logo: '' },
