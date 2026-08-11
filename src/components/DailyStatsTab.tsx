@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog} from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate} from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -416,7 +416,6 @@ useEffect(() => {
           getHealthLogs(user.uid).catch(() => []), 
           getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
           getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
-          // Fetch today in the background if looking at the past
           dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
           dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
         ]);

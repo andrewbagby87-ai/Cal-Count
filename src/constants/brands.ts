@@ -191,6 +191,8 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "mosh", logo: './brands/mosh.png' },
     { name: "Marie Callenders", logo: './brands/mariecallenders.png' , showName: true },
     { name: "Sandwich Bros", logo: './brands/sandwichbros.png' },
+    { name: "Miss Vickies", logo: './brands/missvickies.png' },
+    { name: "McAlisters", logo: './brands/mcalisters.png' },
 
 
     //{ name: "", logo: '' },

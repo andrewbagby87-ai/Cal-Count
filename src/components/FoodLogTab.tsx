@@ -265,7 +265,6 @@ const loadData = async (showLoadingScreen = true) => {
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
         getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
         getDoneLoggingDates(user.uid).catch(() => ({})),
-        // Fetch today in the background if looking at the past
         dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
         dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
       ]);

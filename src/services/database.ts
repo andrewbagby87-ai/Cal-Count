@@ -532,55 +532,22 @@ export async function getHealthLogs(userId: string) {
 
   try {
     const exactDoc = await getDoc(doc(db, 'healthLogs', userId));
-    if (exactDoc.exists() && exactDoc.data().syncs) {
-      allSyncs.push(...exactDoc.data().syncs);
-    }
-  } catch (e) {
-    console.warn("Could not fetch exact health doc:", e);
-  }
-
-  if (userId !== lowerUserId) {
-    try {
-      const lowerDoc = await getDoc(doc(db, 'healthLogs', lowerUserId));
-      if (lowerDoc.exists() && lowerDoc.data().syncs) {
-        allSyncs.push(...lowerDoc.data().syncs);
-      }
-    } catch (e) {
-      console.warn("Could not fetch lowercase health doc:", e);
-    }
-  }
+    if (exactDoc.exists() && exactDoc.data().syncs) allSyncs.push(...exactDoc.data().syncs);
+  } catch (e) { console.warn(e); }
 
   try {
     const qExact = query(collection(db, 'healthLogs'), where('userId', '==', userId));
     const snapExact = await getDocs(qExact);
     snapExact.docs.forEach(d => {
-      if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...d.data(), id: d.id });
+      if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...(d.data() as any), id: d.id });
     });
-  } catch (e) {
-    console.warn("Could not fetch exact health queries:", e);
-  }
-
-  if (userId !== lowerUserId) {
-    try {
-      const qLower = query(collection(db, 'healthLogs'), where('userId', '==', lowerUserId));
-      const snapLower = await getDocs(qLower);
-      snapLower.docs.forEach(d => {
-        if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...d.data(), id: d.id });
-      });
-    } catch (e) {
-      console.warn("Could not fetch lowercase health queries:", e);
-    }
-  }
+  } catch (e) { console.warn(e); }
 
   try {
     const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
     const subSnap = await getDocs(syncsSubRef);
-    subSnap.docs.forEach(d => {
-      allSyncs.push({ ...d.data(), id: d.id });
-    });
-  } catch (e) {
-    console.warn("Could not fetch new syncs subcollection:", e);
-  }
+    subSnap.docs.forEach(d => allSyncs.push({ ...(d.data() as any), id: d.id }));
+  } catch (e) { console.warn(e); }
 
   return allSyncs;
 }
@@ -598,72 +565,39 @@ export const getSyncedHealthWorkouts = async (userId: string) => {
   try {
     const userDocRef = doc(db, 'healthLogs', userId);
     const userDocSnap = await getDoc(userDocRef);
-
     if (userDocSnap.exists()) {
       const payload = userDocSnap.data();
-
       if (payload.syncs && Array.isArray(payload.syncs)) {
-        payload.syncs.forEach((syncBatch: any) => {
-          if (syncBatch.data && syncBatch.data.workouts) {
-            allWorkouts.push(...extractData(syncBatch.data.workouts));
-          } else if (syncBatch.workouts) {
-            allWorkouts.push(...extractData(syncBatch.workouts));
-          }
+        payload.syncs.forEach((s: any) => {
+          if (s.data?.workouts) allWorkouts.push(...extractData(s.data.workouts));
+          else if (s.workouts) allWorkouts.push(...extractData(s.workouts));
         });
-      } else if (payload.data && payload.data.workouts) {
-        allWorkouts.push(...extractData(payload.data.workouts));
-      } else if (payload.workouts) {
-        allWorkouts.push(...extractData(payload.workouts));
       }
     }
-  } catch (err: any) {
-    console.warn(`❌ Error reading root doc:`, err.message);
-  }
+  } catch (err) { console.warn(err); }
 
   try {
     const workoutsRef = collection(db, `healthLogs/${userId}/workouts`);
     const snapshot = await getDocs(workoutsRef);
-    
-    if (snapshot.docs.length > 0) {
-        snapshot.docs.forEach(docSnap => {
-          const payload = docSnap.data();
-          if (payload.data && payload.data.workouts) {
-            allWorkouts.push(...extractData(payload.data.workouts));
-          } else if (payload.workouts) {
-            allWorkouts.push(...extractData(payload.workouts));
-          } else if (payload.name && payload.duration) {
-            allWorkouts.push({ dbId: docSnap.id, ...payload });
-          }
-        });
-    }
-  } catch (err: any) {
-  }
+    snapshot.docs.forEach(docSnap => {
+      const payload = docSnap.data() as any;
+      if (payload.data?.workouts) allWorkouts.push(...extractData(payload.data.workouts));
+      else if (payload.workouts) allWorkouts.push(...extractData(payload.workouts));
+      else if (payload.name && payload.duration) allWorkouts.push({ dbId: docSnap.id, ...payload });
+    });
+  } catch (err) {}
 
   try {
     const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
     const subSnap = await getDocs(syncsSubRef);
     subSnap.docs.forEach(docSnap => {
-      const payload = docSnap.data();
-      if (payload.data && payload.data.workouts) {
-        allWorkouts.push(...extractData(payload.data.workouts));
-      } else if (payload.workouts) {
-        allWorkouts.push(...extractData(payload.workouts));
-      }
+      const payload = docSnap.data() as any;
+      if (payload.data?.workouts) allWorkouts.push(...extractData(payload.data.workouts));
+      else if (payload.workouts) allWorkouts.push(...extractData(payload.workouts));
     });
-  } catch (err: any) {
-    console.warn("Could not fetch new syncs subcollection for workouts:", err.message);
-  }
+  } catch (err) {}
 
-  const uniqueWorkouts = Array.from(
-    new Map(allWorkouts.filter(w => w != null).map(w => [w.id || w.dbId || Math.random(), w])).values()
-  );
-
-  uniqueWorkouts.sort((a: any, b: any) => {
-    const dateA = new Date(a.start || a.date || a.timestamp || 0).getTime();
-    const dateB = new Date(b.start || b.date || b.timestamp || 0).getTime();
-    return dateB - dateA;
-  });
-
+  const uniqueWorkouts = Array.from(new Map(allWorkouts.filter(w => w != null).map(w => [w.id || w.dbId || Math.random(), w])).values());
   return uniqueWorkouts;
 };
 
