@@ -41,7 +41,7 @@ export const FOOD_ICONS = [
   { icon: './icons/steak.png', title: 'Steak / Meat' }, { icon: './icons/casserole.png', title: 'Stew / Casserole' }, { icon: './icons/strawberry.png', title: 'Strawberry' },
   { icon: './icons/sushi.png', title: 'Sushi' }, { icon: './icons/sweet-potato.png', title: 'Sweet Potato / Yam' }, { icon: './icons/taco.png', title: 'Taco' },
   { icon: './icons/takeout.png', title: 'Takeout Box' }, { icon: './icons/tea.png', title: 'Tea' },
-  { icon: './icons/tomato.png', title: 'Tomato' },
+  { icon: './icons/tomato.png', title: 'Tomato' }, { icon: './icons/raspberry.png', title: 'Raspberry' },
   { icon: './icons/pill.png', title: 'Vitamin / Supplement' }, { icon: './icons/waffle.png', title: 'Waffle' }, { icon: './icons/watermelon.png', title: 'Watermelon' },
   { icon: './icons/wine.png', title: 'Wine' },{ icon: './icons/yogurt.png', title: 'Yogurt' },
   { icon: './icons/snack.png', title: 'Snack / Chips' }, { icon: './icons/fish.png', title: 'Fish' }, { icon: './icons/crackers.png', title: 'Crackers' },

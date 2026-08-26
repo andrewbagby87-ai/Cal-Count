@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'wouter';
 import UserSettings from '../components/UserSettings';
 import DailyStatsTab from '../components/DailyStatsTab';
 import FoodLogTab from '../components/FoodLogTab';
@@ -220,6 +221,23 @@ export default function Dashboard() {
               >
                 ⚙️ Account
               </button>
+              {userProfile?.isAdmin && (
+                <Link 
+                  to="/admin" 
+                  style={{ 
+                    display: 'block', 
+                    padding: '0.75rem 1rem', 
+                    color: '#1e293b', 
+                    textDecoration: 'none',
+                    fontWeight: 500,
+                    textAlign: 'left' // Ensures it matches your button alignment
+                  }}
+                  className="dropdown-item"
+                  onClick={() => setShowDropdown(false)} // Closes dropdown on click
+                >
+                  🛡️ Admin Dashboard
+                </Link>
+              )}
               <button 
                 className="dropdown-item logout-btn"
                 onClick={handleLogout}

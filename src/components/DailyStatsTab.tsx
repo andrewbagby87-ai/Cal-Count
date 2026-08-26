@@ -596,12 +596,37 @@ useEffect(() => {
         
         <div ref={topRef} />
         
-        <div className="date-navigator">
-          <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', margin: '0 auto 1.5rem auto' }}>
+        <div className="date-navigator" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', textAlign: 'center' }}>
             <h2>{isToday ? "Today's Summary" : "Daily Summary"}</h2>
             <p className="date">
               {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
+          </div>
+          
+          <div style={{ position: 'absolute', right: '0' }}>
+            <input 
+              type="date"
+              value={getDateString(viewDate)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [y, m, d] = e.target.value.split('-');
+                  setViewDate(new Date(Number(y), Number(m) - 1, Number(d)));
+                }
+              }}
+              title="Jump to date"
+              style={{
+                padding: '0.4rem',
+                borderRadius: '0.5rem',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#f8fafc',
+                color: '#475569',
+                outline: 'none',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            />
           </div>
         </div>
 
