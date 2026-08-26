@@ -660,10 +660,19 @@ const handleEditLog = async (updates: any) => {
 
   return (
     <>
+      <style>{`
+        @keyframes loadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .responsive-date-nav { display: flex; justify-content: center; align-items: center; position: relative; margin-bottom: 1.5rem; }
+        .date-picker-wrapper { position: absolute; right: 0; }
+        @media (max-width: 500px) {
+          .responsive-date-nav { flex-direction: column; gap: 0.5rem; }
+          .date-picker-wrapper { position: static; margin-top: 0.25rem; }
+        }
+      `}</style>
+
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', backgroundColor: '#e2e8f0', zIndex: 9999, overflow: 'hidden' }}>
           <div style={{ width: '100%', height: '100%', backgroundColor: '#2563eb', animation: 'loadingSweep 1.5s infinite ease-in-out' }} />
-          <style>{`@keyframes loadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
         </div>
       )}
 
@@ -671,15 +680,15 @@ const handleEditLog = async (updates: any) => {
         
         <div ref={topRef} />
         
-        <div className="date-navigator" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div className="date-navigator responsive-date-nav">
           <div className="date-display" onClick={handleGoToToday} style={{ cursor: 'pointer', textAlign: 'center' }}>
             <h2>{isToday ? "Today's Food" : "Food Log"}</h2>
-            <p className="date">
+            <p className="date" style={{ margin: 0 }}>
               {viewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
           </div>
           
-          <div style={{ position: 'absolute', right: '0' }}>
+          <div className="date-picker-wrapper">
             <input 
               type="date"
               value={getDateString(viewDate)}
