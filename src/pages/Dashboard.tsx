@@ -130,8 +130,12 @@ export default function Dashboard() {
         </nav>
 
         <div className="dashboard-content" style={{ overflowY: 'auto' }}>
-          {healthTab === 'weight' && <WeightTab />}
-          {healthTab === 'workout' && <WorkoutTab />}
+          <div style={{ display: healthTab === 'weight' ? 'block' : 'none', height: '100%' }}>
+            <WeightTab />
+          </div>
+          <div style={{ display: healthTab === 'workout' ? 'block' : 'none', height: '100%' }}>
+            <WorkoutTab />
+          </div>
         </div>
       </div>
     );
