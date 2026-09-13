@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate} from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthMetricsForDate, getHealthWorkoutsForDate, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate} from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -409,139 +409,54 @@ useEffect(() => {
       }
       
       try {
-        const [foods, workouts, manualWeights, healthLogsRaw, syncedWorkoutsRaw, ignoredWorkouts, todayFoods, todayWorkouts] = await Promise.all([
+        const [foods, workouts, manualWeights, healthMetrics, healthWorkouts, ignoredWorkouts, todayFoods, todayWorkouts] = await Promise.all([
           getDayFoodLogs(user.uid, dateStr).catch(() => []),
           getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
-          getWeightLogsForDate(user.uid, dateStr).catch(() => []),
-          getHealthLogs(user.uid).catch(() => []), 
-          getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
+          getWeightLogsForDate(user.uid, dateStr).catch(() => []), 
+          getHealthMetricsForDate(user.uid, dateStr).catch(() => []), 
+          getHealthWorkoutsForDate(user.uid, dateStr).catch(() => []),
           getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
           dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
           dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
         ]);
 
-        // Helper function to process data for a specific date
-        const processDataForDate = (targetDateStr: string, rawFoods: any, rawWorkouts: any) => {
-          const processedSynced = (syncedWorkoutsRaw || [])
-            .filter((w: any) => isWorkoutOnDate(w.start || w.date || w.timestamp, targetDateStr))
-            .map((w: any) => ({
-              ...w,
-              isIgnored: (ignoredWorkouts || []).includes(String(w.id || w.dbId))
-            }));
+        const processedSynced = healthWorkouts.map((w: any) => ({
+          ...w, isIgnored: ignoredWorkouts.includes(String(w.id || w.uuid || w.dbId))
+        }));
 
-          const manualW = (manualWeights || []).filter((w: any) => w.date === targetDateStr).map((w: any) => ({
-            ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
-          }));
+        const manualW = manualWeights.map((w: any) => ({
+          ...w, timestamp: w.timestamp || new Date(`${w.date}T${w.time}`).getTime()
+        }));
 
-          const healthW: any[] = [];
-          let daySteps = 0; 
-          let daySleep = 0; // NEW: Setup sleep variable
-          const safeHealth = Array.isArray(healthLogsRaw) ? healthLogsRaw : [];
-          
-          safeHealth.forEach((log: any) => {
-            const baseTimestampObj = parseSafeDate(log.timestamp, Date.now());
-            const baseTimestamp = baseTimestampObj.getTime();
+        const healthW: any[] = [];
+        let daySteps = 0, daySleep = 0;
+        
+        healthMetrics.forEach((m: any) => {
+          if (m.name === 'weight_body_mass' || m.name === 'body_mass') {
+            const timeMs = m.timestamp || new Date(m.date).getTime();
+            const d = new Date(timeMs);
+            healthW.push({
+              date: dateStr, time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+              weight: Math.round(Number(m.qty || m.value || m.weight || 0) * 10) / 10,
+              unit: m.units?.toLowerCase().includes('kg') ? 'kg' : 'lbs',
+              timestamp: timeMs, isSynced: true
+            });
+          }
+          if (m.name === 'step_count') daySteps = Math.max(daySteps, Number(m.qty || m.value || 0));
+          if (m.name === 'sleep_analysis') daySleep = Math.max(daySleep, Number(m.totalSleep || m.qty || m.value || 0));
+        });
 
-            const processMetric = (metric: any) => {
-              // Extract Weight
-              if (metric.name === 'weight_body_mass') {
-                if (Array.isArray(metric.data)) {
-                  metric.data.forEach((entry: any) => {
-                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
-                    const parsedDate = formatSyncDate(dateObj);
-                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                      healthW.push({
-                        date: parsedDate.dateStr, time: parsedDate.timeStr,
-                        weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10,
-                        unit: parseUnit(metric.units || log.units),
-                        timestamp: parsedDate.timeMs, isSynced: true
-                      });
-                    }
-                  });
-                } else {
-                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
-                  const parsedDate = formatSyncDate(dateObj);
-                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                    healthW.push({
-                      date: parsedDate.dateStr, time: parsedDate.timeStr,
-                      weight: Math.round(Number(metric.qty || metric.value || metric.weight || 0) * 10) / 10,
-                      unit: parseUnit(metric.units || log.units || metric.unit),
-                      timestamp: parsedDate.timeMs, isSynced: true
-                    });
-                  }
-                }
-              }
+        const combinedW = [...manualW, ...healthW].filter(w => w.weight > 0).sort((a, b) => b.timestamp - a.timestamp);
+        const viewData = { foods, workouts, syncedWorkouts: processedSynced, weight: combinedW[0] || null, steps: daySteps, sleep: daySleep };
 
-              // NEW: Extract Steps
-              if (metric.name === 'step_count') {
-                if (Array.isArray(metric.data)) {
-                  metric.data.forEach((entry: any) => {
-                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
-                    const parsedDate = formatSyncDate(dateObj);
-                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                      // FIX: Take the highest total synced, do not add duplicates together
-                      daySteps = Math.max(daySteps, Number(entry.qty || entry.value || 0));
-                    }
-                  });
-                } else {
-                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
-                  const parsedDate = formatSyncDate(dateObj);
-                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                    // FIX: Take the highest total synced, do not add duplicates together
-                    daySteps = Math.max(daySteps, Number(metric.qty || metric.value || 0));
-                  }
-                }
-              }
-
-              // NEW: Extract Sleep
-              if (metric.name === 'sleep_analysis') {
-                if (Array.isArray(metric.data)) {
-                  metric.data.forEach((entry: any) => {
-                    const dateObj = parseSafeDate(entry.date || log.date || log.timestamp, baseTimestamp);
-                    const parsedDate = formatSyncDate(dateObj);
-                    if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                      daySleep = Math.max(daySleep, Number(entry.totalSleep || entry.qty || entry.value || 0));
-                    }
-                  });
-                } else {
-                  const dateObj = parseSafeDate(metric.date || log.date || log.timestamp, baseTimestamp);
-                  const parsedDate = formatSyncDate(dateObj);
-                  if (parsedDate && parsedDate.dateStr === targetDateStr) {
-                    daySleep = Math.max(daySleep, Number(metric.totalSleep || metric.qty || metric.value || 0));
-                  }
-                }
-              }
-            };
-
-            // FIX: Added 'sleep_analysis' to the allowed processing log types
-            if (log.name === 'weight_body_mass' || log.name === 'step_count' || log.name === 'sleep_analysis') {
-              processMetric(log);
-            } else if (Array.isArray(log.metrics)) {
-              log.metrics.forEach(processMetric);
-            } else if (log.data && Array.isArray(log.data.metrics)) {
-              log.data.metrics.forEach(processMetric);
-            }
-          });
-
-          const combined = [...manualW, ...healthW].filter(w => w.weight > 0).sort((a, b) => b.timestamp - a.timestamp);
-          return { foods: rawFoods || [], workouts: rawWorkouts || [], syncedWorkouts: processedSynced, weight: combined[0] || null, steps: daySteps, sleep: daySleep };
-        };
-
-        // Process the Viewed Date
-        const viewData = processDataForDate(dateStr, foods, workouts);
         setFoodLogs(viewData.foods);
         setWorkoutLogs(viewData.workouts);
         setSyncedWorkouts(viewData.syncedWorkouts);
         setTodayWeight(viewData.weight);
-        setTodaySteps(viewData.steps || 0);
-        setTodaySleep(viewData.sleep || 0); // NEW: Save to view state
+        setTodaySteps(viewData.steps);
+        setTodaySleep(viewData.sleep);
 
-        // Process Today's Background Cache
-        if (dateStr === todayStr) {
-           todayCache.current = viewData;
-        } else if (todayFoods && todayWorkouts) {
-           todayCache.current = processDataForDate(todayStr, todayFoods, todayWorkouts);
-        }
+        if (dateStr === todayStr) todayCache.current = viewData;
 
       } catch (error) {
         console.error('Failed to load stats:', error);

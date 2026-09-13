@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getSyncedHealthWorkouts, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getHealthWorkoutsForDate, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -259,9 +259,9 @@ const loadData = async (showLoadingScreen = true) => {
     if (showLoadingScreen) setLoading(true);
     
     try {
-      const [logs, syncedWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates, todayLogs, todayManualWorkouts] = await Promise.all([
+      const [logs, healthWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates, todayLogs, todayManualWorkouts] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
-        getSyncedHealthWorkouts(user.uid).catch(() => [] as any[]),
+        getHealthWorkoutsForDate(user.uid, dateStr).catch(() => []),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
         getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
         getDoneLoggingDates(user.uid).catch(() => ({})),
@@ -272,17 +272,11 @@ const loadData = async (showLoadingScreen = true) => {
       if (currentRequest !== requestCounter.current) return;
       setDoneLoggingDates(firebaseDoneDates);
 
-      // --- Process the Viewed Date ---
-      const todaysSyncedWorkouts = syncedWorkouts.filter((w: any) => {
-        const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, dateStr);
-        const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
-        return isToday && !isIgnored; 
-      });
+      // Only count workouts that are not ignored
+      const validHealthWorkouts = healthWorkouts.filter((w: any) => !ignoredWorkouts.includes(String(w.id || w.uuid || w.dbId)));
 
-      let totalBurned = todaysSyncedWorkouts.reduce((sum, w) => {
-        if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') {
-          return sum + Math.round(w.activeEnergyBurned.qty);
-        }
+      let totalBurned = validHealthWorkouts.reduce((sum, w: any) => {
+        if (w.activeEnergyBurned?.units === 'kcal') return sum + Math.round(w.activeEnergyBurned.qty);
         return sum;
       }, 0);
 
@@ -293,23 +287,8 @@ const loadData = async (showLoadingScreen = true) => {
       setFoodLogs(logs);
       setBurnedCalories(totalBurned);
 
-      // --- Process Today's Background Cache ---
       if (dateStr === todayStr) {
          todayCache.current = { logs, burnedCalories: totalBurned };
-      } else if (todayLogs && todayManualWorkouts) {
-         const actualTodaySynced = syncedWorkouts.filter((w: any) => {
-           const isToday = isWorkoutOnDate(w.start || w.date || w.timestamp, todayStr);
-           const isIgnored = ignoredWorkouts.includes(String(w.id || w.dbId)); 
-           return isToday && !isIgnored; 
-         });
-
-         let todayBurned = actualTodaySynced.reduce((sum, w) => {
-           if (w.activeEnergyBurned && w.activeEnergyBurned.units === 'kcal') return sum + Math.round(w.activeEnergyBurned.qty);
-           return sum;
-         }, 0);
-         todayBurned += todayManualWorkouts.reduce((sum: any, w: any) => sum + (w.caloriesBurned || 0), 0);
-
-         todayCache.current = { logs: todayLogs, burnedCalories: todayBurned };
       }
 
     } catch (error) {

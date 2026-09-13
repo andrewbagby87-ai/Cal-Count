@@ -380,22 +380,27 @@ export async function createWorkoutLog(userId: string, workout: Omit<WorkoutLog,
 }
 
 export async function getDayWorkoutLogs(userId: string, date: string): Promise<WorkoutLog[]> {
-  const q = query(
-    collection(db, 'workoutLogs'),
-    where('userId', '==', userId),
-    where('date', '==', date)
-  );
-  const querySnapshot = await getDocs(q);
-  const logs = querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data as Omit<WorkoutLog, 'id'>,
-      timestamp: (data.timestamp as Timestamp).toMillis(),
-    };
-  });
-  
-  return logs.sort((a, b) => b.timestamp - a.timestamp);
+  try {
+    const q = query(
+      collection(db, 'workoutLogs'),
+      where('userId', '==', userId),
+      where('date', '==', date)
+    );
+    const querySnapshot = await getDocs(q);
+    const logs = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data as Omit<WorkoutLog, 'id'>,
+        timestamp: (data.timestamp as Timestamp).toMillis(),
+      };
+    });
+    
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (error) {
+    console.warn("Failed to fetch workout logs:", error);
+    return [];
+  }
 }
 
 export async function getWeeklyWorkoutLogs(userId: string, startDate: string, endDate: string): Promise<WorkoutLog[]> {
@@ -526,87 +531,52 @@ export async function deleteWeightLog(id: string) {
 }
 
 // Health Log Operations
-export async function getHealthLogs(userId: string) {
-  const allSyncs: any[] = [];
-  const lowerUserId = userId.toLowerCase();
-
+export const getHealthWorkoutsForDate = async (userId: string, dateStr: string) => {
   try {
-    const exactDoc = await getDoc(doc(db, 'healthLogs', userId));
-    if (exactDoc.exists() && exactDoc.data().syncs) allSyncs.push(...exactDoc.data().syncs);
-  } catch (e) { console.warn(e); }
-
-  try {
-    const qExact = query(collection(db, 'healthLogs'), where('userId', '==', userId));
-    const snapExact = await getDocs(qExact);
-    snapExact.docs.forEach(d => {
-      if (d.id !== userId && d.id !== lowerUserId) allSyncs.push({ ...(d.data() as any), id: d.id });
-    });
-  } catch (e) { console.warn(e); }
-
-  try {
-    const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
-    const subSnap = await getDocs(syncsSubRef);
-    subSnap.docs.forEach(d => allSyncs.push({ ...(d.data() as any), id: d.id }));
-  } catch (e) { console.warn(e); }
-
-  return allSyncs;
-}
-
-export const getSyncedHealthWorkouts = async (userId: string) => {
-  let allWorkouts: any[] = [];
-  
-  const extractData = (dataPart: any) => {
-    if (!dataPart) return [];
-    if (Array.isArray(dataPart)) return dataPart;
-    if (typeof dataPart === 'object') return Object.values(dataPart);
+    const q = query(collection(db, 'healthWorkouts'), where('userId', '==', userId), where('date', '==', dateStr));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.warn("Firebase blocked healthWorkouts:", error);
     return [];
-  };
+  }
+};
 
+export const getHealthMetricsForDate = async (userId: string, dateStr: string) => {
   try {
-    const userDocRef = doc(db, 'healthLogs', userId);
-    const userDocSnap = await getDoc(userDocRef);
-    if (userDocSnap.exists()) {
-      const payload = userDocSnap.data();
-      if (payload.syncs && Array.isArray(payload.syncs)) {
-        payload.syncs.forEach((s: any) => {
-          if (s.data?.workouts) allWorkouts.push(...extractData(s.data.workouts));
-          else if (s.workouts) allWorkouts.push(...extractData(s.workouts));
-        });
-      }
-    }
-  } catch (err) { console.warn(err); }
-
-  try {
-    const workoutsRef = collection(db, `healthLogs/${userId}/workouts`);
-    const snapshot = await getDocs(workoutsRef);
-    snapshot.docs.forEach(docSnap => {
-      const payload = docSnap.data() as any;
-      if (payload.data?.workouts) allWorkouts.push(...extractData(payload.data.workouts));
-      else if (payload.workouts) allWorkouts.push(...extractData(payload.workouts));
-      else if (payload.name && payload.duration) allWorkouts.push({ dbId: docSnap.id, ...payload });
-    });
-  } catch (err) {}
-
-  try {
-    const syncsSubRef = collection(db, `healthLogs/${userId}/syncs`);
-    const subSnap = await getDocs(syncsSubRef);
-    subSnap.docs.forEach(docSnap => {
-      const payload = docSnap.data() as any;
-      if (payload.data?.workouts) allWorkouts.push(...extractData(payload.data.workouts));
-      else if (payload.workouts) allWorkouts.push(...extractData(payload.workouts));
-    });
-  } catch (err) {}
-
-  const uniqueWorkouts = Array.from(new Map(allWorkouts.filter(w => w != null).map(w => [w.id || w.dbId || Math.random(), w])).values());
-  return uniqueWorkouts;
+    const q = query(collection(db, 'healthMetrics'), where('userId', '==', userId), where('date', '==', dateStr));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.warn("Firebase blocked healthMetrics:", error);
+    return [];
+  }
 };
 
 export const getIgnoredWorkouts = async (userId: string): Promise<string[]> => {
   try {
     const docRef = doc(db, 'users', userId);
     const snap = await getDoc(docRef);
+    
     if (snap.exists() && snap.data().ignoredWorkouts) {
-      return snap.data().ignoredWorkouts;
+      const rawIgnored = snap.data().ignoredWorkouts as string[];
+      
+      let needsUpdate = false;
+      const updatedIgnored = rawIgnored.map(id => {
+        // If it's a legacy ID without the prefix, append the prefix!
+        if (!id.startsWith(`${userId}_`)) {
+          needsUpdate = true;
+          return `${userId}_${id}`;
+        }
+        return id;
+      });
+
+      if (needsUpdate) {
+        // Silently update Firebase in the background with the corrected array
+        updateDoc(docRef, { ignoredWorkouts: updatedIgnored }).catch(console.error);
+      }
+
+      return updatedIgnored;
     }
     return [];
   } catch (e) {
@@ -682,131 +652,3 @@ export const getHealthLogsSince = async (userId: string, cutoffMs: number): Prom
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
-
-export async function migrateLegacyDoneDates(userId: string, userProfile: any) {
-  try {
-    const docRef = doc(db, 'users', userId);
-    const snap = await getDoc(docRef);
-    
-    if (!snap.exists() || !snap.data().doneLoggingDates) {
-      console.log("No done dates found to migrate.");
-      return;
-    }
-
-    const dates = snap.data().doneLoggingDates;
-    const updates: Record<string, any> = {};
-    let needsUpdate = false;
-
-    // Loop through every saved date in the user's profile
-    for (const [dateStr, value] of Object.entries(dates)) {
-      // If the value is exactly true, it's the old format that needs updating
-      if (value === true) { 
-        console.log(`Migrating data for ${dateStr}...`);
-        
-        // Fetch the historical data for this specific day
-        const [foods, workouts, healthLogs, ignoredWorkouts] = await Promise.all([
-           getDayFoodLogs(userId, dateStr),
-           getDayWorkoutLogs(userId, dateStr),
-           getSyncedHealthWorkouts(userId),
-           getIgnoredWorkouts(userId)
-        ]);
-
-        // Calculate total calories consumed
-        const consumed = foods.reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-        
-        // Calculate total calories burned
-        const todaysSynced = healthLogs.filter((w: any) => {
-          // Re-use your existing date parsing logic
-          const d = new Date(w.start || w.date || w.timestamp);
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          const isToday = `${y}-${m}-${day}` === dateStr;
-          return isToday && !ignoredWorkouts.includes(String(w.id || w.dbId));
-        });
-        
-        let burned = todaysSynced.reduce((sum, w) => (w.activeEnergyBurned?.units === 'kcal' ? sum + Math.round(w.activeEnergyBurned.qty) : sum), 0);
-        burned += workouts.reduce((sum: number, w: any) => sum + (w.caloriesBurned || 0), 0);
-
-        // Get the historical budget using your Time Machine function
-        let historicalProfile = userProfile;
-        if (userProfile.goalHistory && userProfile.goalHistory.length > 0) {
-           for (const entry of userProfile.goalHistory) {
-             if (entry.date <= dateStr) historicalProfile = { ...userProfile, ...entry };
-             else break;
-           }
-        }
-        const budget = (historicalProfile?.caloriesBudget || 0) + burned;
-
-        // Queue the Firebase update using dot notation to update just the nested key
-        updates[`doneLoggingDates.${dateStr}`] = {
-          isDone: true,
-          totalCalories: consumed,
-          budget: budget
-        };
-        needsUpdate = true;
-      }
-    }
-
-    if (needsUpdate) {
-      await updateDoc(docRef, updates);
-      console.log("Migration successfully completed!");
-    } else {
-      console.log("All dates are already using the new summary format.");
-    }
-  } catch (error) {
-    console.error("Migration failed:", error);
-  }
-}
-
-export async function migrateLegacyFoodLogs(userId: string | undefined) {
-  if (!userId) {
-    console.error("Missing User ID for migration.");
-    return;
-  }
-
-  console.log("Starting legacy food log migration...");
-  const logsToMigrate = new Map();
-
-  try {
-    // 1. Fetch old array-based logs
-    const exactDoc = await getDoc(doc(db, 'foodLogs', userId));
-    if (exactDoc.exists()) {
-      const data = exactDoc.data();
-      if (data.foodData) data.foodData.forEach((log: any) => logsToMigrate.set(log.id, log));
-      if (data.logs) data.logs.forEach((log: any) => logsToMigrate.set(log.id, log));
-    }
-
-    // 2. Fetch old multi-doc format logs
-    const qExact = query(collection(db, 'foodLogs'), where('userId', '==', userId));
-    const snapExact = await getDocs(qExact);
-    snapExact.docs.forEach(d => {
-      if (d.id !== userId) {
-        logsToMigrate.set(d.id, { id: d.id, ...d.data() });
-      }
-    });
-
-    if (logsToMigrate.size === 0) {
-      console.log("No legacy logs found! Everything is already in the new format.");
-      return;
-    }
-
-    console.log(`Found ${logsToMigrate.size} legacy logs to move. Copying to subcollection...`);
-
-    // 3. Copy them to the new subcollection
-    const migrationPromises = [];
-    for (const [id, log] of logsToMigrate.entries()) {
-      const newLogRef = doc(db, `foodLogs/${userId}/logs`, id);
-      migrationPromises.push(setDoc(newLogRef, log));
-    }
-
-    // Wait for all saves to finish
-    await Promise.all(migrationPromises);
-    
-    console.log(`Migration Complete! Successfully copied ${logsToMigrate.size} logs to the new subcollection.`);
-    console.log("You can now safely remove the legacy fallback queries from your code.");
-
-  } catch (error) {
-    console.error("Error migrating food logs:", error);
-  }
-}

@@ -1,7 +1,7 @@
 // src/components/WeightTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getWeightLogsForDate, createWeightLog, deleteWeightLog, getHealthLogs } from '../services/database';
+import { getWeightLogsForDate, createWeightLog, deleteWeightLog, getHealthMetricsForDate } from '../services/database';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import './WeightTab.css';
 
@@ -72,7 +72,6 @@ export default function WeightTab() {
   const [visibleDays, setVisibleDays] = useState(0); 
   const [manualWeights, setManualWeights] = useState<any[]>([]);
   const [healthWeights, setHealthWeights] = useState<any[]>([]);
-  const [hasFetchedHealth, setHasFetchedHealth] = useState(false);
 
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year' | 'all'>('week');
   const topRef = useRef<HTMLDivElement>(null);
@@ -81,60 +80,11 @@ export default function WeightTab() {
     if (topRef.current) topRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
   }, []);
 
-  // 👉 NEW: The 7-Day Chunk Loader
   const fetchMoreDays = async (daysToAdd: number) => {
     if (!user) return;
     setIsLoadingMore(true);
 
     try {
-      // 1. Fetch bulk Apple Health syncs ONLY once on initial boot
-      let currentHealth = healthWeights;
-      if (!hasFetchedHealth) {
-        const healthLogsRaw = await getHealthLogs(user.uid);
-        const parsedHealth: any[] = [];
-        healthLogsRaw.forEach((log: any, index: number) => {
-          const baseTimestamp = new Date(log.timestamp || Date.now()).getTime();
-          const payloadId = log.id || `sync-${index}`;
-
-          const processMetric = (metric: any) => {
-            if (metric.name === 'weight_body_mass' && Array.isArray(metric.data)) {
-              metric.data.forEach((entry: any, i: number) => {
-                const dateObj = parseSafeDate(entry.date, baseTimestamp);
-                const parsedDate = formatSyncDate(dateObj);
-                if (parsedDate) {
-                  parsedHealth.push({
-                    id: `health-sync-${payloadId}-${i}`, date: parsedDate.dateStr, time: parsedDate.timeStr,
-                    weight: Math.round(Number(entry.qty || entry.value || 0) * 10) / 10, unit: parseUnit(metric.units || log.units),
-                    timestamp: parsedDate.timeMs, isSynced: true
-                  });
-                }
-              });
-            }
-          };
-
-          if (log.name === 'weight_body_mass') {
-            if (Array.isArray(log.data)) processMetric(log);
-            else {
-              const dateObj = parseSafeDate(log.date, baseTimestamp);
-              const parsedDate = formatSyncDate(dateObj);
-              if (parsedDate) {
-                parsedHealth.push({
-                  id: `health-sync-flat-${payloadId}`, date: parsedDate.dateStr, time: parsedDate.timeStr,
-                  weight: Math.round(Number(log.qty || log.value || log.weight || 0) * 10) / 10, unit: parseUnit(log.units || log.unit),
-                  timestamp: parsedDate.timeMs, isSynced: true
-                });
-              }
-            }
-          } else if (Array.isArray(log.metrics)) log.metrics.forEach(processMetric);
-          else if (log.data && Array.isArray(log.data.metrics)) log.data.metrics.forEach(processMetric);
-        });
-
-        currentHealth = parsedHealth.filter(l => l.weight > 0);
-        setHealthWeights(currentHealth);
-        setHasFetchedHealth(true);
-      }
-
-      // 2. Calculate exact target dates for this chunk
       const datesToFetch = [];
       for (let i = 0; i < daysToAdd; i++) {
         const d = new Date();
@@ -142,16 +92,32 @@ export default function WeightTab() {
         datesToFetch.push(getDateString(d));
       }
 
-      // 3. Fetch ONLY the manual weights for these exact dates!
-      const newManualLogsArray = await Promise.all(datesToFetch.map(d => getWeightLogsForDate(user.uid, d)));
-      const newManualLogs = newManualLogsArray.flat();
+      const [newManualArray, newHealthArray] = await Promise.all([
+        Promise.all(datesToFetch.map(d => getWeightLogsForDate(user.uid, d))),
+        Promise.all(datesToFetch.map(d => getHealthMetricsForDate(user.uid, d)))
+      ]);
 
-      setManualWeights(prev => {
-        const combined = [...prev, ...newManualLogs];
-        // Deduplicate using a Map
-        return Array.from(new Map(combined.map(item => [item.id, item])).values());
+      const newManualLogs = newManualArray.flat();
+      const newHealthMetrics = newHealthArray.flat();
+
+      const parsedHealth: any[] = [];
+      newHealthMetrics.forEach((m: any) => {
+        if (m.name === 'weight_body_mass' || m.name === 'body_mass') {
+           const timeMs = m.timestamp || new Date(m.date).getTime();
+           const d = new Date(timeMs);
+           parsedHealth.push({
+             id: m.id, date: m.date, 
+             time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+             weight: Math.round(Number(m.qty || m.value || m.weight || 0) * 10) / 10, 
+             unit: m.units?.toLowerCase().includes('kg') ? 'kg' : 'lbs',
+             timestamp: timeMs, isSynced: true
+           });
+        }
       });
 
+      setManualWeights(prev => Array.from(new Map([...prev, ...newManualLogs].map(item => [item.id, item])).values()));
+      setHealthWeights(prev => Array.from(new Map([...prev, ...parsedHealth].map(item => [item.id, item])).values()));
+      
       setVisibleDays(prev => prev + daysToAdd);
     } catch (err) {
       console.error('Failed to load weight chunks:', err);

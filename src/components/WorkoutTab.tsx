@@ -1,7 +1,7 @@
 // src/components/WorkoutsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getSyncedHealthWorkouts, getIgnoredWorkouts, toggleIgnoredWorkout, getDayWorkoutLogs } from '../services/database';
+import { getIgnoredWorkouts, toggleIgnoredWorkout, getDayWorkoutLogs, getHealthWorkoutsForDate } from '../services/database';
 
 const getDateString = (date: Date) => {
   const year = date.getFullYear();
@@ -31,7 +31,6 @@ export default function WorkoutsTab() {
   const [manualWorkouts, setManualWorkouts] = useState<any[]>([]);
   const [healthWorkouts, setHealthWorkouts] = useState<any[]>([]);
   const [ignoredIds, setIgnoredIds] = useState<string[]>([]);
-  const [hasFetchedHealth, setHasFetchedHealth] = useState(false);
 
   useEffect(() => {
     const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
@@ -44,17 +43,9 @@ const fetchMoreDays = async (daysToAdd: number) => {
     setIsLoadingMore(true);
 
     try {
-      if (!hasFetchedHealth) {
-        const [healthData, ignoredData] = await Promise.all([
-          getSyncedHealthWorkouts(user.uid),
-          getIgnoredWorkouts(user.uid)
-        ]);
-        setHealthWorkouts(healthData);
-        setIgnoredIds(ignoredData);
-        setHasFetchedHealth(true);
-      }
+      const ignoredData = await getIgnoredWorkouts(user.uid);
+      setIgnoredIds(ignoredData);
 
-      // Calculate exact date strings
       const datesToFetch = [];
       for (let i = 0; i < daysToAdd; i++) {
         const d = new Date();
@@ -62,15 +53,17 @@ const fetchMoreDays = async (daysToAdd: number) => {
         datesToFetch.push(getDateString(d));
       }
 
-      // Loop manual fetches to avoid Firebase composite index errors!
-      const newManualWorkoutsArray = await Promise.all(datesToFetch.map(d => getDayWorkoutLogs(user.uid, d)));
-      const newManualWorkouts = newManualWorkoutsArray.flat();
+      const [newManualArray, newHealthArray] = await Promise.all([
+        Promise.all(datesToFetch.map(d => getDayWorkoutLogs(user.uid, d))),
+        Promise.all(datesToFetch.map(d => getHealthWorkoutsForDate(user.uid, d)))
+      ]);
 
-      setManualWorkouts(prev => {
-        const combined = [...prev, ...newManualWorkouts];
-        return Array.from(new Map(combined.map(item => [item.id, item])).values());
-      });
+      const newManualWorkouts = newManualArray.flat();
+      const newHealthWorkouts = newHealthArray.flat();
 
+      setManualWorkouts(prev => Array.from(new Map([...prev, ...newManualWorkouts].map(item => [item.id, item])).values()));
+      setHealthWorkouts(prev => Array.from(new Map([...prev, ...newHealthWorkouts].map(item => [item.id, item])).values()));
+      
       setVisibleDays(prev => prev + daysToAdd);
     } catch (err) {
       console.error('Failed to load workout chunks:', err);
