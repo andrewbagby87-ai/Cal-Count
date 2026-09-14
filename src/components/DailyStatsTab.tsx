@@ -713,10 +713,10 @@ useEffect(() => {
                   {/* NEW: Distance from weight goal */}
                   {activeProfile?.weightGoal && (
                     <div style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '0.5rem' }}>
-                      <span style={{ color: Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal) < 0.1 ? '#10b981' : '#3b82f6' }}>
-                        {Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal) < 0.1 
-                          ? 'Goal reached! 🎉' 
-                          : `${Math.abs(Number(todayWeight.weight) - activeProfile.weightGoal).toFixed(1)} ${todayWeight.unit} away`}
+                      <span style={{ color: Number(todayWeight.weight) <= activeProfile.weightGoal ? '#10b981' : '#3b82f6' }}>
+                        {Number(todayWeight.weight) <= activeProfile.weightGoal 
+                          ? 'Goal reached!' 
+                          : `${(Number(todayWeight.weight) - activeProfile.weightGoal).toFixed(1)} ${todayWeight.unit} away`}
                       </span>
                     </div>
                   )}
