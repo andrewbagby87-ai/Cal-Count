@@ -292,7 +292,7 @@ export default function DailyStatsTab() {
         const today = new Date();
         const todayStr = getDateString(today);
         
-        if (doneDates[todayStr]) {
+        if (doneDates[todayStr]?.isDone) {
            currentStreak++;
         }
         
@@ -301,7 +301,7 @@ export default function DailyStatsTab() {
         
         while (true) {
           const checkStr = getDateString(checkDate);
-          if (doneDates[checkStr]) {
+          if (doneDates[checkStr]?.isDone) {
             currentStreak++;
             checkDate.setDate(checkDate.getDate() - 1);
           } else {

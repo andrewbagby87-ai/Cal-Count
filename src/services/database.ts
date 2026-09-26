@@ -601,36 +601,16 @@ export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ig
 export async function getDoneLoggingDates(userId: string): Promise<Record<string, any>> {
   try {
     let result: Record<string, any> = {};
-    
-    // 1. Load ALL legacy streaks and overrides into memory
-    const mainRef = doc(db, 'users', userId);
-    const mainSnap = await getDoc(mainRef);
-    if (mainSnap.exists()) {
-      const data = mainSnap.data();
-      if (data.doneLoggingDates) {
-        Object.keys(data.doneLoggingDates).forEach(date => {
-          result[date] = { ...data.doneLoggingDates[date] };
-        });
-      }
-      if (data.dailyBudgetOverrides) {
-        Object.keys(data.dailyBudgetOverrides).forEach(date => {
-          if (!result[date]) result[date] = {};
-          result[date].budgetOverride = data.dailyBudgetOverrides[date];
-        });
-      }
-    }
-
-    // 2. Merge with new subcollection data
     const q = query(collection(db, `users/${userId}/dailyStats`));
     const subSnap = await getDocs(q);
+    
     subSnap.docs.forEach(doc => {
-      if (!result[doc.id]) result[doc.id] = {};
-      result[doc.id] = { ...result[doc.id], ...doc.data() };
+      result[doc.id] = doc.data();
     });
-
+    
     return result;
   } catch (e) {
-    console.error("Error fetching done logging dates:", e);
+    console.error("Error fetching daily stats:", e);
     return {};
   }
 }
@@ -695,34 +675,9 @@ export async function updateDailyBonus(userId: string, dateStr: string, bonusAmo
 
 export async function getDailyStats(userId: string, dateStr: string) {
   try {
-    let legacyData: any = {};
-    
-    // 1. Grab legacy data from main profile
-    const mainRef = doc(db, 'users', userId);
-    const mainSnap = await getDoc(mainRef);
-    if (mainSnap.exists()) {
-      const data = mainSnap.data();
-      if (data.dailyBudgetOverrides && data.dailyBudgetOverrides[dateStr] !== undefined) {
-        legacyData.budgetOverride = data.dailyBudgetOverrides[dateStr];
-      }
-      if (data.rewardPromptsAnswered && data.rewardPromptsAnswered[dateStr] !== undefined) {
-        legacyData.rewardPromptAnswered = data.rewardPromptsAnswered[dateStr];
-      }
-      if (data.doneLoggingDates && data.doneLoggingDates[dateStr] !== undefined) {
-        legacyData = { ...legacyData, ...data.doneLoggingDates[dateStr] };
-      }
-    }
-
-    // 2. Grab new subcollection data
-    let newData: any = {};
     const subRef = doc(db, `users/${userId}/dailyStats`, dateStr);
     const subSnap = await getDoc(subRef);
-    if (subSnap.exists()) {
-      newData = subSnap.data();
-    }
-
-    // 3. Merge them! (New data overrides old data)
-    return { ...legacyData, ...newData };
+    return subSnap.exists() ? subSnap.data() : {};
   } catch (e) {
     console.error("Error in getDailyStats:", e);
     return {};

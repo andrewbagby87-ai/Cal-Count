@@ -187,29 +187,34 @@ export default function FoodLogTab() {
   const isToday = todayStr === viewStr;
 
   const [doneLoggingDates, setDoneLoggingDates] = useState<Record<string, any>>({});
-  const isDoneLogging = doneLoggingDates[viewStr] || false;
+  const isDoneLogging = doneLoggingDates[viewStr]?.isDone || false;
   
   const toggleDoneLogging = async () => {
     if (!user) return;
     const nextState = !isDoneLogging;
     
-    // Create the new payload format
     const summaryPayload = nextState ? {
       isDone: true,
       totalCalories: totalCalories,
       budget: adjustedBudget
-    } : false; // If unchecking, revert back to false/null
+    } : false; 
 
-    // Optimistic UI update
-    setDoneLoggingDates(prev => ({ ...prev, [viewStr]: summaryPayload as any }));
+    // Optimistic UI update that safely preserves your calorie bonus
+    setDoneLoggingDates(prev => {
+      const currentDay = prev[viewStr] || {};
+      if (nextState) {
+        return { ...prev, [viewStr]: { ...currentDay, isDone: true, totalCalories, budget: adjustedBudget } };
+      } else {
+        const { isDone, totalCalories, budget, ...rest } = currentDay;
+        return { ...prev, [viewStr]: rest };
+      }
+    });
     
     try {
       await toggleDoneLoggingDate(user.uid, viewStr, summaryPayload);
       window.dispatchEvent(new Event('dayCompletedChanged'));
     } catch (error) {
       console.error("Failed to sync done state", error);
-      // Revert on failure
-      setDoneLoggingDates(prev => ({ ...prev, [viewStr]: !nextState as any }));
     }
   };
 
