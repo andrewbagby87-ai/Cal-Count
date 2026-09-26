@@ -600,12 +600,35 @@ export const toggleIgnoredWorkout = async (userId: string, workoutId: string, ig
 // --- Done Logging & Streak Operations ---
 export async function getDoneLoggingDates(userId: string): Promise<Record<string, any>> {
   try {
-    const docRef = doc(db, 'users', userId);
-    const snap = await getDoc(docRef);
-    if (snap.exists() && snap.data().doneLoggingDates) {
-      return snap.data().doneLoggingDates;
+    let result: Record<string, any> = {};
+    
+    // 1. Load ALL legacy streaks and overrides into memory
+    const mainRef = doc(db, 'users', userId);
+    const mainSnap = await getDoc(mainRef);
+    if (mainSnap.exists()) {
+      const data = mainSnap.data();
+      if (data.doneLoggingDates) {
+        Object.keys(data.doneLoggingDates).forEach(date => {
+          result[date] = { ...data.doneLoggingDates[date] };
+        });
+      }
+      if (data.dailyBudgetOverrides) {
+        Object.keys(data.dailyBudgetOverrides).forEach(date => {
+          if (!result[date]) result[date] = {};
+          result[date].budgetOverride = data.dailyBudgetOverrides[date];
+        });
+      }
     }
-    return {};
+
+    // 2. Merge with new subcollection data
+    const q = query(collection(db, `users/${userId}/dailyStats`));
+    const subSnap = await getDocs(q);
+    subSnap.docs.forEach(doc => {
+      if (!result[doc.id]) result[doc.id] = {};
+      result[doc.id] = { ...result[doc.id], ...doc.data() };
+    });
+
+    return result;
   } catch (e) {
     console.error("Error fetching done logging dates:", e);
     return {};
@@ -617,16 +640,17 @@ export async function toggleDoneLoggingDate(
   dateStr: string, 
   payload: boolean | { isDone: boolean, totalCalories: number, budget: number }
 ) {
-  try {
-    const docRef = doc(db, 'users', userId);
-    
-    // Using dot notation to target the specific date key inside the map
-    await updateDoc(docRef, {
-      [`doneLoggingDates.${dateStr}`]: payload
-    });
-  } catch (error) {
-    console.error("Error toggling done logging date:", error);
-    throw error;
+  const docRef = doc(db, `users/${userId}/dailyStats`, dateStr);
+  
+  if (payload === false) {
+    // Completely remove the fields if the user un-checks the day
+    await setDoc(docRef, { isDone: deleteField(), totalCalories: deleteField(), budget: deleteField() }, { merge: true });
+  } else if (typeof payload === 'object') {
+    // Safely save the object (total calories and budget)
+    await setDoc(docRef, payload, { merge: true });
+  } else {
+    // Fallback just in case a literal `true` boolean is passed
+    await setDoc(docRef, { isDone: true }, { merge: true });
   }
 }
 
@@ -654,30 +678,53 @@ export const getHealthLogsSince = async (userId: string, cutoffMs: number): Prom
 };
 
 export async function answerWeightDropPrompt(userId: string, dateStr: string, accepted: boolean, bonusAmount: number) {
-  const docRef = doc(db, 'users', userId);
-  const updates: Record<string, any> = {
-    [`rewardPromptsAnswered.${dateStr}`]: true
-  };
-  
-  if (accepted) {
-    updates[`dailyBudgetOverrides.${dateStr}`] = bonusAmount;
-  }
-  
-  await updateDoc(docRef, updates);
+  const docRef = doc(db, `users/${userId}/dailyStats`, dateStr);
+  const updates: Record<string, any> = { rewardPromptAnswered: true };
+  if (accepted) updates.budgetOverride = bonusAmount;
+  await setDoc(docRef, updates, { merge: true });
 }
 
 export async function updateDailyBonus(userId: string, dateStr: string, bonusAmount: number) {
-  const docRef = doc(db, 'users', userId);
-  
+  const docRef = doc(db, `users/${userId}/dailyStats`, dateStr);
   if (bonusAmount <= 0) {
-    // If deleted or reduced to 0, completely remove the override.
-    // (Because rewardPromptsAnswered is already saved, the app won't ask again)
-    await updateDoc(docRef, {
-      [`dailyBudgetOverrides.${dateStr}`]: deleteField()
-    });
+    await setDoc(docRef, { budgetOverride: deleteField() }, { merge: true });
   } else {
-    await updateDoc(docRef, {
-      [`dailyBudgetOverrides.${dateStr}`]: bonusAmount
-    });
+    await setDoc(docRef, { budgetOverride: bonusAmount }, { merge: true });
+  }
+}
+
+export async function getDailyStats(userId: string, dateStr: string) {
+  try {
+    let legacyData: any = {};
+    
+    // 1. Grab legacy data from main profile
+    const mainRef = doc(db, 'users', userId);
+    const mainSnap = await getDoc(mainRef);
+    if (mainSnap.exists()) {
+      const data = mainSnap.data();
+      if (data.dailyBudgetOverrides && data.dailyBudgetOverrides[dateStr] !== undefined) {
+        legacyData.budgetOverride = data.dailyBudgetOverrides[dateStr];
+      }
+      if (data.rewardPromptsAnswered && data.rewardPromptsAnswered[dateStr] !== undefined) {
+        legacyData.rewardPromptAnswered = data.rewardPromptsAnswered[dateStr];
+      }
+      if (data.doneLoggingDates && data.doneLoggingDates[dateStr] !== undefined) {
+        legacyData = { ...legacyData, ...data.doneLoggingDates[dateStr] };
+      }
+    }
+
+    // 2. Grab new subcollection data
+    let newData: any = {};
+    const subRef = doc(db, `users/${userId}/dailyStats`, dateStr);
+    const subSnap = await getDoc(subRef);
+    if (subSnap.exists()) {
+      newData = subSnap.data();
+    }
+
+    // 3. Merge them! (New data overrides old data)
+    return { ...legacyData, ...newData };
+  } catch (e) {
+    console.error("Error in getDailyStats:", e);
+    return {};
   }
 }

@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, answerWeightDropPrompt, getHealthMetricsForDate, getHealthWorkoutsForDate, getIgnoredWorkouts, getDoneLoggingDates, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate, updateDailyBonus } from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, answerWeightDropPrompt, getHealthMetricsForDate, getHealthWorkoutsForDate, getIgnoredWorkouts, getDoneLoggingDates, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate, updateDailyBonus, getDailyStats } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -203,6 +203,8 @@ export default function DailyStatsTab() {
   const [optimisticBonus, setOptimisticBonus] = useState<number | null>(null);
   const [localAnswered, setLocalAnswered] = useState<Record<string, boolean>>({});
 
+  const [dailyStatsData, setDailyStatsData] = useState<any>({});
+
   const getDateString = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -353,7 +355,7 @@ useEffect(() => {
            const currentHealth = syncedWorkouts.reduce((sum, w) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
            const currentBurned = currentManual + currentHealth;
 
-           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (doneDates[dStr]?.budgetOverride || 0);
            const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned + dayBonus;
            
            if (currentBudget > 0) {
@@ -374,7 +376,7 @@ useEffect(() => {
            const currentHealth = (todayCache.current.syncedWorkouts || []).reduce((sum: number, w: any) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
            const currentBurned = currentManual + currentHealth;
            
-           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (doneDates[dStr]?.budgetOverride || 0);
            const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned + dayBonus;           
            if (currentBudget > 0) {
              progress = currentConsumed / currentBudget;
@@ -405,8 +407,8 @@ useEffect(() => {
       
       // If weight is less than or equal to the goal minus the threshold
       if (Number(todayWeight.weight) <= targetWeight) {
-        // Check both Firebase AND our instant local memory
-        if (!userProfile.rewardPromptsAnswered?.[viewStr] && !localAnswered[viewStr]) {
+        // Check legacy profile, new dailyStatsData, AND local instant memory
+        if (!userProfile.rewardPromptsAnswered?.[viewStr] && !dailyStatsData.rewardPromptAnswered && !localAnswered[viewStr]) {
           setRewardBonus(userProfile.rewardBonusAmount || 100); 
           setShowRewardPrompt(true);
         }
@@ -443,16 +445,19 @@ useEffect(() => {
       }
       
       try {
-        const [foods, workouts, manualWeights, healthMetrics, healthWorkouts, ignoredWorkouts, todayFoods, todayWorkouts] = await Promise.all([
+        const [foods, workouts, manualWeights, healthMetrics, healthWorkouts, ignoredWorkouts, dayStats, todayFoods, todayWorkouts] = await Promise.all([
           getDayFoodLogs(user.uid, dateStr).catch(() => []),
           getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
           getWeightLogsForDate(user.uid, dateStr).catch(() => []), 
           getHealthMetricsForDate(user.uid, dateStr).catch(() => []), 
           getHealthWorkoutsForDate(user.uid, dateStr).catch(() => []),
           getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
+          getDailyStats(user.uid, dateStr),
           dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
           dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
         ]);
+
+        setDailyStatsData(dayStats);
 
         const processedSynced = healthWorkouts.map((w: any) => ({
           ...w, isIgnored: ignoredWorkouts.includes(String(w.id || w.uuid || w.dbId))
@@ -515,7 +520,7 @@ useEffect(() => {
   }, 0);
   const caloriesBurned = manualBurned + healthBurned;
 
-  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[viewStr] || 0);
+  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (dailyStatsData.budgetOverride || 0);
   const totalBudget = (activeProfile?.caloriesBudget || 0) + caloriesBurned + dailyBonus;
   
   const remaining = totalBudget - caloriesConsumed;
@@ -569,11 +574,17 @@ useEffect(() => {
               <button 
                 onClick={() => {
                   setShowRewardPrompt(false);
-                  setLocalAnswered(prev => ({ ...prev, [viewStr]: true }));
+                  if (userProfile) {
+                    if (!userProfile.rewardPromptsAnswered) userProfile.rewardPromptsAnswered = {};
+                    userProfile.rewardPromptsAnswered[viewStr] = true;
+                    if (!userProfile.dailyBudgetOverrides) userProfile.dailyBudgetOverrides = {};
+                    userProfile.dailyBudgetOverrides[viewStr] = rewardBonus;
+                  }
+
                   setOptimisticBonus(rewardBonus); 
+                  window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: rewardBonus })); 
                   answerWeightDropPrompt(user!.uid, viewStr, true, rewardBonus).catch(console.error); 
-                  window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: rewardBonus }));
-                }}
+                }} 
                 style={{ width: '100%', padding: '0.85rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)', fontSize: '1rem' }}
               >
                 Yes, Claim Bonus!
@@ -588,7 +599,13 @@ useEffect(() => {
                 <button 
                   onClick={() => {
                     setShowRewardPrompt(false);
-                    setLocalAnswered(prev => ({ ...prev, [viewStr]: true }));
+                    
+                    // Instantly lock out the prompt in local memory
+                    if (userProfile) {
+                      if (!userProfile.rewardPromptsAnswered) userProfile.rewardPromptsAnswered = {};
+                      userProfile.rewardPromptsAnswered[viewStr] = true;
+                    }
+
                     answerWeightDropPrompt(user!.uid, viewStr, false, 0).catch(console.error);
                   }} 
                   style={{ flex: 1, padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', fontWeight: 700, cursor: 'pointer' }}
@@ -825,31 +842,54 @@ useEffect(() => {
                         <button 
                           onClick={() => {
                             const newAmount = Math.max(0, dailyBonus - 50);
+                            
+                            // Update local memory
+                            if (userProfile) {
+                              if (!userProfile.dailyBudgetOverrides) userProfile.dailyBudgetOverrides = {};
+                              userProfile.dailyBudgetOverrides[viewStr] = newAmount;
+                            }
+
                             setOptimisticBonus(newAmount);
-                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
                             window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: newAmount }));
+                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
                           }}
                           style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >-</button>
+                        
                         <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981', minWidth: '40px', textAlign: 'center' }}>
                           +{dailyBonus}
                         </span>
+                        
                         <button 
                           onClick={() => {
                             const newAmount = dailyBonus + 50;
+                            
+                            // Update local memory
+                            if (userProfile) {
+                              if (!userProfile.dailyBudgetOverrides) userProfile.dailyBudgetOverrides = {};
+                              userProfile.dailyBudgetOverrides[viewStr] = newAmount;
+                            }
+
                             setOptimisticBonus(newAmount);
-                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
                             window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: newAmount }));
+                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
                           }}
                           style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >+</button>
                       </div>
+                      
                       <button 
                         onClick={() => {
                           if (window.confirm('Are you sure you want to delete this calorie bonus?')) {
+                            
+                            // Erase from local memory
+                            if (userProfile && userProfile.dailyBudgetOverrides) {
+                              delete userProfile.dailyBudgetOverrides[viewStr];
+                            }
+
                             setOptimisticBonus(0);
-                            updateDailyBonus(user!.uid, viewStr, 0).catch(console.error);
                             window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: 0 }));
+                            updateDailyBonus(user!.uid, viewStr, 0).catch(console.error);
                           }
                         }}
                         style={{ fontSize: '0.75rem', color: '#ef4444', background: '#fee2e2', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', border: 'none', cursor: 'pointer', fontWeight: 600 }}

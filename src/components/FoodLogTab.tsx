@@ -1,7 +1,7 @@
 // src/components/FoodLogTab.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getHealthWorkoutsForDate, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate, getWeeklyFoodLogs, getWeeklyWorkoutLogs} from '../services/database';
+import { getUserFoods, getDayFoodLogs, createFoodLog, deleteFoodLog, updateFoodLog, getDayWorkoutLogs, getHealthWorkoutsForDate, getIgnoredWorkouts, updateFood, getDoneLoggingDates, toggleDoneLoggingDate, getDailyStats} from '../services/database';
 import { Food, FoodLog } from '../types';
 import AddFoodModal from './AddFoodModal';
 import EditFoodLogModal from './EditFoodLogModal';
@@ -96,6 +96,7 @@ export default function FoodLogTab() {
   const [viewDate, setViewDate] = useState(new Date());
 
   const [optimisticBonus, setOptimisticBonus] = useState<number | null>(null);
+  const [dailyStatsData, setDailyStatsData] = useState<any>({});
 
   // Clear instant UI math when changing dates
   useEffect(() => {
@@ -273,15 +274,18 @@ const loadData = async (showLoadingScreen = true) => {
     if (showLoadingScreen) setLoading(true);
     
     try {
-      const [logs, healthWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates, todayLogs, todayManualWorkouts] = await Promise.all([
+      const [logs, healthWorkouts, manualWorkouts, ignoredWorkouts, firebaseDoneDates, dayStats, todayLogs, todayManualWorkouts] = await Promise.all([
         getDayFoodLogs(user.uid, dateStr),
         getHealthWorkoutsForDate(user.uid, dateStr).catch(() => []),
         getDayWorkoutLogs(user.uid, dateStr).catch(() => []),
         getIgnoredWorkouts(user.uid).catch(() => [] as string[]),
         getDoneLoggingDates(user.uid).catch(() => ({})),
+        getDailyStats(user.uid, dateStr),
         dateStr !== todayStr ? getDayFoodLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null),
         dateStr !== todayStr ? getDayWorkoutLogs(user.uid, todayStr).catch(() => []) : Promise.resolve(null)
       ]);
+
+      setDailyStatsData(dayStats);
       
       if (currentRequest !== requestCounter.current) return;
       setDoneLoggingDates(firebaseDoneDates);
@@ -356,7 +360,7 @@ useEffect(() => {
         else if (dStr === getDateString(viewDate)) {
            const activeProfile = getActiveBudgets(userProfile, dStr);
            const currentConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (doneDates[dStr]?.budgetOverride || 0);
            const currentBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories + dayBonus;
            
            if (currentBudget > 0) {
@@ -373,7 +377,7 @@ useEffect(() => {
         else if (dStr === actualTodayStr && todayCache.current) {
            const activeProfile = getActiveBudgets(userProfile, dStr);
            const currentConsumed = (todayCache.current.logs || []).reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (doneDates[dStr]?.budgetOverride || 0);
            const currentBudget = (activeProfile?.caloriesBudget || 0) + (todayCache.current.burnedCalories || 0) + dayBonus;
            
            if (currentBudget > 0) {
@@ -626,7 +630,7 @@ const handleEditLog = async (updates: any) => {
   };
 
   const activeProfile = getActiveBudgets(userProfile, viewStr);
-  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[viewStr] || 0);
+  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (dailyStatsData.budgetOverride || 0);
   const adjustedBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories + dailyBonus;
   
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
