@@ -94,6 +94,20 @@ export default function FoodLogTab() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const [viewDate, setViewDate] = useState(new Date());
+
+  const [optimisticBonus, setOptimisticBonus] = useState<number | null>(null);
+
+  // Clear instant UI math when changing dates
+  useEffect(() => {
+    setOptimisticBonus(null);
+  }, [viewDate]);
+
+  // Listen for instant changes from the Daily Stats Tab
+  useEffect(() => {
+    const handleBonusChange = (e: any) => setOptimisticBonus(e.detail);
+    window.addEventListener('dailyBonusChanged', handleBonusChange);
+    return () => window.removeEventListener('dailyBonusChanged', handleBonusChange);
+  }, []);
   
   const [navigatorSummaries, setNavigatorSummaries] = useState<Record<string, { progress: number, color: string }>>({});
   
@@ -610,7 +624,8 @@ const handleEditLog = async (updates: any) => {
   };
 
   const activeProfile = getActiveBudgets(userProfile, viewStr);
-  const adjustedBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories;
+  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[viewStr] || 0);
+  const adjustedBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories + dailyBonus;
   
   const totalCalories = Math.round(foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories), 0));
   const calDiff = adjustedBudget - totalCalories;
@@ -767,11 +782,13 @@ const handleEditLog = async (updates: any) => {
                   `${Math.abs(calDiff)} cal ${calDiff >= 0 ? 'left' : 'over'}`
                 ) : (
                   <>
-                    {totalCalories} / {adjustedBudget} cal
-                    {burnedCalories > 0 && (
-                      <span style={{ fontSize: '0.9rem', color: '#ef4444', marginLeft: '0.5rem' }}>(+{burnedCalories} 🔥)</span>
-                    )}
-                  </>
+                  {totalCalories} / {adjustedBudget} cal
+                  {(burnedCalories > 0 || dailyBonus > 0) && (
+                    <span style={{ fontSize: '0.9rem', color: dailyBonus > 0 && burnedCalories === 0 ? '#10b981' : '#ef4444', marginLeft: '0.5rem', fontWeight: 600 }}>
+                      (+{burnedCalories + dailyBonus} {burnedCalories > 0 && '🔥'}{dailyBonus > 0 && '🏆'})
+                    </span>
+                  )}
+                </>
                 )
               ) : (
                 `${totalCalories} cal`

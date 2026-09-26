@@ -46,6 +46,9 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
     showStepsOnDashboard: true,
     weightGoal: '' as number | string,
     stepGoal: '' as number | string,
+    enableRewardBonus: false,
+    rewardThreshold: 0,
+    rewardBonusAmount: 200,
   });
   
   const [isSaving, setIsSaving] = useState(false);
@@ -78,6 +81,9 @@ export default function UserSettings({ onBack, mode = 'account' }: UserSettingsP
         showStepsOnDashboard: userProfile.showStepsOnDashboard ?? true,
         weightGoal: userProfile.weightGoal || '',
         stepGoal: userProfile.stepGoal || '',
+        enableRewardBonus: userProfile.enableRewardBonus || false,
+        rewardThreshold: userProfile.rewardThreshold || 0,
+        rewardBonusAmount: userProfile.rewardBonusAmount || 200,
       });
     }
   }, [userProfile]);
@@ -227,6 +233,9 @@ const handleChangeEmail = async () => {
         proteinBudget: Number(formData.proteinBudget) || 0,
         weightGoal: formData.weightGoal ? Number(formData.weightGoal) : null,
         stepGoal: formData.stepGoal ? Number(formData.stepGoal) : null,
+        enableRewardBonus: formData.enableRewardBonus,
+        rewardThreshold: Number(formData.rewardThreshold) || 0,
+        rewardBonusAmount: Number(formData.rewardBonusAmount) || 200,
         goalHistory: updatedHistory // <--- Save the history array!
       };
 
@@ -522,7 +531,47 @@ const handleChangeEmail = async () => {
                     <label>Daily Step Goal</label>
                     <input type="number" name="stepGoal" value={formData.stepGoal} onChange={handleChange} onFocus={(e) => e.target.select()} min="0" disabled={isBusy} placeholder="No Goal Set" />
                   </div>
-                </section>
+                  <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, cursor: 'pointer', color: '#1e293b' }}>
+                      <input 
+                        type="checkbox" 
+                        name="enableRewardBonus"
+                        checked={formData.enableRewardBonus}
+                        onChange={handleChange}
+                        disabled={isBusy}
+                        style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                      />
+                      Reward weight drops with a calorie bonus
+                    </label>
+
+                    {formData.enableRewardBonus && (
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>Threshold (lbs below goal)</label>
+                          <input 
+                            type="number" 
+                            name="rewardThreshold"
+                            value={formData.rewardThreshold}
+                            onChange={handleChange}
+                            disabled={isBusy}
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '0.35rem', border: '1px solid #cbd5e1', marginTop: '0.25rem' }}
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>Bonus Calories</label>
+                          <input 
+                            type="number" 
+                            name="rewardBonusAmount"
+                            value={formData.rewardBonusAmount}
+                            onChange={handleChange}
+                            disabled={isBusy}
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '0.35rem', border: '1px solid #cbd5e1', marginTop: '0.25rem' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>   
               </>
             )}
 

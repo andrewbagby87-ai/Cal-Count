@@ -43,6 +43,12 @@ export interface UserProfile {
 
   createdAt: Date | number | string;
   updatedAt?: Date | number | string;
+
+  enableRewardBonus?: boolean;
+  rewardThreshold?: number;
+  rewardBonusAmount?: number;
+  rewardPromptsAnswered?: Record<string, boolean>;
+  dailyBudgetOverrides?: Record<string, number>;
 }
 
 export interface AuthContextType {

@@ -1,7 +1,7 @@
 // src/components/DailyStatsTab.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDayFoodLogs, getDayWorkoutLogs, getAllWeightLogs, getHealthMetricsForDate, getHealthWorkoutsForDate, getIgnoredWorkouts, getDoneLoggingDates, getWeeklyFoodLogs, getWeeklyWorkoutLogs, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate} from '../services/database';
+import { getDayFoodLogs, getDayWorkoutLogs, answerWeightDropPrompt, getHealthMetricsForDate, getHealthWorkoutsForDate, getIgnoredWorkouts, getDoneLoggingDates, toggleIgnoredWorkout, deleteWorkoutLog, getWeightLogsForDate, updateDailyBonus } from '../services/database';
 import { FoodLog, WorkoutLog, WeightLog } from '../types';
 import './DailyStatsTab.css';
 
@@ -197,6 +197,27 @@ export default function DailyStatsTab() {
       console.error('Failed to delete manual workout:', error);
     }
   };
+
+  const [showRewardPrompt, setShowRewardPrompt] = useState(false);
+  const [rewardBonus, setRewardBonus] = useState(200);
+  const [optimisticBonus, setOptimisticBonus] = useState<number | null>(null);
+  const [localAnswered, setLocalAnswered] = useState<Record<string, boolean>>({});
+
+  const getDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getDateString(new Date());
+  const viewStr = getDateString(viewDate);
+  const isToday = todayStr === viewStr;
+  const activeProfile = getActiveBudgets(userProfile, viewStr);
+
+  useEffect(() => {
+    setOptimisticBonus(null);
+  }, [viewStr]);
   
   useEffect(() => {
     const handleUpdate = () => {
@@ -221,12 +242,6 @@ export default function DailyStatsTab() {
     }
   }, []);
 
-  const getDateString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   const handleGoToToday = () => setViewDate(new Date());
 
@@ -380,6 +395,24 @@ useEffect(() => {
     loadNavigatorStats();
   }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, workoutLogs, syncedWorkouts]);
 
+  useEffect(() => {
+    if (!userProfile || !todayWeight || !isToday) return;
+    
+    if (userProfile.enableRewardBonus && activeProfile?.weightGoal) {
+      const threshold = userProfile.rewardThreshold || 0;
+      const targetWeight = activeProfile.weightGoal - threshold;
+      
+      // If weight is less than or equal to the goal minus the threshold
+      if (Number(todayWeight.weight) <= targetWeight) {
+        // Check both Firebase AND our instant local memory
+        if (!userProfile.rewardPromptsAnswered?.[viewStr] && !localAnswered[viewStr]) {
+          setRewardBonus(userProfile.rewardBonusAmount || 100); 
+          setShowRewardPrompt(true);
+        }
+      }
+    }
+  }, [todayWeight, userProfile, isToday, viewStr, activeProfile?.weightGoal, localAnswered]);
+
 useEffect(() => {
     const loadData = async () => {
       if (!user?.uid) return;
@@ -469,10 +502,6 @@ useEffect(() => {
     loadData();
   }, [user?.uid, viewDate, refreshTrigger]);
 
-  const todayStr = getDateString(new Date());
-  const viewStr = getDateString(viewDate);
-  const isToday = todayStr === viewStr;
-
   const caloriesConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
   
   const manualBurned = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
@@ -485,8 +514,8 @@ useEffect(() => {
   }, 0);
   const caloriesBurned = manualBurned + healthBurned;
 
-  const activeProfile = getActiveBudgets(userProfile, viewStr);
-  const totalBudget = (activeProfile?.caloriesBudget || 0) + caloriesBurned;
+  const dailyBonus = optimisticBonus !== null ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[viewStr] || 0);
+  const totalBudget = (activeProfile?.caloriesBudget || 0) + caloriesBurned + dailyBonus;
   
   const remaining = totalBudget - caloriesConsumed;
   const percentage = Math.round((caloriesConsumed / (totalBudget || 1)) * 100);
@@ -504,6 +533,70 @@ useEffect(() => {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', backgroundColor: '#e2e8f0', zIndex: 9999, overflow: 'hidden' }}>
           <div style={{ width: '100%', height: '100%', backgroundColor: '#2563eb', animation: 'loadingSweep 1.5s infinite ease-in-out' }} />
           <style>{`@keyframes loadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
+        </div>
+      )}
+
+      {showRewardPrompt && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '1rem', maxWidth: '400px', width: '100%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏆</div>
+            <h2 style={{ margin: '0 0 1rem 0', color: '#1e293b' }}>Goal Reached!</h2>
+            <p style={{ color: '#475569', marginBottom: '1rem', lineHeight: '1.5' }}>
+              Your weight today ({Number(todayWeight?.weight).toFixed(1)} {todayWeight?.unit}) is below your threshold! 
+              Would you like to increase your calorie budget for today?
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem' }}>
+              <button 
+                onClick={() => setRewardBonus(prev => Math.max(0, prev - 50))}
+                style={{ width: '45px', height: '45px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', fontSize: '1.5rem', fontWeight: 'bold', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+              >
+                -
+              </button>
+              <span style={{ fontSize: '2rem', fontWeight: 700, color: '#10b981', minWidth: '80px' }}>
+                +{rewardBonus}
+              </span>
+              <button 
+                onClick={() => setRewardBonus(prev => prev + 50)}
+                style={{ width: '45px', height: '45px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', fontSize: '1.5rem', fontWeight: 'bold', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+              >
+                +
+              </button>
+            </div>
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button 
+                onClick={() => {
+                  setShowRewardPrompt(false);
+                  setLocalAnswered(prev => ({ ...prev, [viewStr]: true }));
+                  setOptimisticBonus(rewardBonus); 
+                  answerWeightDropPrompt(user!.uid, viewStr, true, rewardBonus).catch(console.error); 
+                  window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: rewardBonus }));
+                }}
+                style={{ width: '100%', padding: '0.85rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)', fontSize: '1rem' }}
+              >
+                Yes, Claim Bonus!
+              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button 
+                  onClick={() => setShowRewardPrompt(false)}
+                  style={{ flex: 1, padding: '0.75rem', backgroundColor: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Ask Me Later
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowRewardPrompt(false);
+                    setLocalAnswered(prev => ({ ...prev, [viewStr]: true }));
+                    answerWeightDropPrompt(user!.uid, viewStr, false, 0).catch(console.error);
+                  }} 
+                  style={{ flex: 1, padding: '0.75rem', backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.5rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  No Thanks
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -674,8 +767,10 @@ useEffect(() => {
                    <span className="separator" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>/</span>
                    <span className="budget" style={{ color: Math.round(remaining) === 0 ? '#94a3b8' : undefined }}>
                      {totalBudget} kcal
-                     {caloriesBurned > 0 && (
-                       <span style={{ fontSize: '1rem', color: '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>(+{caloriesBurned} 🔥)</span>
+                     {(caloriesBurned > 0 || dailyBonus > 0) && (
+                       <span style={{ fontSize: '1rem', color: dailyBonus > 0 && caloriesBurned === 0 ? '#10b981' : '#f97316', marginLeft: '0.5rem', fontWeight: 600 }}>
+                         (+{caloriesBurned + dailyBonus} {caloriesBurned > 0 && '🔥'}{dailyBonus > 0 && '🏆'})
+                       </span>
                      )}
                    </span>
                  </>
@@ -718,6 +813,48 @@ useEffect(() => {
                           ? 'Goal reached!' 
                           : `${(Number(todayWeight.weight) - activeProfile.weightGoal).toFixed(1)} ${todayWeight.unit} away`}
                       </span>
+                    </div>
+                  )}
+                  {dailyBonus > 0 && (
+                    <div style={{ marginTop: '0.75rem', borderTop: '1px dashed #cbd5e1', paddingTop: '0.75rem', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        🏆 Calorie Bonus
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <button 
+                          onClick={() => {
+                            const newAmount = Math.max(0, dailyBonus - 50);
+                            setOptimisticBonus(newAmount);
+                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
+                            window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: newAmount }));
+                          }}
+                          style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >-</button>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981', minWidth: '40px', textAlign: 'center' }}>
+                          +{dailyBonus}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            const newAmount = dailyBonus + 50;
+                            setOptimisticBonus(newAmount);
+                            updateDailyBonus(user!.uid, viewStr, newAmount).catch(console.error);
+                            window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: newAmount }));
+                          }}
+                          style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >+</button>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this calorie bonus?')) {
+                            setOptimisticBonus(0);
+                            updateDailyBonus(user!.uid, viewStr, 0).catch(console.error);
+                            window.dispatchEvent(new CustomEvent('dailyBonusChanged', { detail: 0 }));
+                          }
+                        }}
+                        style={{ fontSize: '0.75rem', color: '#ef4444', background: '#fee2e2', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Delete Bonus
+                      </button>
                     </div>
                   )}
                 </div>

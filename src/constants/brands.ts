@@ -217,10 +217,15 @@ export const FOOD_BRANDS: BrandConfig[] = [
     { name: "Halfday", logo: './brands/halfday.png' },
     { name: "Lean Cuisine", logo: './brands/leancuisine.png' },
     { name: "Quaker", logo: './brands/quaker.png', showName: true },
-    { name: "Slim Chickens", logo: './brands/slimchickens.png' , showName: true},
+    { name: "Slim Chickens", logo: './brands/slimchickens.png', showName: true},
     { name: "Snyder's", logo: './brands/snyders.png' },
     { name: "Sour Punch", logo: './brands/sourpunch.png' },
     { name: "Sun Chips", logo: './brands/sunchips.png' },
+    { name: "Birds Eye", logo: './brands/birdseye.png', showName: true },
+    { name: "Chips Ahoy", logo: './brands/chipsahoy.png' },
+    { name: "Crave New World", logo: './brands/cravenewworld.png', showName: true },
+    { name: "Khloud", logo: './brands/khloud.png' },
+    { name: "New Primal", logo: './brands/newprimal.png' },
 
     //{ name: "", logo: '' },
     

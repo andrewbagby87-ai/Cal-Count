@@ -652,3 +652,32 @@ export const getHealthLogsSince = async (userId: string, cutoffMs: number): Prom
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
+
+export async function answerWeightDropPrompt(userId: string, dateStr: string, accepted: boolean, bonusAmount: number) {
+  const docRef = doc(db, 'users', userId);
+  const updates: Record<string, any> = {
+    [`rewardPromptsAnswered.${dateStr}`]: true
+  };
+  
+  if (accepted) {
+    updates[`dailyBudgetOverrides.${dateStr}`] = bonusAmount;
+  }
+  
+  await updateDoc(docRef, updates);
+}
+
+export async function updateDailyBonus(userId: string, dateStr: string, bonusAmount: number) {
+  const docRef = doc(db, 'users', userId);
+  
+  if (bonusAmount <= 0) {
+    // If deleted or reduced to 0, completely remove the override.
+    // (Because rewardPromptsAnswered is already saved, the app won't ask again)
+    await updateDoc(docRef, {
+      [`dailyBudgetOverrides.${dateStr}`]: deleteField()
+    });
+  } else {
+    await updateDoc(docRef, {
+      [`dailyBudgetOverrides.${dateStr}`]: bonusAmount
+    });
+  }
+}
