@@ -352,8 +352,9 @@ useEffect(() => {
            const currentManual = workoutLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
            const currentHealth = syncedWorkouts.reduce((sum, w) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
            const currentBurned = currentManual + currentHealth;
-           
-           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned;
+
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned + dayBonus;
            
            if (currentBudget > 0) {
              progress = currentConsumed / currentBudget;
@@ -373,8 +374,8 @@ useEffect(() => {
            const currentHealth = (todayCache.current.syncedWorkouts || []).reduce((sum: number, w: any) => (w.isIgnored ? sum : sum + (w.activeEnergyBurned?.units === 'kcal' ? Math.round(w.activeEnergyBurned.qty) : 0)), 0);
            const currentBurned = currentManual + currentHealth;
            
-           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned;
-           
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + currentBurned + dayBonus;           
            if (currentBudget > 0) {
              progress = currentConsumed / currentBudget;
              const remaining = Math.round(currentBudget - currentConsumed);
@@ -393,7 +394,7 @@ useEffect(() => {
     };
 
     loadNavigatorStats();
-  }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, workoutLogs, syncedWorkouts]);
+  }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, workoutLogs, syncedWorkouts, optimisticBonus]);
 
   useEffect(() => {
     if (!userProfile || !todayWeight || !isToday) return;

@@ -356,7 +356,8 @@ useEffect(() => {
         else if (dStr === getDateString(viewDate)) {
            const activeProfile = getActiveBudgets(userProfile, dStr);
            const currentConsumed = foodLogs.reduce((sum, log) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-           const currentBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories;
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + burnedCalories + dayBonus;
            
            if (currentBudget > 0) {
              progress = currentConsumed / currentBudget;
@@ -372,7 +373,8 @@ useEffect(() => {
         else if (dStr === actualTodayStr && todayCache.current) {
            const activeProfile = getActiveBudgets(userProfile, dStr);
            const currentConsumed = (todayCache.current.logs || []).reduce((sum: number, log: any) => sum + (log.editedNutrition?.calories ?? log.calories ?? 0), 0);
-           const currentBudget = (activeProfile?.caloriesBudget || 0) + (todayCache.current.burnedCalories || 0);
+           const dayBonus = (dStr === viewStr && optimisticBonus !== null) ? optimisticBonus : (userProfile?.dailyBudgetOverrides?.[dStr] || 0);
+           const currentBudget = (activeProfile?.caloriesBudget || 0) + (todayCache.current.burnedCalories || 0) + dayBonus;
            
            if (currentBudget > 0) {
              progress = currentConsumed / currentBudget;
@@ -392,7 +394,7 @@ useEffect(() => {
     };
 
     loadNavigatorStats();
-  }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, burnedCalories]);
+  }, [user?.uid, viewDate, userProfile, refreshTrigger, foodLogs, burnedCalories, optimisticBonus]);
 
   const handleAddFood = async (foodData: any | any[]) => {
     if (!user) return;
